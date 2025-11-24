@@ -1,1 +1,7 @@
 /Manifest*.toml
+/.DS_Store
+/data/atdb.fits
+/src/atom_.jl
+/src/atomicDB.jl
+/src/compton.jl
+/src/lte_rates.jl
