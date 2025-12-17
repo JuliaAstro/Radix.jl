@@ -7,7 +7,7 @@ authors = ["Paul Barrett <pebarrett@gmail.com>"]
 FITSFiles = "358a0a88-3548-4ad6-b652-8bdbf64af8e5"
 
 [compat]
-FITSFiles = "0.2.0"
+FITSFiles = "0.2.0, 0.3"
 julia = "1.9.0"
 
 [extras]
