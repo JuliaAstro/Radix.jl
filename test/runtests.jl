@@ -100,6 +100,50 @@ using Test
         @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
     end
 
+    @testset "ElectronCollision" begin
+        # the 5-point spline passes through its knots and is exact for linear data
+        kn = [0.3, 1.1, 0.7, 2.0, 1.5]
+        @test [Radix.splinem(kn, x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)] ≈ kn
+        @test all(x -> Radix.splinem(0:0.25:1, x) ≈ x, 0:0.05:1)
+        # upsil(): x = log((e+c)/c)/log(e+c) (kinds 1,4) or e/(e+c) (2,3), then the kind's factor
+        e(T, ΔE) = abs(T/(1.57888e5*ΔE))
+        T0, ΔE0, C0 = 2e5, 0.5, 1.7
+        ee = e(T0, ΔE0)
+        @test Radix.chianti_upsilon(2, ΔE0, C0, kn, T0) ≈ Radix.splinem(kn, ee/(ee + C0))
+        @test Radix.chianti_upsilon(1, ΔE0, C0, kn, T0) ≈
+            Radix.splinem(kn, log((ee + C0)/C0)/log(ee + C0))*log(ee + 2.71828)
+        @test Radix.chianti_upsilon(3, ΔE0, C0, kn, T0) ≈ Radix.splinem(kn, ee/(ee + C0))/(ee + 1)
+        @test Radix.chianti_upsilon(4, ΔE0, C0, kn, T0) ≈
+            Radix.splinem(kn, log((ee + C0)/C0)/log(ee + C0))*log(ee + C0)
+        @test_throws ArgumentError Radix.chianti_upsilon(5, ΔE0, C0, kn, T0)
+
+        lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
+            f32[E, g, 1, 13.6])
+        levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 6.8, 8)])
+        mk(i, k; ΔE=0.5) = Radix.ElectronCollision(Int8(3), "x", Int32(2),
+            Radix.Transition(Int32(i), Int32(k)), Int32(1), Int32(7),
+            f32(ΔE), f32(C0), f32.(kn))
+        # ucalc label 51: tk = max(1e4 t, 2.8777e6/elin), eij = ΔE Ry 13.598,
+        #   cji = 8.626e-8 Υ/(sqrt(t) ggup), cij = cji ggup exp(-eij/(0.861707 t))/gglo
+        Tc = 20.0
+        c = mk(1, 2)
+        r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
+        eij = Float64(f32(0.5))*13.598
+        tk = max(Tc*1e4, 2.8777e6/(12398.54/eij))
+        Υ = Radix.chianti_upsilon(2, Float64(f32(0.5)), Float64(f32(C0)), Float64.(f32.(kn)), tk)
+        cji = 8.626e-8*Υ/sqrt(Tc)/8
+        cij = cji*8*exp(-eij/(0.861707*Tc))/2
+        @test (r.init, r.final) == (1, 2)
+        @test r.irate ≈ cji*2e3  rtol=1e-6
+        @test r.frate ≈ cij*2e3  rtol=1e-6
+        @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
+        # the fit temperature is floored where eij/kT would exceed 50
+        cold = Radix.rate(c, Radix.Cell(0.01, 1e3, 2e3, 1e4); levels=levels)
+        @test isfinite(cold.irate) && cold.irate > 0
+        @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+        @test Radix.rate(mk(1, 2; ΔE=0), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+    end
+
     @testset "functor convenience" begin
         c = Radix.RadRecomb(Int32(1), "rr", Int32[1], f32[1e-12, 0.7])
         @test c(cell) == Radix.rate(c, cell)
@@ -246,6 +290,30 @@ using Test
             @test nrec == 87231
             @test nnone == 188
             @test nbad == 0
+
+            # ElectronCollision: finite and obeying detailed balance with the
+            # record's own transition energy. ucalc does not clamp Υ at 0, and the
+            # spline dips slightly below 0 for 4 records (rates ~ -1e-7).
+            nrec = 0; nnone = 0; nbad = 0; nneg = 0
+            for T in (0.1, 1.0, 10.0)
+                c = Radix.Cell(T, 1e4, 1e4, 1e4)
+                for r in db
+                    r isa Radix.ElectronCollision || continue
+                    T == 0.1 && (nrec += 1)
+                    x = Radix.rate(r, c; levels=levels)
+                    x.init == 0 && (T == 0.1 && (nnone += 1); continue)
+                    lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
+                    ok = isfinite(x.frate) && isfinite(x.irate)
+                    ok &= x.irate == 0 || isapprox(x.frate/x.irate,
+                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.598/(0.861707*T)); rtol=1e-6)
+                    ok || (nbad += 1)
+                    (x.frate < 0 || x.irate < 0) && (nneg += 1)
+                end
+            end
+            @test nrec == 23232
+            @test nnone == 0
+            @test nbad == 0
+            @test nneg == 12
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"

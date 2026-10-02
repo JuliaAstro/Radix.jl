@@ -136,6 +136,13 @@ Checked against `ucalc()` in `xstarsub.f` and by loading `atdb.fits`:
 - `AtomicLine.rate` is unfinished and only had its field names updated.
 - The integer meanings of `ChargeExHe` and `ChargeExHp` are inferred.
 - `DielecRecombH` and `TotDielecRecomb` store no data yet.
+- XSTAR's matrix assembly for bound-bound collision rates (lrtyp 3) decides which
+  level is lower with `e1/e2 − 1 < 0.01` on the absolute level energies. For
+  `ElectronCollision` (ucalc 51), where `idest1` is the upper level, this swaps
+  the roles of nearly degenerate levels (energies within 1%). Radix always
+  returns `init` = lower, `final` = upper, so the quirk is not reproduced.
+- `ElectronCollision` Υ is not clamped at 0 (as in ucalc): the spline gives
+  small negative rates (about −1e-7) for 4 records.
 
 ## Fields of every type
 
