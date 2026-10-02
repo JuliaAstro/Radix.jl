@@ -35,7 +35,3 @@ function PhotoionizeSuper(rate::Int32, label::String, ivec::I, rvec::R) where
         Tuple(rvec[Nd+1:Nd+Nt]), Tuple(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt]),
         Tuple(rvec[Nd+Nt+Nd*Nt+1:2:end-1]), Tuple(rvec[Nd+Nt+Nd*Nt+2:2:end]))
 end
-
-function rate(coef::PhotoionizeSuper)
-
-end

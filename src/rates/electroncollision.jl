@@ -25,7 +25,3 @@ function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R) where
 
     ElectronCollision(Int8(rate), label, ivec..., rvec[1:2]..., Tuple(rvec[3:7]))
 end
-
-function rate(coef::ElectronCollision)
-
-end

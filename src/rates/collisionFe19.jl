@@ -20,7 +20,3 @@ function CollisionFe19(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionFe19(Int8(rate), label, ivec..., rvec[1])    
 end
-
-function rate(coef::CollisionFe19)
-    
-end

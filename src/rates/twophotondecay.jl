@@ -21,6 +21,3 @@ function TwoPhotonDecay(rate::Int32, label::String, ivec::I, rvec::R) where
 
     TwoPhotonDecay(Int8(rate), label::String, ivec..., rvec[1])
 end
-
-function rate(coef::TwoPhotonDecay)
-end

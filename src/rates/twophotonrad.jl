@@ -18,6 +18,3 @@ function TwoPhotonRad(rate::Int32, label::String, ivec::I, rvec::R) where
 
     TwoPhoton(Int8(rate), label, ivec[1], ivec[2], rvec[1], rvec[2])
 end
-
-function rate(coef::TwoPhotonRad)
-end

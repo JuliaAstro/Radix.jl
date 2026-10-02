@@ -20,7 +20,3 @@ function CollisionHeFine(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionHeFine(Int8(rate), label, ivec..., Tuple(rvec))
 end
-
-function rate(coef::CollisionHeFine)
-
-end

@@ -29,7 +29,3 @@ function ParPhotoIonize2(rate::Int32, label::String, ivec::I, rvec::R) where
     ParPhotoIonize2(Int8(rate), label, ivec..., Tuple(rvec[1:2:end-1]),
         Tuple(rvec[2:2:end]))
 end
-
-function rate(coef::ParPhotoIonize2)
-
-end

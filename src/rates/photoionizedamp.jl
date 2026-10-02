@@ -29,7 +29,3 @@ function PhotoionizeDamp(rate::Int32, label::String, ivec::I, rvec::R) where
     PhotoionizeDamp(Int8(rate), label, iv..., Tuple(rvec[1:2:end-1]),
         Tuple(rvec[2:2:end]))
 end
-
-function rate(coef::PhotoionizeDamp)
-
-end

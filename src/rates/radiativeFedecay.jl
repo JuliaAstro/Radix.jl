@@ -24,7 +24,3 @@ function RadiativeFeDecay(rate::Int32, label::String, ivec::I, rvec::R) where
 
     RadiativeFeDecay(Int8(rate), label, ivec..., rvec...)
 end
-
-function rate(coef::RadiativeFeDecay)
-    
-end

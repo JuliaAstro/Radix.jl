@@ -21,7 +21,3 @@ function RadiativeProb(rate::Int32, label::String, ivec::I, rvec::R) where
 
     RadiativeProb(Int8(rate), label, ivec..., rvec[1])
 end
-
-function rate(coef::RadiativeProb)
-
-end

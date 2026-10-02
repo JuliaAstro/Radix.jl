@@ -19,7 +19,3 @@ function AtomicLevelFe(rate::Int32, label::String, ivec::I, rvec::R) where
     
     AtomicLevelFe(Int8(rate), label, ivec[2], ivec[3], rvec[1], rvec[2])
 end
-
-function rate(coef::AtomicLevelFe, cell::Cell)
-
-end

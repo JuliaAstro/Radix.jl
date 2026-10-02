@@ -23,7 +23,3 @@ function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R) where
 
     IronKAuger(Int8(rate), label, ivec..., rvec[1], Tuple(rvec[2:end]))
 end
-
-function rate(coef::IronKAuger)
-
-end

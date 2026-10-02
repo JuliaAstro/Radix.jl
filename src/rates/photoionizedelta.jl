@@ -30,7 +30,3 @@ function PhotoionizeDelta(rate::Int32, label::String, ivec::I, rvec::R) where
     PhotoionizeDelta(Int8(rate), label, ivec..., rvec[1], Tuple(rvec[2:N]),
         Tuple(rvec[N+1:2*N]))
 end
-
-function rate(coef::PhotoionizeDelta)
-    
-end

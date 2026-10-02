@@ -39,7 +39,3 @@ function PhotoRecombX(rate::Int32, label::String, ivec::I, rvec::R) where
         Tuple(rvec[nd+nt+nd*nt+1:2:nd+nt+nd*nt+2*nx-1]),
         Tuple(rvec[nd+nt+nd*nt+2:2:nd+nt+nd*nt+2*nx]))
 end
-
-function rate(coef::PhotoRecombX)
-    
-end

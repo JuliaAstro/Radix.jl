@@ -23,7 +23,3 @@ function AutoionizeFe25Sat(rate::Int32, label::String, ivec::I, rvec::R) where
 
     AutoionizeFe25Sat(Int8(rate), label, ivec..., rvec...)    
 end
-
-function rate(coef::AutoionizeFe25Sat, cell::Cell)
-    
-end

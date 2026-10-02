@@ -31,7 +31,3 @@ function ParPhotoIonize3(rate::Int32, label::String, ivec::I, rvec::R) where
 
     ParPhotoIonize3(Int8(rate), label, ivec..., rvec...)
 end
-
-function rate(coef::ParPhotoIonize3)
-
-end

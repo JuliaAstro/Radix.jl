@@ -28,6 +28,3 @@ function ChargeExHp(rate::Int32, label::String, ivec::I, rvec::R) where
         ChargeExHp(Int8(rate), label, Int32(0), ivec[1], rvec...)
     end
 end
-
-function rate(coef::ChargeExHp)
-end

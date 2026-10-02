@@ -21,7 +21,3 @@ function CollisionHelikeSat(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionHelike(Int8(rate), label, ivec..., Tuple(rvec))   
 end
-
-function rate(coef::CollisionHelikeSat)
-    
-end

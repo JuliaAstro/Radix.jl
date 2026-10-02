@@ -20,7 +20,3 @@ function CollisionLS(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionLS(Int8(rate), label, ivec..., Tuple(rvec))
 end
-
-function rate(coef::CollisionLS)
-
-end

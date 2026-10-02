@@ -23,7 +23,3 @@ function CollisionAPED(rate::Int32, label::String, ivec::I, rvec::R) where
     CollisionAPED(Int8(rate), label, ivec[2:end]..., Tuple(rvec[1:end÷2]),
         Tuple(rvec[end÷2+1:end]))
 end
-
-function rate(coef::CollisionAPED)
-    
-end

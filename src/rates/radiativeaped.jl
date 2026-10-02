@@ -21,7 +21,3 @@ function RadiativeAPED(rate::Int32, label::String, ivec::I, rvec::R) where
 
     RadiativeAPED(Int8(rate), label, ivec..., rvec[1], rvec[3])
 end
-
-function rate(coef::RadiativeAPED)
-    
-end

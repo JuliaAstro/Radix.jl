@@ -20,7 +20,3 @@ function CollisionHlike2(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionHlike2(Int8(rate), label, ivec[1], ivec[2], ivec[4], Tuple(rvec))
 end
-
-function rate(coef::CollisionHlike2)
-
-end

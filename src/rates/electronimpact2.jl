@@ -25,7 +25,3 @@ function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R) where
     ElectronImpact2(Int8(rate), label, ivec..., rvec[1:2]...,
         Tuple(rvec[3:end]))
 end
-
-function rate(coef::ElectronImpact2)
-
-end

@@ -22,7 +22,3 @@ function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R) where
 
     AtomicLine2(Int8(rate), label::String, ivec..., rvec...)
 end
-
-function rate(coef::AtomicLine2, cell::Cell)
-
-end

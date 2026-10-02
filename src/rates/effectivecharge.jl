@@ -23,7 +23,3 @@ function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R) where
     iv = length(ivec) < 6 ? (ivec..., Int32(0)) : ivec
     EffectiveCharge(Int8(rate), label, iv..., rvec[1])
 end
-
-function rate(coef::EffectiveCharge)
-
-end

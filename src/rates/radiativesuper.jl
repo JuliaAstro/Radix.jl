@@ -29,7 +29,3 @@ function RadiativeSuper(rate::Int32, label::String, ivec::I, rvec::R) where
         Tuple(rvec[1:Nd]), Tuple(rvec[Nd+1:Nd+Nt]),
         Tuple(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt]))
 end
-
-function rate(coef::RadiativeSuper)
-    
-end

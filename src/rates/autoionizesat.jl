@@ -25,7 +25,3 @@ function AutoionizeSat(rate::Int32, label::String, ivec::I, rvec::R) where
 
     AutoionizeSat(Int8(rate), label, ivec..., rvec...)
 end
-
-function rate(coef::AutoionizeSat, cell::Cell)
-    
-end

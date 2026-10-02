@@ -24,7 +24,3 @@ function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R) where
     ElectronImpact1(Int8(rate), label, ivec..., Tuple(rvec[1:end÷2]),
         Tuple(rvec[end÷2+1:end]))
 end
-
-function rate(coef::ElectronImpact1)
-
-end

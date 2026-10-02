@@ -22,7 +22,3 @@ function CollisionIonize(rate::Int32, label::String, ivec::I, rvec::R) where
     CollisionIonize(Int8(rate), label, ivec..., rvec[1], rvec[2],
         Tuple(rvec[2:end]))
 end
-
-function rate(coef::CollisionIonize)
-
-end
