@@ -33,6 +33,41 @@ using Test
         @test (p.level, p.ion) == (1, 21)
     end
 
+    @testset "AtomicLine2" begin
+        # Hand-built level table; the levels are listed upper-first on purpose
+        lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
+            f32[E, g, 1, 13.6])
+        levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)])
+        # ucalc label 50: flin = 1e-16 aij ggup elin²/(0.667274 gglo);
+        # vtherm = max(vturb 1e5, 1.3e6/sqrt(a/t)); sigma = 0.02655 flin elin 1e-8/vtherm;
+        # ans1 = aij; ans4 = ans1 (12398.54/elin) ergsev
+        λ, A = 1215.67, 6.265e8
+        c = Radix.AtomicLine2(Int32(4), "lya", Int32[2,1,1,7], f32[λ, 0.4162, A])
+        r = Radix.rate(c, cell; levels=levels, mass=1.01, vturb=1.0)
+        A64, λ64 = Float64(f32(A)), Float64(f32(λ))      # the data are single precision
+        flin = 1e-16*A64*8*λ64^2/(0.667274*2)
+        vth = max(1e5, 1.3e6/sqrt(1.01/T))
+        @test (r.init, r.final) == (2, 1)          # upper first, whatever the stored order
+        @test r.frate == A64
+        @test r.irate == 0
+        @test r.opacity ≈ 0.02655*flin*λ64*1e-8/vth
+        @test r.fenergy ≈ A64*12398.54/λ64*1.602197e-12
+        # stored lower-first gives the same answer
+        c2 = Radix.AtomicLine2(Int32(4), "lya", Int32[1,2,1,7], f32[λ, 0.4162, A])
+        @test Radix.rate(c2, cell; levels=levels, mass=1.01) == Radix.rate(c, cell; levels=levels, mass=1.01)
+        # no wavelength or two-photon: no opacity; unknown level: nothing
+        c3 = Radix.AtomicLine2(Int32(4), "x", Int32[1,2,1,7], f32[1e9, 0, A])
+        @test Radix.rate(c3, cell; levels=levels, mass=1.01).opacity == 0
+        c4 = Radix.AtomicLine2(Int32(9), "2ph", Int32[1,2,1,7], f32[λ, 0, A])
+        @test Radix.rate(c4, cell; levels=levels, mass=1.01).opacity == 0
+        # no wavelength: finite power from the level energy difference
+        c6 = Radix.AtomicLine2(Int32(4), "x", Int32[1,2,1,7], f32[0, 0, A])
+        @test Radix.rate(c6, cell; levels=levels, mass=1.01).fenergy ≈ A64*Float64(f32(10.2))*1.602197e-12
+        c5 = Radix.AtomicLine2(Int32(4), "x", Int32[1,9,1,7], f32[λ, 0, A])
+        @test Radix.rate(c5, cell; levels=levels, mass=1.01).frate == 0
+        @test Radix.rate(c, cell; index=true, levels=levels, mass=1.01).frate == 0
+    end
+
     @testset "functor convenience" begin
         c = Radix.RadRecomb(Int32(1), "rr", Int32[1], f32[1e-12, 0.7])
         @test c(cell) == Radix.rate(c, cell)
@@ -132,6 +167,31 @@ using Test
                 got[k] = get(got, k, 0) + 1
             end
             @test got == expected
+
+            # levels: the reals must be read from the right place (FITSFiles
+            # work-around in load); every level has a positive weight
+            levels = level_table(db)
+            @test length(levels) == 38235
+            @test all(l -> l.g > 0, values(levels))
+            s2 = levels[(122, 1)]                       # S II ground level 3p3 4S
+            @test (s2.E, s2.g) == (0, 4)
+            @test s2.E_inf ≈ 23.4
+
+            # AtomicLine2: every record resolves to two known levels, the decay
+            # runs downward in energy, and all results are finite
+            cell0 = Radix.Cell(1.0, 1e4, 1e4)
+            nbad = 0; nord = 0; nlines = 0
+            for r in db
+                r isa Radix.AtomicLine2 || continue
+                nlines += 1
+                x = Radix.rate(r, cell0; levels=levels, mass=16.0)
+                x.init == 0 && (nbad += 1; continue)
+                levels[(r.ion, x.init)].E >= levels[(r.ion, x.final)].E || (nord += 1)
+                all(isfinite, (x.frate, x.fenergy, x.opacity)) || (nbad += 1)
+            end
+            @test nlines == 730369
+            @test nbad == 0
+            @test nord == 0
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"

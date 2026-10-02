@@ -4,7 +4,10 @@ using FITSFiles
 
 function load(io::IO)
 
-    atomdb = fits(io)
+    # scale=false: FITSFiles.jl (before JuliaAstro/FITSFiles.jl#50 is released)
+    # rounds unscaled Int32 columns through Float32, which corrupts the pointers
+    # to the reals beyond 2^24. The database has no TSCAL/TZERO, so nothing is lost.
+    atomdb = fits(io; scale=false)
 
     ptr  = reshape(atomdb[2].data[:pointers][1], 10, :)
     rdat = atomdb[3].data[:reals][1]
@@ -12,6 +15,7 @@ function load(io::IO)
     sdat = atomdb[5].data[:char][1]
 
     N = length(ptr[1,:])
+
     rates = Array{Union{Atom, Ion, AbstractRate, Missing, Nothing}}(missing, N)
     for j=1:N
         if ptr[2,j] == 0
@@ -33,3 +37,12 @@ function load(io::IO)
     end
     rates
 end
+
+"""
+    level_table(records)
+
+Dictionary `(ion, level) => AtomicLevel` over the `AtomicLevel` records of a
+loaded database, for the rates that need level energies and weights.
+"""
+level_table(records) =
+    Dict((r.ion, r.level) => r for r in records if r isa AtomicLevel)
