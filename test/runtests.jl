@@ -100,6 +100,79 @@ using Test
         @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
     end
 
+    @testset "ElectronCollision" begin
+        # the 5-point spline passes through its knots and is exact for linear data
+        kn = [0.3, 1.1, 0.7, 2.0, 1.5]
+        @test [Radix.splinem(kn, x) for x in (0.0, 0.25, 0.5, 0.75, 1.0)] ≈ kn
+        @test all(x -> Radix.splinem(0:0.25:1, x) ≈ x, 0:0.05:1)
+        # upsil(): x = log((e+c)/c)/log(e+c) (kinds 1,4) or e/(e+c) (2,3), then the kind's factor
+        e(T, ΔE) = abs(T/(1.57888e5*ΔE))
+        T0, ΔE0, C0 = 2e5, 0.5, 1.7
+        ee = e(T0, ΔE0)
+        @test Radix.chianti_upsilon(2, ΔE0, C0, kn, T0) ≈ Radix.splinem(kn, ee/(ee + C0))
+        @test Radix.chianti_upsilon(1, ΔE0, C0, kn, T0) ≈
+            Radix.splinem(kn, log((ee + C0)/C0)/log(ee + C0))*log(ee + 2.71828)
+        @test Radix.chianti_upsilon(3, ΔE0, C0, kn, T0) ≈ Radix.splinem(kn, ee/(ee + C0))/(ee + 1)
+        @test Radix.chianti_upsilon(4, ΔE0, C0, kn, T0) ≈
+            Radix.splinem(kn, log((ee + C0)/C0)/log(ee + C0))*log(ee + C0)
+        @test_throws ArgumentError Radix.chianti_upsilon(5, ΔE0, C0, kn, T0)
+
+        lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
+            f32[E, g, 1, 13.6])
+        levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 6.8, 8)])
+        mk(i, k; ΔE=0.5) = Radix.ElectronCollision(Int8(3), "x", Int32(2),
+            Radix.Transition(Int32(i), Int32(k)), Int32(1), Int32(7),
+            f32(ΔE), f32(C0), f32.(kn))
+        # ucalc label 51: tk = max(1e4 t, 2.8777e6/elin), eij = ΔE Ry 13.598,
+        #   cji = 8.626e-8 Υ/(sqrt(t) ggup), cij = cji ggup exp(-eij/(0.861707 t))/gglo
+        Tc = 20.0
+        c = mk(1, 2)
+        r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
+        eij = Float64(f32(0.5))*13.598
+        tk = max(Tc*1e4, 2.8777e6/(12398.54/eij))
+        Υ = Radix.chianti_upsilon(2, Float64(f32(0.5)), Float64(f32(C0)), Float64.(f32.(kn)), tk)
+        cji = 8.626e-8*Υ/sqrt(Tc)/8
+        cij = cji*8*exp(-eij/(0.861707*Tc))/2
+        @test (r.init, r.final) == (1, 2)
+        @test r.irate ≈ cji*2e3  rtol=1e-6
+        @test r.frate ≈ cij*2e3  rtol=1e-6
+        @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
+        # the fit temperature is floored where eij/kT would exceed 50
+        cold = Radix.rate(c, Radix.Cell(0.01, 1e3, 2e3, 1e4); levels=levels)
+        @test isfinite(cold.irate) && cold.irate > 0
+        # a spline that dips below 0 gives zero rates, not negative ones
+        neg = Radix.ElectronCollision(Int8(3), "x", Int32(1), Radix.Transition(Int32(1), Int32(2)),
+            Int32(1), Int32(7), f32(20.76), f32(1.3), f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363])
+        @test Radix.chianti_upsilon(1, 20.76, 1.3, f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363], 1e3) < 0
+        @test Radix.rate(neg, Radix.Cell(0.1, 1e3, 2e3, 1e4); levels=levels).irate == 0
+        @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+        @test Radix.rate(mk(1, 2; ΔE=0), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+    end
+
+    @testset "CollisionProb" begin
+        # against XSTAR's own Fortran (ucalc 63, double-precision build), 800 cases
+        # from real records; the file lists ni li nf lf Z T E1 E2 g1 g2 ne ans1 ans2
+        nz = 0
+        for line in eachline(joinpath(@__DIR__, "reference", "collisionprob_cases.txt"))
+            startswith(line, "#") && continue
+            ni, li, nf, lf, Zp, Tk, e1, e2, g1, g2, nel, a1, a2 = parse.(Float64, split(line))
+            mk(level, n, L, E, g) = Radix.AtomicLevel(Int32(13), "",
+                Int32[n, 2, L, Zp, level, 7], f32[E, g, 1, 13.6])
+            lv = Radix.level_table([mk(1, ni, li, e1, g1), mk(2, nf, lf, e2, g2)])
+            cp = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)),
+                Int32(Zp), Int32(7))
+            r = Radix.rate(cp, Radix.Cell(Tk/1e4, 0.0, nel, nel); levels=lv)
+            @test r.frate ≈ a1  rtol=1e-6 atol=1e-300
+            @test r.irate ≈ a2  rtol=1e-6 atol=1e-300
+            nz += (a1 != 0)
+        end
+        @test nz > 100                            # the reference is not mostly zeros
+        # unknown level: nothing
+        none_lv = Radix.level_table(Radix.AtomicLevel[])
+        cpx = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)), Int32(8), Int32(7))
+        @test Radix.rate(cpx, Radix.Cell(1.0, 0.0, 1e4, 1e4); levels=none_lv).frate == 0
+    end
+
     @testset "functor convenience" begin
         c = Radix.RadRecomb(Int32(1), "rr", Int32[1], f32[1e-12, 0.7])
         @test c(cell) == Radix.rate(c, cell)
@@ -245,6 +318,44 @@ using Test
             end
             @test nrec == 87231
             @test nnone == 188
+            @test nbad == 0
+
+            # ElectronCollision: finite and obeying detailed balance with the
+            # record's own transition energy. Υ is clamped at 0 (ucalc does not,
+            # and its spline dips slightly below 0 for 4 records).
+            nrec = 0; nnone = 0; nbad = 0; nneg = 0
+            for T in (0.1, 1.0, 10.0)
+                c = Radix.Cell(T, 1e4, 1e4, 1e4)
+                for r in db
+                    r isa Radix.ElectronCollision || continue
+                    T == 0.1 && (nrec += 1)
+                    x = Radix.rate(r, c; levels=levels)
+                    x.init == 0 && (T == 0.1 && (nnone += 1); continue)
+                    lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
+                    ok = isfinite(x.frate) && isfinite(x.irate)
+                    ok &= x.irate == 0 || isapprox(x.frate/x.irate,
+                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.598/(0.861707*T)); rtol=1e-6)
+                    ok || (nbad += 1)
+                    (x.frate < 0 || x.irate < 0) && (nneg += 1)
+                end
+            end
+            @test nrec == 23232
+            @test nnone == 0
+            @test nbad == 0
+            @test nneg == 0
+
+            # CollisionProb: all rates finite and non-negative over four (T, nₑ)
+            nbad = 0; nrec = 0
+            for (T, ne) in ((1.0, 1e4), (10.0, 1e8), (100.0, 1e10), (1000.0, 1e12))
+                c = Radix.Cell(T, 0.0, ne, ne)
+                for r in db
+                    r isa Radix.CollisionProb || continue
+                    T == 1.0 && (nrec += 1)
+                    x = Radix.rate(r, c; levels=levels)
+                    (isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0) || (nbad += 1)
+                end
+            end
+            @test nrec == 6015
             @test nbad == 0
         end
     else

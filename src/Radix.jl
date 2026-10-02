@@ -10,6 +10,8 @@ include("cell.jl")
 include("ion.jl")
 
 include("transition.jl")
+include("chianti.jl")
+include("hydrogenic.jl")
 include("abstractrate.jl")
 include("rates/rates.jl")
 include("ratemap.jl")
