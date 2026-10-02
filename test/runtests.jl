@@ -149,6 +149,30 @@ using Test
         @test Radix.rate(mk(1, 2; ΔE=0), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
     end
 
+    @testset "CollisionProb" begin
+        # against XSTAR's own Fortran (ucalc 63, double-precision build), 800 cases
+        # from real records; the file lists ni li nf lf Z T E1 E2 g1 g2 ne ans1 ans2
+        nz = 0
+        for line in eachline(joinpath(@__DIR__, "reference", "collisionprob_cases.txt"))
+            startswith(line, "#") && continue
+            ni, li, nf, lf, Zp, Tk, e1, e2, g1, g2, nel, a1, a2 = parse.(Float64, split(line))
+            mk(level, n, L, E, g) = Radix.AtomicLevel(Int32(13), "",
+                Int32[n, 2, L, Zp, level, 7], f32[E, g, 1, 13.6])
+            lv = Radix.level_table([mk(1, ni, li, e1, g1), mk(2, nf, lf, e2, g2)])
+            cp = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)),
+                Int32(Zp), Int32(7))
+            r = Radix.rate(cp, Radix.Cell(Tk/1e4, 0.0, nel, nel); levels=lv)
+            @test r.frate ≈ a1  rtol=1e-6 atol=1e-300
+            @test r.irate ≈ a2  rtol=1e-6 atol=1e-300
+            nz += (a1 != 0)
+        end
+        @test nz > 100                            # the reference is not mostly zeros
+        # unknown level: nothing
+        none_lv = Radix.level_table(Radix.AtomicLevel[])
+        cpx = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)), Int32(8), Int32(7))
+        @test Radix.rate(cpx, Radix.Cell(1.0, 0.0, 1e4, 1e4); levels=none_lv).frate == 0
+    end
+
     @testset "functor convenience" begin
         c = Radix.RadRecomb(Int32(1), "rr", Int32[1], f32[1e-12, 0.7])
         @test c(cell) == Radix.rate(c, cell)
@@ -319,6 +343,20 @@ using Test
             @test nnone == 0
             @test nbad == 0
             @test nneg == 0
+
+            # CollisionProb: all rates finite and non-negative over four (T, nₑ)
+            nbad = 0; nrec = 0
+            for (T, ne) in ((1.0, 1e4), (10.0, 1e8), (100.0, 1e10), (1000.0, 1e12))
+                c = Radix.Cell(T, 0.0, ne, ne)
+                for r in db
+                    r isa Radix.CollisionProb || continue
+                    T == 1.0 && (nrec += 1)
+                    x = Radix.rate(r, c; levels=levels)
+                    (isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0) || (nbad += 1)
+                end
+            end
+            @test nrec == 6015
+            @test nbad == 0
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"
