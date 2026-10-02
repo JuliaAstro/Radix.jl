@@ -8,7 +8,7 @@ using Test
 @testset "Radix.jl" begin
     f32 = Float32
     T, nh, ne = 1.5, 1e3, 2e3
-    cell = Radix.Cell(T, nh, ne)
+    cell = Radix.Cell(T, nh, ne, 1e4)
 
     @testset "rate interface" begin
         coefs = [
@@ -68,11 +68,43 @@ using Test
         @test Radix.rate(c, cell; index=true, levels=levels, mass=1.01).frate == 0
     end
 
+    @testset "ElectronImpact1" begin
+        lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
+            f32[E, g, 1, 13.6])
+        levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)])
+        Tg, Ug = [3.0, 4.0, 5.0], [0.1, 0.4, 0.2]          # log10 T (K), Υ
+        mk(i, k) = Radix.ElectronImpact1(Int8(5), "x", Radix.Transition(Int32(i), Int32(k)),
+            Int32(1), Int32(7), f32.(Tg), f32.(Ug))
+        # ucalc label 56 (T in 1e4 K, tfnd = log10(1e4 t)):
+        #   cij = 8.626e-8 Υ exp(-ΔE/(0.861707 t))/(sqrt(t) gglo), cji = 8.626e-8 Υ/(sqrt(t) ggup)
+        Tc = 0.5                                              # log10(5000 K) = 3.699
+        Υi = 0.1 + (0.4 - 0.1)*(log10(Tc*1e4) - 3.0)/(4.0 - 3.0)
+        c = mk(1, 2)
+        r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
+        Δ = Float64(f32(10.2))
+        cij = 8.626e-8*Υi*exp(-Δ/(0.861707*Tc))/sqrt(Tc)/2
+        cji = 8.626e-8*Υi/sqrt(Tc)/8
+        @test (r.init, r.final) == (1, 2)
+        @test r.frate ≈ cij*2e3  rtol=1e-6
+        @test r.irate ≈ cji*2e3  rtol=1e-6
+        # detailed balance: cij/cji = (gup/glo) exp(-ΔE/kT)
+        @test r.frate/r.irate ≈ (8/2)*exp(-Δ/(0.861707*Tc))  rtol=1e-6
+        # stored upper-first gives the same answer
+        @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
+        # above the table: last segment extrapolated and clamped at 0
+        hi = Radix.rate(c, Radix.Cell(10.0, 1e3, 2e3, 1e4); levels=levels)   # log T = 5.0
+        @test hi.irate ≈ 8.626e-8*0.2/sqrt(10.0)/8*2e3  rtol=1e-6
+        far = Radix.rate(c, Radix.Cell(1e3, 1e3, 2e3, 1e4); levels=levels)    # log T = 7.0
+        @test far.frate == 0 && far.irate == 0               # 0.4 + (0.2-0.4)*3 < 0
+        # unknown level: nothing
+        @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+    end
+
     @testset "functor convenience" begin
         c = Radix.RadRecomb(Int32(1), "rr", Int32[1], f32[1e-12, 0.7])
         @test c(cell) == Radix.rate(c, cell)
         @test c(cell; index=true) == Radix.rate(c, cell; index=true)
-        cells = [Radix.Cell(T, nh, ne) for T in (0.5, 1.0, 2.0)]
+        cells = [Radix.Cell(T, nh, ne, 1e4) for T in (0.5, 1.0, 2.0)]
         @test [r.frate for r in c.(cells)] == [Radix.rate(c, x).frate for x in cells]
     end
 
@@ -179,7 +211,7 @@ using Test
 
             # AtomicLine2: every record resolves to two known levels, the decay
             # runs downward in energy, and all results are finite
-            cell0 = Radix.Cell(1.0, 1e4, 1e4)
+            cell0 = Radix.Cell(1.0, 1e4, 1e4, 1e4)
             nbad = 0; nord = 0; nlines = 0
             for r in db
                 r isa Radix.AtomicLine2 || continue
@@ -192,6 +224,28 @@ using Test
             @test nlines == 730369
             @test nbad == 0
             @test nord == 0
+
+            # ElectronImpact1: levels always resolve, the 188 degenerate pairs
+            # (equal energies) are skipped as in ucalc, and the rates are finite,
+            # non-negative and obey detailed balance at 1e3, 1e4 and 1e5 K
+            nrec = 0; nnone = 0; nbad = 0
+            for T in (0.1, 1.0, 10.0)
+                c = Radix.Cell(T, 1e4, 1e4, 1e4)
+                for r in db
+                    r isa Radix.ElectronImpact1 || continue
+                    T == 0.1 && (nrec += 1)
+                    x = Radix.rate(r, c; levels=levels)
+                    x.init == 0 && (T == 0.1 && (nnone += 1); continue)
+                    ok = isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0
+                    lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
+                    ok &= x.irate == 0 ||
+                        isapprox(x.frate/x.irate, (up.g/lo.g)*Radix.expo(-(up.E - lo.E)/(0.861707*T)); rtol=1e-6)
+                    ok || (nbad += 1)
+                end
+            end
+            @test nrec == 87231
+            @test nnone == 188
+            @test nbad == 0
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"
