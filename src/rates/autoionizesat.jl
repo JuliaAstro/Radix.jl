@@ -6,26 +6,23 @@
 
 const AutoionizeSatDesc = "Autoinization rates (in s^-1) for satellite lvls"
 
-struct AutoionizeSat{I,R} <: AbstractRate
-    rate::Int8
+struct AutoionizeSat{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    S2::I
-    L::I
-    k::I
-    i::I
-    Z::I
-    N::I
-    A::R
-    E::R
-    J2::R
+    spin_mult::I        # 2S+1
+    L::I                # orbital angular momentum
+    level::I            # level index
+    parent::Parent{I}           # parent ion (0: not stored) and continuum level
+    Z::I                # atomic number
+    ion::I              # ion index (XSTAR ionN)
+    A_auto::R           # autoionization rate (s⁻¹)
+    E::R                # energy above ionization limit (eV)
+    g::R                # statistical weight 2J+1
 end
 
 function AutoionizeSat(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    AutoionizeSat(Int8(rate), label, ivec..., rvec...)
-end
-
-function rate(coef::AutoionizeSat, cell::Cell)
-    
+    AutoionizeSat(Int8(rate), label, ivec[1:3]..., Parent(zero(eltype(ivec)), ivec[4]),
+        ivec[5:6]..., rvec...)
 end

@@ -6,25 +6,20 @@
 
 const RadiativeFeDecayDesc = "Fe UTA rad rates"
 
-struct RadiativeFeDecay{I,R} <: AbstractRate
-    rate::Int8
+struct RadiativeFeDecay{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    N::I
-    λ::R
-    E::R
-    g::R
-    Ar::R
-    Aa::R
+    transition::Transition{I}   # lower and upper level
+    ion::I     # ion index (XSTAR ionN)
+    λ::R       # wavelength (Å)
+    E::R       # eV
+    gf::R      # weighted oscillator strength
+    A_rad::R   # s⁻¹
+    A_auto::R  # s⁻¹
 end
 
 function RadiativeFeDecay(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    RadiativeFeDecay(Int8(rate), label, ivec..., rvec...)
-end
-
-function rate(coef::RadiativeFeDecay)
-    
+    RadiativeFeDecay(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3], rvec...)
 end

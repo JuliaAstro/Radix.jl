@@ -17,6 +17,3 @@ function TotDielecRecomb(rate::Int32, label::String, ivec::I, rvec::R) where
 
     TotDielecRecomb(Int8(rate), label)
 end
-
-function rate(coef::TotDielecRecomb)
-end

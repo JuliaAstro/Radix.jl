@@ -8,12 +8,12 @@ const IonDesc = "ion data"
 Ion(label, Zp, Z, N, E)
 """
 struct Ion{I, F}
-    # rate::Int8 = 14
+    # rtype = 14
     label::String
-    I::I            # ionization number
+    stage::I        # ionization stage (1 = neutral)
     Z::I            # atomic number
-    N::I            # ion number
-    E::F            # ionization energy
+    ion::I          # ion index (what rate records call `ion`)
+    E_ion::F        # ionization energy (eV)
 end
 
 function Ion(rate::Int32, label::String, ivec::I, rvec::F) where

@@ -7,30 +7,25 @@
 
 const PhotoionizeDeltaDesc = "Delta functions to add to phot. x-sections  DR"
 
-struct PhotoionizeDelta{I,R} <: AbstractRate
-    rate::Int8
+struct PhotoionizeDelta{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    n::I
-    L::I
-    S2::I
-    Z::I
-    k::I
-    Nm::I
-    i::I
-    N::I
-    E∞::R
-    E::Tuple
-    f::Tuple
+    n::I               # principal quantum number
+    L::I               # orbital angular momentum
+    spin_mult::I       # 2S+1
+    Z::I               # atomic number
+    parent::Parent{I}           # parent ion and level
+    level::I           # level index
+    ion::I             # ion index (XSTAR ionN)
+    E_inf::R           # eV
+    E_grid::Vector{R}  # energies (eV)
+    f::Vector{R}       # cm²
 end
 
 function PhotoionizeDelta(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     N = (length(rvec)-1)÷2
-    PhotoionizeDelta(Int8(rate), label, ivec..., rvec[1], Tuple(rvec[2:N]),
-        Tuple(rvec[N+1:2*N]))
-end
-
-function rate(coef::PhotoionizeDelta)
-    
+    PhotoionizeDelta(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., rvec[1], Vector(rvec[2:N]),
+        Vector(rvec[N+1:2*N]))
 end

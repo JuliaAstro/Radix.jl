@@ -15,6 +15,3 @@ function DielecRecombH(rate::Int32, label::String, ivec::I, rvec::R) where
 
     DielecRecombH(Int8(rate), label)
 end
-
-function rate(coef::DielecRecombH)
-end

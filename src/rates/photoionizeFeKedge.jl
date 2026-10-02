@@ -7,30 +7,25 @@
 
 const PhotoionizeFeKedgeDesc = "Iron K Pi xsections, spectator Auger summed"
 
-struct PhotoionizeFeKedge{I,R} <: AbstractRate
-    rate::Int8
+struct PhotoionizeFeKedge{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    n::I
-    L::I
-    J2::I
-    Z::I
-    km::I
-    Nm::I
-    i::I
-    N::I
+    n::I             # principal quantum number
+    L::I             # orbital angular momentum
+    twoJ::I          # 2J
+    Z::I             # atomic number
+    parent::Parent{I}           # parent ion and level
+    level::I         # level index
+    ion::I           # ion index (XSTAR ionN)
     Zeff::R
-    E::R
+    E_th::R          # Ry
     f::R
     γ::R
-    c::R
+    scale::R         # scaling factor
 end
 
 function PhotoionizeFeKedge(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    PhotoionizeFeKedge(Int8(rate), label, ivec..., rvec...)
-end
-
-function rate(coef::PhotoionizeFeKedge)
-    
+    PhotoionizeFeKedge(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., rvec...)
 end

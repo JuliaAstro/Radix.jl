@@ -6,24 +6,18 @@
 
 const AutoionizeFe25SatDesc = "autoionization data for Fe XXiV satellites"
 
-struct AutoionizeFe25Sat{I,R} <: AbstractRate
-    rate::Int8
+struct AutoionizeFe25Sat{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    N::I
-    k::I
-    Nm::I
-    i::I
-    N_::I
-    A::R
-    E::R
+    ion::I           # ion index (XSTAR ionN)
+    level::I         # level index
+    parent::Parent{I}           # parent ion and level
+    A_auto::R        # autoionization rate (s⁻¹)
+    E::R             # energy above ionization limit (eV)
 end
 
 function AutoionizeFe25Sat(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    AutoionizeFe25Sat(Int8(rate), label, ivec..., rvec...)    
-end
-
-function rate(coef::AutoionizeFe25Sat, cell::Cell)
-    
+    AutoionizeFe25Sat(Int8(rate), label, ivec[1], ivec[2], Parent(ivec[3], ivec[4]), rvec...)    
 end

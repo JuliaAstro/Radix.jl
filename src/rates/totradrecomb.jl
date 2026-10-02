@@ -8,19 +8,19 @@
 const TotRadRecomDesc = "total rr  from badnell amdpp.phys.strath.ac.uk"
 
 struct TotRadRecomb{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    Z::I
-    Nm::I
+    Z::I                 # atomic number
+    parent_electrons::I  # electrons of the recombining ion (N-1)
     M::I
     W::I
-    N::I
-    A::R
+    ion::I               # ion index (XSTAR ionN)
+    A::R                 # cm³ s⁻¹
     B::R
-    T0::R
-    T1::R
+    T0::R                # K
+    T1::R                # K
     C::R
-    T2::R
+    T2::R                # K
 end
 
 function TotRadRecomb(rate::Int32, label::String, ivec::I, rvec::R) where
@@ -35,15 +35,15 @@ end
 function rate(coef::TotRadRecomb, cell::Cell; index=false, verbose=false)
 
     if index
-        res = (; init=1, final=0, rate=0.)
+        res = (; init=1, final=0, frate=0., irate=0.)
     else
-        b = coef.b + coef.c*exp(-coef.T2/cell.T/1e4)
+        b = coef.B + coef.C*exp(-coef.T2/cell.T/1e4)
         term1 = sqrt(cell.T/coef.T0)
         term2 = (1.0 + sqrt(cell.T/coef.T0))^(1.0 - b)
         term3 = (1.0 + sqrt(cell.T/coef.T1))^(1.0 + b)
-        frate = cell.nₑ*coef.a/(1e-48 + term1*term2*term3)
+        frate = cell.nₑ*coef.A/(1e-48 + term1*term2*term3)
         if verbose println() end
-        res = (; init=1, final=0, frate=frate)
+        res = (; init=1, final=0, frate=frate, irate=0.)
     end
     res
 end

@@ -8,19 +8,18 @@
 
 const ParPhotoIonize3Desc = "verner pi x!"
 
-struct ParPhotoIonize3{I,R} <: AbstractRate
-    rate::Int8
+struct ParPhotoIonize3{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    NN::I
-    n::I
-    L::I
-    kNm::I
-    ionNm::I
-    iN::I
-    N::I
-    E::R
-    E0::R
-    σ0::R
+    n_electrons::I   # electrons in the ion
+    n::I             # shell principal quantum number
+    l::I             # subshell orbital quantum number
+    parent::Parent{I}           # parent ion and level
+    level::I         # level index
+    ion::I           # ion index (XSTAR ionN)
+    E_th::R          # eV
+    E0::R            # eV
+    σ0::R            # Mb
     ya::R
     P::R
     yw::R
@@ -29,9 +28,5 @@ end
 function ParPhotoIonize3(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ParPhotoIonize3(Int8(rate), label, ivec..., rvec...)
-end
-
-function rate(coef::ParPhotoIonize3)
-
+    ParPhotoIonize3(Int8(rate), label, ivec[1:3]..., Parent(ivec[5], ivec[4]), ivec[6:7]..., rvec...)
 end

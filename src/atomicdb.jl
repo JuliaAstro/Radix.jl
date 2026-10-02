@@ -12,7 +12,7 @@ function load(io::IO)
     sdat = atomdb[5].data[:char][1]
 
     N = length(ptr[1,:])
-    rates = Array{Union{Atom, Ion, AbstractRate, Missing, Nothing}}(undef, N)
+    rates = Array{Union{Atom, Ion, AbstractRate, Missing, Nothing}}(missing, N)
     for j=1:N
         if ptr[2,j] == 0
             break

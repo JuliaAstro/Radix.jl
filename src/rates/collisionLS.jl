@@ -5,22 +5,17 @@
 
 const CollisionLSDesc = "Kato & Nakazaki (1996) fit to Helike coll. strgt"
 
-struct CollisionLS{I} <: AbstractRate
-    rate::Int8
+struct CollisionLS{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
-    c::Tuple
+    transition::Transition{I}   # lower and upper level
+    Z::I               # atomic number
+    ion::I             # ion index (XSTAR ionN)
+    coeffs::Vector{R}  # fit coefficients
 end
 
 function CollisionLS(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionLS(Int8(rate), label, ivec..., Tuple(rvec))
-end
-
-function rate(coef::CollisionLS)
-
+    CollisionLS(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec))
 end

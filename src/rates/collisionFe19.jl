@@ -5,22 +5,17 @@
 
 const CollisionFe19Desc = "Bhatia Fe XIX collision strengths"
 
-struct CollisionFe19{I,R} <: AbstractRate
-    rate::Int8
+struct CollisionFe19{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
-    Υ::R
+    transition::Transition{I}   # lower and upper level
+    Z::I        # atomic number
+    ion::I      # ion index (XSTAR ionN)
+    Υ::R  # effective collision strength
 end
 
 function CollisionFe19(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionFe19(Int8(rate), label, ivec..., rvec[1])    
-end
-
-function rate(coef::CollisionFe19)
-    
+    CollisionFe19(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec[1])    
 end

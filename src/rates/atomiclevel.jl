@@ -8,18 +8,18 @@
 const AtomicLevelDesc = "level data"
 
 struct AtomicLevel{I, R} <: AbstractRate
-    rate::Int8                # rate type
-    label::String             # label
-    n::I                      # level
-    S2p::I                    # 
-    L::I                      # angular momentum
-    Z::I                      # atomic number
-    i::I                      # initial level
-    N::I                      # ionization number
-    Ei::R                     # ionization energy
-    J2p::R                    # total angular momentum
-    ν::R                      # frequency
-    Einf::R                   # ionization energy at infinity
+    rtype::Int8                 # XSTAR rate type (lrtyp)
+    label::String
+    n::I          # principal quantum number
+    spin_mult::I  # 2S+1
+    L::I          # orbital angular momentum
+    Z::I          # atomic number
+    level::I      # level index
+    ion::I        # ion index (XSTAR ionN)
+    E::R          # level energy (eV)
+    g::R          # statistical weight 2J+1
+    n_eff::R      # effective quantum number
+    E_inf::R      # ionization energy at infinity (eV)
 end
 
 function AtomicLevel(rate::Int32, label::String, ivec::I, rvec::R) where
@@ -31,5 +31,5 @@ end
 function rate(coef::AtomicLevel, cell::Cell;
     index=false, verbose=false)
 
-    (; init=coef.i, final=0, frate=0.)
+    (; init=coef.level, final=0, frate=0., irate=0.)
 end

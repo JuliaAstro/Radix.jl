@@ -8,28 +8,23 @@
 
 const ParPhotoIonize2Desc = "op pi xsections"
 
-struct ParPhotoIonize2{I} <: AbstractRate
-    rate::Int8
+struct ParPhotoIonize2{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    n::I
-    L::I
-    J2::I
-    Z::I
-    kNm::I
-    ionNm::I
-    iN::I
-    N::I
-    E::Tuple
-    σ::Tuple
+    n::I               # principal quantum number
+    L::I               # orbital angular momentum
+    twoJ::I            # 2J
+    Z::I               # atomic number
+    parent::Parent{I}           # parent ion and level
+    level::I           # level index
+    ion::I             # ion index (XSTAR ionN)
+    E_grid::Vector{R}  # energies (Ry)
+    σ::Vector{R}       # cross sections (Mb)
 end
 
 function ParPhotoIonize2(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ParPhotoIonize2(Int8(rate), label, ivec..., Tuple(rvec[1:2:end-1]),
-        Tuple(rvec[2:2:end]))
-end
-
-function rate(coef::ParPhotoIonize2)
-
+    ParPhotoIonize2(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., Vector(rvec[1:2:end-1]),
+        Vector(rvec[2:2:end]))
 end

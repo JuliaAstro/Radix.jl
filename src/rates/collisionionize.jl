@@ -6,23 +6,19 @@
 
 const CollisionIonizeDesc = "Bryans CI rates"
 
-struct CollisionIonize{I,R} <: AbstractRate
-    rate::Int8
+struct CollisionIonize{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    N::I
-    E::R
-    T0::R
-    ρ::Tuple
+    level::I      # level index
+    ion::I        # ion index (XSTAR ionN)
+    E_th::R       # threshold energy (eV)
+    T0::R         # K
+    ρ::Vector{R}  # effective collision strengths
 end
 
 function CollisionIonize(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     CollisionIonize(Int8(rate), label, ivec..., rvec[1], rvec[2],
-        Tuple(rvec[2:end]))
-end
-
-function rate(coef::CollisionIonize)
-
+        Vector(rvec[2:end]))
 end

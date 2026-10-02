@@ -6,15 +6,15 @@
 const EffectiveChargeDesc = "effective charge to be used in coll. ion."
 
 struct EffectiveCharge{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    n::I
-    L::I
-    J2::I
-    Z::I
-    i::I
-    N::I
-    Zeff::R
+    n::I      # principal quantum number
+    L::I      # orbital angular momentum
+    twoJ::I   # 2J
+    Z::I      # atomic number
+    level::I  # level index
+    ion::I    # ion index (XSTAR ionN)
+    Zeff::R   # effective charge
 end
 
 function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R) where
@@ -22,8 +22,4 @@ function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R) where
 
     iv = length(ivec) < 6 ? (ivec..., Int32(0)) : ivec
     EffectiveCharge(Int8(rate), label, iv..., rvec[1])
-end
-
-function rate(coef::EffectiveCharge)
-
 end

@@ -1,0 +1,182 @@
+#########################################################################
+# File: xstar.par                                                       #
+#                                                                       #
+# Parameter list for XSTAR package                                      #
+#                                                                       #
+# Note: This file is related to the xspec2xstar.par file.               #
+#       Exercise caution with both when making modifications to one     #
+#                                                                       #
+# Modifications:                                                        #
+# 1/21/1999, WTB: added loopcontrol for multiple runs                   #
+#                 installed lower & upper limits                        #
+#                                                                       #
+# Documentation below is based on documentation by J. Silvis            #
+# of RITSS.                                                             #
+#                                                                       #
+# This file provides information needed by Xanadu Parameter             #
+# Interface (XPI) routines to provide input to the ftool xstar.         #
+# The entries to a parameter file, such as this one, have               #
+# seven columns.
+#
+# Column   Colunm Function    Comment
+#  1       Parameter Name     Alpha-numeric
+#
+#  2       Data type          s-string
+#                             i-integer
+#                             r-real
+#                             b-boolean
+#
+#  3       Parameter mode     q-query (asks the user for a value)
+#                             h-hidden (does not ask user)
+#                             ql-query+learn (remember value
+#                                               from last run)
+#                             hl-hidden+learn
+#                             a-automatic (use value stored in  
+#                                               the mode parameter)
+#
+# 4        Default value      If user hits <cr> this is entered
+#
+# 5        Lower limit        Can be left blank if none is required 
+#
+# 6        Upper limit        Can be left blank if none is required 
+#
+# 7        Prompt             Question printed on screen for user
+#
+# When parameter mode is set to "a" the line will use the value set by
+# the mode statement e.g. 
+#
+# infile,s,a,"her_bfits_1_143.pha",,,"Enter the input file's name"
+# mode,s,h,"ql",,,""
+# is the same as 
+# infile,s,ql,"her_bfits_1_143.pha",,,"Enter the input file's name"
+#
+# You may want to use this if you need to change several parameters at
+# once.
+#
+# Note on the mode statement.  This is just a regular parameter statement,
+# i.e. it sets the value of a string parameter (the first s) 
+# without prompting the user (the h) and the value is ql.
+#
+################################################################
+# User Adjustable Parameters
+#
+cfrac,r,h,0.,0.,1.,"covering fraction"
+#
+temperature,r,a,400.,0.,1.e4,"temperature (/10**4K)"
+#
+lcpres,i,h,0,0,1,"constant pressure switch (1=yes, 0=no)"
+#
+pressure,r,a,0.03,0.,1.,"pressure (dyne/cm**2)"
+#
+density,r,a,1.e+4,0.,1.e21,"density (cm**-3)"
+#
+spectrum,s,a,"pow",,,"spectrum type?"
+#
+spectrum_file,s,a,"spct.dat",,,"spectrum file?"
+#
+spectun,i,a,0,0,1,"spectrum units? (0=energy, 1=photons)"
+#
+trad,r,a,-1.,,,"radiation temperature or alpha?"
+#
+rlrad38,r,a,1.e-6,0.,1.e10,"luminosity (/10**38 erg/s)"
+#
+column,r,a,1.E17,0.,1.e25,"column density (cm**-2)"
+#
+rlogxi,r,a,5.,-10.,+10.,"log(ionization parameter) (erg cm/s)"
+#
+abundtbl,s,a,"xdef",,,"abundance table"
+#
+habund,r,h,1.,0.,100.,"hydrogen abundance"
+#
+heabund,r,h,1.,0.,100.,"helium abundance"
+#
+liabund,r,h,0,0.,100.,"lithium abundance"
+#
+beabund,r,h,0,0.,100.,"beryllium abundance"
+#
+babund,r,h,0,0.,100.,"boron abundance"
+#
+cabund,r,h,1,0.,100.,"carbon abundance"
+#
+nabund,r,h,1,0.,100.,"nitrogen abundance"
+#
+oabund,r,h,1,0.,100.,"oxygen abundance"
+#
+fabund,r,h,1.0,0.,100.,"fluorine abundance"
+#
+neabund,r,h,1,0.,100.,"neon abundance"
+#
+naabund,r,h,1.0,0.,100.,"sodium abundance"
+#
+mgabund,r,h,1,0.,100.,"magnesium abundance"
+#
+alabund,r,h,1.0,0.,100.,"aluminum abundance"
+#
+siabund,r,h,1,0.,100.,"silicon abundance"
+#
+pabund,r,h,1.0,0.,100.,"phosphorus abundance"
+#
+sabund,r,h,1,0.,100.,"sulfur abundance"
+#
+clabund,r,h,1.0,0.,100.,"chlorine abundance"
+#
+arabund,r,h,1,0.,100.,"argon abundance"
+#
+kabund,r,h,1.0,0.,100.,"potassium abundance"
+#
+caabund,r,h,1,0.,100.,"calcium abundance"
+#
+scabund,r,h,1.0,0.,100.,"scandium abundance"
+#
+tiabund,r,h,1.0,0.,100.,"titanium abundance"
+#
+vabund,r,h,1,0.,100.,"vanadium abundance"
+#
+crabund,r,h,1.0,0.,100.,"chromium abundance"
+#
+mnabund,r,h,1.0,0.,100.,"manganese abundance"
+#
+feabund,r,h,1,0.,100.,"iron abundance"
+#
+coabund,r,h,1.0,0.,100.,"cobalt abundance"
+#
+niabund,r,h,1,0.,100.,"nickel abundance"
+#
+cuabund,r,h,1.0,0.,100.,"copper abundance"
+#
+znabund,r,h,1.0,0.,100.,"zinc abundance"
+#
+modelname,s,a,"XSTAR Default",,,"model name"
+#
+#####################################################
+#  Hidden Parameters
+#  Don't mess with these unless you know what you're doing!
+nsteps,i,h,3,1,1000,"number of steps"
+#
+niter,i,h,0,,,"number of iterations"
+#
+lwrite,i,h,0,0,1,"write switch (1=yes, 0=no)"
+#
+lprint,i,h,0,-1,6,"print switch (1=yes, 0=no)"
+#
+lstep,i,h,0,,,"step size choice switch"
+#
+emult,r,h,0.5,1.e-6,1.e+6,"Courant multiplier"
+#
+taumax,r,h,5.,1.,10000.,"tau max for courant step"
+#
+xeemin,r,h,0.1,1.e-6,0.5,"minimum electron fraction"
+#
+critf,r,h,1.e-7,1.e-24,0.1,"critical ion abundance"
+#
+vturbi,r,h,1.,0.,30000.,"turbulent velocity (km/s)"
+#
+radexp,r,h,0.,-3.,3.,"density distribution power law index"
+#
+ncn2,i,h,9999,999,999999,"number of continuum bins"
+#
+loopcontrol,i,h,0,0,30000,"loop control (0=standalone)"
+#
+npass,i,h,1,1,10000,"number of passes"
+#
+mode,s,h,"ql",,,"mode"
