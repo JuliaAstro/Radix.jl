@@ -13,8 +13,8 @@ struct ElectronImpact1{I, R} <: AbstractRate
     transition::Transition{I}   # lower and upper level
     Z::I                # atomic number
     ion::I              # ion index (XSTAR ionN)
-    T_grid::Vector{R}   # temperatures (K)
-    Υ::Vector{R}  # effective collision strengths
+    T_grid::Vector{R}   # log₁₀ of the temperatures (K)
+    Υ::Vector{R}       # effective collision strengths
 end
 
 function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R) where
@@ -22,4 +22,39 @@ function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R) where
 
     ElectronImpact1(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec[1:end÷2]),
         Vector(rvec[end÷2+1:end]))
+end
+
+"""
+    rate(coef::ElectronImpact1, cell; levels, index=false)
+
+Electron-impact excitation and de-excitation (XSTAR ucalc type 56). `levels` is
+a `level_table`. The levels are ordered by energy, `init` is the lower and
+`final` the upper level, `frate` the excitation rate and `irate` the
+de-excitation rate (s⁻¹), related by detailed balance. Υ is interpolated
+linearly in log T; outside the table the nearest segment is extrapolated (as
+ucalc does, since its `hunt` clamps the index) and the result clamped at 0. Both
+rates are 0 if a level is missing from `levels` or the two energies coincide.
+"""
+function rate(coef::ElectronImpact1, cell::Cell; levels, index=false,
+    verbose=false)
+
+    none = (; init=0, final=0, frate=0., irate=0.)
+    a = get(levels, (coef.ion, coef.transition.lower), nothing)
+    b = get(levels, (coef.ion, coef.transition.upper), nothing)
+    (a === nothing || b === nothing) && return none
+    lo, up = b.E < a.E ? (b, a) : (a, b)
+    ΔE = abs(up.E - lo.E)
+    ΔE <= 1e-16 && return none
+    index && return (; none..., init=lo.level, final=up.level)
+
+    logT = log10(cell.T*1e4)
+    T, Υ = coef.T_grid, coef.Υ
+    j = clamp(searchsortedlast(T, logT), 1, max(length(T) - 1, 1))
+    Υ0 = max(1e-36, Float64(Υ[j]))
+    cijpp = length(T) == 1 ? Υ0 :
+        (Float64(Υ[j+1]) - Υ0)*(logT - T[j])/(T[j+1] - T[j] + 1e-24) + Υ0
+    cijpp = max(0., cijpp)
+    cij = 8.626e-8*cijpp*expo(-ΔE/(0.861707*cell.T))/sqrt(cell.T)/lo.g
+    cji = 8.626e-8*cijpp/sqrt(cell.T)/up.g
+    (; init=lo.level, final=up.level, frate=cij*cell.nₑ, irate=cji*cell.nₑ)
 end

@@ -25,6 +25,10 @@ level was `i`, `k`, `j`, `n` or `iN`.
 5. **Units in comments, not names.** Energies eV unless noted (`ΔE` in Ry for
    the CHIANTI fits). Temperatures K, cross sections Mb, rates s⁻¹ or cm³ s⁻¹.
    `Cell.T` is in 10⁴ K as in XSTAR.
+
+   `Cell` holds the local gas state only: `T`, `nₕ` (`xh0`), `nₑ` (`xnx`) and
+   `ntot` (`xpx`, the hydrogen density). Level data and element masses live in
+   tables (`level_table`), and the radiation field will be a separate object.
 6. **Greek only for standard, easy-to-type symbols** (`λ σ α γ ρ η Υ`). Only
    `E∞` is spelled out (`E_inf`), because a subscript is not a valid identifier
    character.
@@ -57,7 +61,7 @@ level was `i`, `k`, `j`, `n` or `iN`.
 | Einstein A | `A` | `A`, `a` |
 | autoionization / radiative rates | `A_auto`, `A_rad` | `Aa`, `Ar` |
 | (weighted) oscillator strength | `gf` / `f` | `gf`, `f`, `g` |
-| tabulated grids | `T_grid`, `ne_grid`, `E_grid` | `T`, `Te`, `ne`, `E` (tuples) |
+| tabulated grids | `T_grid` (log₁₀ K for `ElectronImpact1`), `ne_grid`, `E_grid` | `T`, `Te`, `ne`, `E` (tuples) |
 | cross section | `σ` | `σ` |
 | fit coefficients (unnamed) | `coeffs` | `c::Tuple` |
 | effective collision strength | `Υ` (U+03A5) | `Υ` |
