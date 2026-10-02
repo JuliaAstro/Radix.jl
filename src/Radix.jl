@@ -1,7 +1,7 @@
 module Radix
 
 export Atom, AtomicLevel, AtomicLine
-export load
+export load, level_table
 
 
 include("constants.jl")

@@ -103,6 +103,12 @@ Checked against `ucalc()` in `xstarsub.f` and by loading `atdb.fits`:
   float is the abundance (H 1.0, He 0.1, C 3.7e-4), the second the atomic mass.
 - **`TotRadRecombH`:** the Fortran uses the first integer, `Z`, as the effective
   charge, so `rate` uses `coef.Z^2`.
+- **Reading `atdb.fits`.** FITSFiles.jl up to v0.3.2 rounds unscaled Int32
+  columns through Float32, so the pointers to the reals were wrong beyond 2^24
+  for about 1M of the 1.2M records (reals read from the wrong place, e.g. S II
+  levels with `g = 0`). `load` passes `scale=false` (the file has no
+  TSCAL/TZERO); fixed upstream in JuliaAstro/FITSFiles.jl#50. Values read from
+  records past #71,119 before this change were wrong.
 - **Equivalence of the refactor.** Loading `atdb.fits` before and after
   introducing `Transition`/`Parent` (and moving the three no-parent-ion types
   onto `Parent`) gave identical lower, upper, parent-ion and parent-level values
