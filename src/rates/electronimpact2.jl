@@ -7,21 +7,21 @@
 
 const ElectronImpact2Desc = "chianti2016 collisional rates"
 
-struct ElectronImpact2{I,R} <: AbstractRate
-    rate::Int8
+struct ElectronImpact2{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    t::I
-    i::I
-    k::I
-    N::I
-    ΔE::R
+    kind::I             # transition type
+    lower::I            # lower level
+    upper::I            # upper level
+    ion::I              # ion index (XSTAR ionN)
+    ΔE::R               # Ry
     C::R
-    Υ::Tuple
+    upsilon::Vector{R}  # reduced effective collision strengths Υ
 end
 
 function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     ElectronImpact2(Int8(rate), label, ivec..., rvec[1:2]...,
-        Tuple(rvec[3:end]))
+        Vector(rvec[3:end]))
 end

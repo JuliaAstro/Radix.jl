@@ -5,10 +5,10 @@
 const DielecRecomb2Desc = "dielectronic recombination: arnaud and raymond"
 
 struct DielecRecomb2{R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    cfe::Tuple{R}
-    efe::Tuple{R}
+    C::Vector{R}  # coefficients
+    E::Vector{R}  # energies
 end
 
 function DielecRecomb2(rate::Int32, label::String, ivec::I, rvec::R) where

@@ -5,18 +5,18 @@
 const ChargeExHpDesc = "charge exchange H+ Kingdon and Ferland"
 
 struct ChargeExHp{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
+    level::I  # level index
+    ion::I    # ion index (XSTAR ionN)
     a::R
     b::R
     c::R
     d::R
     e::R
-    T1::R
-    T2::R
-    ΔE::R
+    T1::R     # K
+    T2::R     # K
+    ΔE::R     # ΔE/k (10⁴ K)
 end
 
 function ChargeExHp(rate::Int32, label::String, ivec::I, rvec::R) where

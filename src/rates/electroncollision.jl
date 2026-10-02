@@ -8,20 +8,20 @@
 const ElectronCollisionDesc = "op and chianti line coll rates"
 
 struct ElectronCollision{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    type::I
-    i::I
-    k::I
-    Z::I
-    N::I
-    ΔE::R
+    kind::I             # transition type
+    lower::I            # lower level
+    upper::I            # upper level
+    Z::I                # atomic number
+    ion::I              # ion index (XSTAR ionN)
+    ΔE::R               # Ry
     C::R
-    Υ::Tuple
+    upsilon::Vector{R}  # reduced effective collision strengths Υ
 end
 
 function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ElectronCollision(Int8(rate), label, ivec..., rvec[1:2]..., Tuple(rvec[3:7]))
+    ElectronCollision(Int8(rate), label, ivec..., rvec[1:2]..., Vector(rvec[3:7]))
 end

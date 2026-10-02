@@ -7,13 +7,13 @@
 const RadiativeProbDesc = "h-like cij, bautista (hlike ion)"
 
 struct RadiativeProb{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
-    A::R
+    lower::I  # lower level
+    upper::I  # upper level
+    Z::I      # atomic number
+    ion::I    # ion index (XSTAR ionN)
+    A::R      # s⁻¹
 end
 
 function RadiativeProb(rate::Int32, label::String, ivec::I, rvec::R) where

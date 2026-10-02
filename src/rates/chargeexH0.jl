@@ -6,18 +6,17 @@
 
 const ChargeExH0Desc = "charge exch. h0: Kingdon and Ferland"
 
-struct ChargeExH0{I, R} <: AbstractRate where {R<:AbstractFloat}
-    rate::Int8
+struct ChargeExH0{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
+    ion::I  # ion index (XSTAR ionN)
     a::R
     b::R
     c::R
     d::R
-    T1::R
-    T2::R
-    ΔE::R
-
+    T1::R   # K
+    T2::R   # K
+    ΔE::R   # ΔE/k (10⁴ K)
 end
 
 function ChargeExH0(rate::Int32, label::String, ivec::I, rvec::R) where
@@ -33,7 +32,7 @@ function rate(coef::ChargeExH0, cell::Cell; index=false, verbose=false, n=1)
     else
         rate = 1e-9*cell.nₕ*coef.a*expo(coef.b*log(cell.T)) * 
             max(0, (1 + coef.c*expo(coef.d*cell.T)))
-        frate, irate = coef.rate == 5 ? (0., rate) : (rate, 0.)
+        frate, irate = coef.rtype == 5 ? (0., rate) : (rate, 0.)
         res = (; init=1, final=n, frate=frate, irate=irate)
     end
     if verbose println() end

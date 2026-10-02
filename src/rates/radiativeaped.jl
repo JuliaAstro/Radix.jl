@@ -6,14 +6,14 @@
 const RadiativeAPEDDesc = "aped line wavelengths same as 50"
 
 struct RadiativeAPED{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
-    λ::R
-    A::R
+    lower::I  # lower level
+    upper::I  # upper level
+    Z::I      # atomic number
+    ion::I    # ion index (XSTAR ionN)
+    λ::R      # wavelength (Å)
+    A::R      # s⁻¹
 end
 
 function RadiativeAPED(rate::Int32, label::String, ivec::I, rvec::R) where

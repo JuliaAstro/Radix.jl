@@ -5,13 +5,13 @@
 
 const AtomicLevelFeDesc = "Fe UTA level data"
 
-struct AtomicLevelFe{I,R} <: AbstractRate
-   rate::Int8                 # rate type
-   label::String              # label
-   i::I                       # level
-   N::I                       # ionization number
-   E::R                       # ionization energy
-   J2::R                      # 2J value
+struct AtomicLevelFe{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
+    label::String
+    level::I  # level index
+    ion::I    # ion index (XSTAR ionN)
+    E::R      # level energy (eV)
+    g::R      # statistical weight 2J+1
 end
 
 function AtomicLevelFe(rate::Int32, label::String, ivec::I, rvec::R) where

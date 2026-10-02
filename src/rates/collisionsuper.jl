@@ -9,16 +9,16 @@
 const CollisionSuperDesc = "coll rates from 71"
 
 struct CollisionSuper{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
-    λ::R
-    ne::Tuple
-    Te::Tuple
-    A::Tuple
+    lower::I            # lower level
+    upper::I            # upper level
+    Z::I                # atomic number
+    ion::I              # ion index (XSTAR ionN)
+    λ::R                # wavelength (Å)
+    ne_grid::Vector{R}  # electron densities (cm⁻³)
+    T_grid::Vector{R}   # temperatures (K)
+    C::Matrix{R}        # collision rates (s⁻¹), size (ne, T)
 end
 
 function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R) where
@@ -26,6 +26,6 @@ function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R) where
 
     Nd, Nt = ivec[1:2]
     CollisionSuper(Int8(rate), label, ivec[3:6]..., rvec[Nd+Nt+Nd*Nt+1],
-        Tuple(rvec[1:Nd]), Tuple(rvec[Nd+1:Nd+Nt]),
-        Tuple(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt]))
+        Vector(rvec[1:Nd]), Vector(rvec[Nd+1:Nd+Nt]),
+        reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Nd, Nt))
 end

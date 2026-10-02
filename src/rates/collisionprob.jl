@@ -7,12 +7,12 @@
 const CollisionProbDesc = "h-like cij, bautista (hlike ion)"
 
 struct CollisionProb{I} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
+    lower::I  # lower level
+    upper::I  # upper level
+    Z::I      # atomic number
+    ion::I    # ion index (XSTAR ionN)
 end
 
 function CollisionProb(rate::Int32, label::String, ivec::I, rvec::R) where

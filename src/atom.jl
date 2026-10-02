@@ -8,12 +8,12 @@ const AtomDesc = "element data:"
 Atom(label, i1-i8, mass, Eion)
 """
 struct Atom{I, F}
-    # rate::Int8 = 13
+    # rtype = 13
     label::String
-    N::I     # electron number
-    Z::I     # atomic number
-    mass::F  # atomic mass
-    E::F     # atomic ionization energy
+    n_ions::I       # number of ionization stages
+    Z::I            # atomic number
+    abundance::F    # abundance relative to hydrogen
+    mass::F         # atomic mass
 end
 
 function Atom(rate::Int32, label::String, ivec::I, rvec::R) where

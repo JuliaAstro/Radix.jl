@@ -44,6 +44,18 @@ using Test
         @test r.frate ≈ ne*f32(cai)*exp(-f32(eai)/(T*0.861707))/sqrt(T)
         @test (r.init, r.final) == (1, 1)
 
+        # ucalc label 30 (hydrogenic RR): t6=t/100; beta=Z²/(6.34 t6); vth=3.10782e7 sqrt(t);
+        # phi from the two fits joined with a fudge factor; ans1 = 2*2.105e-22*vth*beta*phi*xnx
+        Zc = 3
+        c = Radix.TotRadRecombH(Int32(30), "rrH", Int32[Zc, 3], f32[])
+        t6 = T/100; β = Zc^2/(6.34*t6); vth = 3.10782e7*sqrt(T)
+        ypow = min(1.0, 0.06376/β^2)
+        fudge = 0.9*(1-ypow) + (1/1.5)*ypow
+        ϕ1 = (1.735 + log(β) + 1/6/β)*fudge/2
+        ϕ2 = β*(-1.202*log(β) - 0.298)
+        ϕ = β < 0.2525 ? ϕ2 : ϕ1
+        @test Radix.rate(c, cell).frate ≈ ne*2*2.105e-22*vth*β*ϕ
+
         # ucalc label 2: rate = a*expo(log(t)*b)*(1+c*expo(d*t))*1e-9; ans1 = rate*xh0
         A, B, C, D = 2.0, 0.5, 0.3, -0.2
         c = Radix.ChargeExH0(Int32(2), "cx", Int32[1], f32[A, B, C, D, 0, 0, 0])

@@ -6,9 +6,9 @@
 const RadRecomDesc = "radiative recombination:  aldrovandi and pequign"
 
 struct RadRecomb{R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    a::R
+    A::R  # cm³ s⁻¹
     η::R
 end
 
@@ -21,5 +21,5 @@ end
 function rate(coef::RadRecomb, cell::Cell; index=false, verbose=false)
     if verbose println() end
 
-    (; init=1, final=0, frate=(index ? 0. : cell.nₑ*coef.a/cell.T^coef.η), irate=0.)
+    (; init=1, final=0, frate=(index ? 0. : cell.nₑ*coef.A/cell.T^coef.η), irate=0.)
 end

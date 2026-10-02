@@ -7,17 +7,16 @@
 const TwoPhotonDecayDesc = "2 photon decay"
 
 struct TwoPhotonDecay{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    l::I
-    N::I
-    A::R
+    lower::I  # lower level
+    upper::I  # upper level
+    ion::I    # ion index (XSTAR ionN)
+    A::R      # s⁻¹
 end
 
 function TwoPhotonDecay(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    TwoPhotonDecay(Int8(rate), label::String, ivec..., rvec[1])
+    TwoPhotonDecay(Int8(rate), label::String, ivec[1], ivec[2], ivec[4], rvec[1])
 end

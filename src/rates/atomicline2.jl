@@ -6,15 +6,15 @@
 const AtomicLine2Desc = "op line rad. rates"
 
 struct AtomicLine2{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
-    λ::R
-    gf::R
-    A::R
+    lower::I  # lower level
+    upper::I  # upper level
+    Z::I      # atomic number
+    ion::I    # ion index (XSTAR ionN)
+    λ::R      # wavelength (Å)
+    gf::R     # weighted oscillator strength
+    A::R      # Einstein A (s⁻¹)
 end
 
 function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R) where

@@ -6,12 +6,12 @@
 const DielecRecomb1Desc = "dielectronic recombination: aldrovandi and pequi"
 
 struct DielecRecomb1{R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    a::R
-    b::R
-    T0::R
-    T1::R
+    A::R   # cm³ s⁻¹ K³ᐟ²
+    B::R
+    T0::R  # K
+    T1::R  # K
 end
 
 function DielecRecomb1(rate::Int32, label::String, ivec::I, rvec::R) where

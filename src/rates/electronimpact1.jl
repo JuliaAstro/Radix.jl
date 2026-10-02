@@ -7,20 +7,20 @@
 
 const ElectronImpact1Desc = "tabulated collision strength, bautista"
 
-struct ElectronImpact1{I} <: AbstractRate
-    rate::Int8
+struct ElectronImpact1{I, R} <: AbstractRate
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    i::I
-    k::I
-    Z::I
-    N::I
-    T::Tuple
-    Υ::Tuple
+    lower::I            # lower level
+    upper::I            # upper level
+    Z::I                # atomic number
+    ion::I              # ion index (XSTAR ionN)
+    T_grid::Vector{R}   # temperatures (K)
+    upsilon::Vector{R}  # effective collision strengths Υ
 end
 
 function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ElectronImpact1(Int8(rate), label, ivec..., Tuple(rvec[1:end÷2]),
-        Tuple(rvec[end÷2+1:end]))
+    ElectronImpact1(Int8(rate), label, ivec..., Vector(rvec[1:end÷2]),
+        Vector(rvec[end÷2+1:end]))
 end

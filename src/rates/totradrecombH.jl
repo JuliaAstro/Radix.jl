@@ -16,10 +16,10 @@ const C30h = 2.105e-22
 const C30i = 3.10782e7
 
 struct TotRadRecombH{I} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    Z::I
-    N::I
+    Z::I    # atomic number
+    ion::I  # ion index (XSTAR ionN)
 end
 
 function TotRadRecombH(rate::Int32, label::String, ivec::I, rvec::R) where
@@ -32,7 +32,7 @@ function rate(coef::TotRadRecombH, cell::Cell; index=false, verbose=false)
     if index
         res = (; init=1, final=0, frate=0., irate=0.)
     else
-        β = coef.N^2/(C30a*cell.T)
+        β = coef.Z^2/(C30a*cell.T)
         # fudge factor makes the two expressions join smoothly
         ypow = min(1, C30b/β^2)
         ϕ1 = (C30c*(1-ypow) + 2/3*ypow)*(C30d + log(β) + 1/6/β)/2

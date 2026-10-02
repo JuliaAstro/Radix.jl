@@ -6,12 +6,14 @@ AtomicLevelFe 986
 AtomicLine2 730369
 AutoionizeFe25Sat 16
 AutoionizeSat 63
-ChargeExH0 139
+ChargeExH0 80
+ChargeExHe 59
 ChargeExHp 4
 CollisionAPED 1314
 CollisionFe19 240
 CollisionHeFine 6
-CollisionHelike 479
+CollisionHelike 52
+CollisionHelikeSat 427
 CollisionHlike1 342
 CollisionHlike2 72
 CollisionIonize 982

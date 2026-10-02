@@ -8,19 +8,19 @@
 const TotRadRecomDesc = "total rr  from badnell amdpp.phys.strath.ac.uk"
 
 struct TotRadRecomb{I, R} <: AbstractRate
-    rate::Int8
+    rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    Z::I
-    Nm::I
+    Z::I                 # atomic number
+    parent_electrons::I  # electrons of the recombining ion (N-1)
     M::I
     W::I
-    N::I
-    A::R
+    ion::I               # ion index (XSTAR ionN)
+    A::R                 # cm³ s⁻¹
     B::R
-    T0::R
-    T1::R
+    T0::R                # K
+    T1::R                # K
     C::R
-    T2::R
+    T2::R                # K
 end
 
 function TotRadRecomb(rate::Int32, label::String, ivec::I, rvec::R) where
