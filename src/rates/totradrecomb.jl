@@ -32,18 +32,19 @@ function TotRadRecomb(rate::Int32, label::String, ivec::I, rvec::R) where
     end
 end
 
-function rate(coef::TotRadRecomb, cell::Cell; index=false, verbose=false)
+"""
+    rate(coef::TotRadRecomb, cell; index=false)
 
-    if index
-        res = (; init=1, final=0, frate=0., irate=0.)
-    else
-        b = coef.B + coef.C*exp(-coef.T2/cell.T/1e4)
-        term1 = sqrt(cell.T/coef.T0)
-        term2 = (1.0 + sqrt(cell.T/coef.T0))^(1.0 - b)
-        term3 = (1.0 + sqrt(cell.T/coef.T1))^(1.0 + b)
-        frate = cell.nₑ*coef.A/(1e-48 + term1*term2*term3)
-        if verbose println() end
-        res = (; init=1, final=0, frate=frate, irate=0.)
-    end
-    res
+Total radiative recombination (XSTAR ucalc type 38, Badnell's fit). The
+characteristic temperatures `T0`, `T1`, `T2` are in K while `cell.T` is in 10⁴ K.
+"""
+function rate(coef::TotRadRecomb, cell::Cell; index=false, verbose=false)
+    index && return (; init=1, final=0, frate=0., irate=0.)
+    T = cell.T
+    T0, T1 = coef.T0/1e4, coef.T1/1e4
+    b = coef.B + coef.C*exp(-coef.T2/1e4/T)
+    term1 = sqrt(T/T0)
+    term2 = (1.0 + sqrt(T/T0))^(1.0 - b)
+    term3 = (1.0 + sqrt(T/T1))^(1.0 + b)
+    (; init=1, final=0, frate=cell.nₑ*coef.A/(1e-48 + term1*term2*term3), irate=0.)
 end

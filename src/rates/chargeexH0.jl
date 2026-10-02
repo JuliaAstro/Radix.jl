@@ -25,15 +25,15 @@ function ChargeExH0(rate::Int32, label::String, ivec::I, rvec::R) where
     ChargeExH0(Int8(rate), label, ivec[1], rvec...)
 end
 
-function rate(coef::ChargeExH0, cell::Cell; index=false, verbose=false, n=1)
+function rate(coef::ChargeExH0, cell::Cell; index=false, verbose=false, nlev=0)
 
     if index || cell.T > 5
-        res = (; init=1, final=n, frate=0., irate=0.)
+        res = (; init=1, final=nlev, frate=0., irate=0.)
     else
         rate = 1e-9*cell.nₕ*coef.a*expo(coef.b*log(cell.T)) * 
             max(0, (1 + coef.c*expo(coef.d*cell.T)))
         frate, irate = coef.rtype == 5 ? (0., rate) : (rate, 0.)
-        res = (; init=1, final=n, frate=frate, irate=irate)
+        res = (; init=1, final=nlev, frate=frate, irate=irate)
     end
     if verbose println() end
     res
