@@ -140,6 +140,11 @@ using Test
         # the fit temperature is floored where eij/kT would exceed 50
         cold = Radix.rate(c, Radix.Cell(0.01, 1e3, 2e3, 1e4); levels=levels)
         @test isfinite(cold.irate) && cold.irate > 0
+        # a spline that dips below 0 gives zero rates, not negative ones
+        neg = Radix.ElectronCollision(Int8(3), "x", Int32(1), Radix.Transition(Int32(1), Int32(2)),
+            Int32(1), Int32(7), f32(20.76), f32(1.3), f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363])
+        @test Radix.chianti_upsilon(1, 20.76, 1.3, f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363], 1e3) < 0
+        @test Radix.rate(neg, Radix.Cell(0.1, 1e3, 2e3, 1e4); levels=levels).irate == 0
         @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
         @test Radix.rate(mk(1, 2; ΔE=0), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
     end
@@ -292,8 +297,8 @@ using Test
             @test nbad == 0
 
             # ElectronCollision: finite and obeying detailed balance with the
-            # record's own transition energy. ucalc does not clamp Υ at 0, and the
-            # spline dips slightly below 0 for 4 records (rates ~ -1e-7).
+            # record's own transition energy. Υ is clamped at 0 (ucalc does not,
+            # and its spline dips slightly below 0 for 4 records).
             nrec = 0; nnone = 0; nbad = 0; nneg = 0
             for T in (0.1, 1.0, 10.0)
                 c = Radix.Cell(T, 1e4, 1e4, 1e4)
@@ -313,7 +318,7 @@ using Test
             @test nrec == 23232
             @test nnone == 0
             @test nbad == 0
-            @test nneg == 12
+            @test nneg == 0
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"

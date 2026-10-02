@@ -35,8 +35,8 @@ de-excitation rate (s⁻¹), related by detailed balance with the transition
 energy `ΔE` of the record. The fit temperature is floored at `ΔE/50k`. Both
 rates are 0 if a level is missing from `levels` or `ΔE ≤ 0`.
 
-Υ is not clamped at 0 (neither is it in ucalc): for 4 records the spline dips
-slightly below zero and the rates are about -1e-7.
+Υ is clamped at 0, which ucalc does not do: for 4 records the spline dips
+slightly below zero (rates of about -1e-7 in XSTAR). Type 56 clamps in ucalc.
 
 XSTAR's matrix assembly decides which level is lower with a ratio test on the
 level energies that can swap them for nearly degenerate levels; that quirk is
@@ -56,7 +56,7 @@ function rate(coef::ElectronCollision, cell::Cell; levels, index=false,
     index && return (; none..., init=lo.level, final=up.level)
 
     T = max(cell.T*1e4, 2.8777e6/elin)               # K
-    Υ = chianti_upsilon(coef.kind, coef.ΔE, coef.C, coef.Υ, T)
+    Υ = max(0., chianti_upsilon(coef.kind, coef.ΔE, coef.C, coef.Υ, T))
     cji = 8.626e-8*Υ/sqrt(cell.T)/up.g
     cij = cji*up.g*expo(-eij/(0.861707*cell.T))/lo.g
     (; init=lo.level, final=up.level, frate=cij*cell.nₑ, irate=cji*cell.nₑ)

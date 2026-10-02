@@ -141,7 +141,7 @@ Checked against `ucalc()` in `xstarsub.f` and by loading `atdb.fits`:
   `ElectronCollision` (ucalc 51), where `idest1` is the upper level, this swaps
   the roles of nearly degenerate levels (energies within 1%). Radix always
   returns `init` = lower, `final` = upper, so the quirk is not reproduced.
-- `ElectronCollision` Υ is not clamped at 0 (as in ucalc): the spline gives
+- `ElectronCollision` clamps Υ at 0, which ucalc does not do: the spline gives
   small negative rates (about −1e-7) for 4 records.
 
 ## Fields of every type
