@@ -1,11 +1,11 @@
-include("atomiclevel.jl")
-include("atomiclevelFe.jl")
-include("atomicline.jl")
+include("atomiclevel.jl")               # complete
+include("atomiclevelFe.jl")             # 
+include("atomicline.jl")                # 
 include("atomicline2.jl")
-include("autoionize.jl")
+include("autoionize.jl")                # complete
 include("autoionizeFex25sat.jl")
 include("autoionizesat.jl")
-include("chargeexH0.jl")
+include("chargeexH0.jl")                # complete
 include("chargeexHe.jl")
 include("chargeexHp.jl")
 include("collisionaped.jl")
@@ -38,7 +38,7 @@ include("photorecombx.jl")
 include("radiativeaped.jl")
 include("radiativeFedecay.jl")
 include("radiativeprob.jl")
-include("radiativerecomb.jl")
+include("radiativerecomb.jl")           # complete
 include("radiativesuper.jl")
 include("totdielecrecomb.jl")
 include("totradrecomb.jl")

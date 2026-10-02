@@ -35,15 +35,15 @@ end
 function rate(coef::TotRadRecomb, cell::Cell; index=false, verbose=false)
 
     if index
-        res = (; init=1, final=0, rate=0.)
+        res = (; init=1, final=0, frate=0., irate=0.)
     else
-        b = coef.b + coef.c*exp(-coef.T2/cell.T/1e4)
+        b = coef.B + coef.C*exp(-coef.T2/cell.T/1e4)
         term1 = sqrt(cell.T/coef.T0)
         term2 = (1.0 + sqrt(cell.T/coef.T0))^(1.0 - b)
         term3 = (1.0 + sqrt(cell.T/coef.T1))^(1.0 + b)
-        frate = cell.nₑ*coef.a/(1e-48 + term1*term2*term3)
+        frate = cell.nₑ*coef.A/(1e-48 + term1*term2*term3)
         if verbose println() end
-        res = (; init=1, final=0, frate=frate)
+        res = (; init=1, final=0, frate=frate, irate=0.)
     end
     res
 end

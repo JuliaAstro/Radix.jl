@@ -21,6 +21,6 @@ end
 
 function rate(coef::Autoionize, cell::Cell; index=false, verbose=false)
 
-    frate = index ? 0. : den*coef.cai*expo(-coef.eai/(C03a*T))/sqrt(T)
-    (; init=1, final=1, frate=frate)
+    frate = index ? 0. : cell.nₑ*coef.cai*expo(-coef.eai/C03a/cell.T)/sqrt(cell.T)
+    (; init=1, final=1, frate=frate, irate=0.)
 end

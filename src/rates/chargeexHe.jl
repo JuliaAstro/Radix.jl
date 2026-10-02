@@ -21,14 +21,16 @@ end
 function ChargeExHe(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ChargeExH0(Int8(rate), label, ivec..., rvec...)
+    ChargeExHe(Int8(rate), label, ivec..., rvec...)
 end
 
-function rate(coef::ChargeExHe, cell::Cell; verbose=false)
+function rate(coef::ChargeExHe, cell::Cell; index=false, verbose=false,
+    ndit=1, nlev=1)
+    T = cell.T
     res = 1e-9*coef.a*min(T, 1000.0)^coef.b*(1 + coef.c*expo(coef.d*T))
 
     init, final, frate = ndit > 1 ? (coef.i, nlev*coef.k-1, res/6) :
         (1, nlev, 0.0)
 
-    (; init=init, final=final, frate=frate, irate=res)
+    (; init=init, final=final, frate=frate, irate=index ? 0. : res)
 end

@@ -1,0 +1,110 @@
+ xstar version 2.59j
+ nry=         319         999
+ xstar version 2.59j
+ Loading Atomic Database...
+ Atomic Data Version: 2025-12-03T16:03:10
+ in readtbl:
+ number of pointers=     1230566
+ number of reals=   199906130
+ number of integers=     6278481
+ number of characters=      751726
+ initializng database...
+ number of lines=      736256
+ number of rrcs=      301301
+ done with setptrs
+  
+ print option: 3
+ print option: 2
+
+ input parameters:
+covering fraction=      0.000E+00
+temperature (/10**4K)=  1.000E+02
+ constant pressure switch (1=yes, 0=no)=           0
+pressure (dyne/cm**2)=  3.000E-02
+density (cm**-3)=       1.000E+04
+ spectrum type=pow     
+ spectrum file=        
+ spectrum units? (0=energy, 1=photons)           0
+radiation temperature or alpha= -1.000E+00
+luminosity (/10**38 erg/s)=  1.000E-06
+column density (cm**-2  1.000E+17
+log(ionization parameter)=  2.000E+00
+flux=                   7.962E+04
+ abundance table: xdef
+ abundances:
+ element,   rel.to cosmic,     rel. to H,     H=12
+ H abund=  1.000E+00  1.000E+00  1.200E+01
+ Heabund=  1.000E+00  1.000E-01  1.100E+01
+ Liabund=  0.000E+00  0.000E+00  0.000E+00
+ Beabund=  0.000E+00  0.000E+00  0.000E+00
+ B abund=  0.000E+00  0.000E+00  0.000E+00
+ C abund=  1.000E+00  3.700E-04  8.568E+00
+ N abund=  1.000E+00  1.100E-04  8.041E+00
+ O abund=  1.000E+00  6.800E-04  8.833E+00
+ F abund=  1.000E+00  3.980E-08  4.600E+00
+ Neabund=  1.000E+00  2.800E-05  7.447E+00
+ Naabund=  1.000E+00  1.780E-06  6.250E+00
+ Mgabund=  1.000E+00  3.500E-05  7.544E+00
+ Alabund=  1.000E+00  2.450E-06  6.389E+00
+ Siabund=  1.000E+00  3.500E-05  7.544E+00
+ P abund=  1.000E+00  3.310E-07  5.520E+00
+ S abund=  1.000E+00  1.600E-05  7.204E+00
+ Clabund=  1.000E+00  3.980E-07  5.600E+00
+ Arabund=  1.000E+00  4.500E-06  6.653E+00
+ K abund=  1.000E+00  8.910E-08  4.950E+00
+ Caabund=  1.000E+00  2.100E-06  6.322E+00
+ Scabund=  1.000E+00  1.660E-09  3.220E+00
+ Tiabund=  1.000E+00  1.350E-07  5.130E+00
+ V abund=  1.000E+00  2.510E-08  4.400E+00
+ Crabund=  1.000E+00  7.080E-07  5.850E+00
+ Mnabund=  1.000E+00  2.510E-07  5.400E+00
+ Feabund=  1.000E+00  2.500E-05  7.398E+00
+ Coabund=  1.000E+00  1.260E-07  5.100E+00
+ Niabund=  1.000E+00  2.000E-06  6.301E+00
+ Cuabund=  1.000E+00  3.160E-08  4.500E+00
+ Znabund=  1.000E+00  1.580E-08  4.199E+00
+ model name=ref1                          
+ number of steps=           2
+ number of iterations=           0
+ write switch (1=yes, 0=no)=           1
+ print switch (1=yes, 0=no)=           0
+ step size choice switch=           0
+ loop control (0=standalone)=           0
+ number of passes=           1
+ emult=  0.50000000000000000     
+ taumax=   5.0000000000000000     
+ xeemin=  0.10000000149011612     
+ critf=   1.0000000116860974E-007
+ vturbi=   1.0000000000000000     
+ ncn2=         999
+ radexp=   0.0000000000000000     
+
+ 
+ running ...
+ U(1-1.8),U(1.8-4):   2977.8191131400677        2025.8105962208733     
+ Lbol=   2.3400568331963794E-006
+  
+ pass number=           1          -1
+ print option:17
+   log(r) delr/r log(N) log(xi) x_e   log(n) log(t) h-c(%) h-c(%) log(tau) 
+                                                                  fwd    rev    
+   13.00 -36.00 -10.00   2.00   1.00   4.00   6.00 -10.47   0.00 -10.00 -10.00  0
+   13.00 -36.00 -10.00   2.00   1.00   4.00   6.00 -10.39   0.00 -10.00 -10.00  0
+   13.18  -0.48  16.70   1.65   1.00   4.00   6.00 -26.10   0.00 -10.00 -10.00  0
+   13.30  -0.30  17.00   1.40   1.00   4.00   6.00 -26.10   0.00 -10.00 -10.00  0
+  
+  final print:           0
+  1.00000000E+02  4.01314778E-15  5.21615377E-15 -2.60692748E-01
+  
+ print option:22
+  r=  2.000E+13 t=  1.000E+02 log(xi)=  1.398E+00 n_e=  1.000E+04 n_p=  1.000E+04
+ httot=  4.013E-15 cltot=  5.216E-15taulc=  3.390E-11taulcb=  0.000E+00
+  log(Xi)= -6.190E-01 log(u1)= -3.533E-01 log(ux)= -1.221E+00 gamma=  2.150E-01 rdel=  1.000E+13
+ 
+ print option:11
+ after writespectra   16.483322143554688     
+ after writespectra2  0.15864562988281250     
+ after writespectra3   8.3923339843750000E-004
+ after writespectra4  0.11108398437500000     
+ total time   86.354224957525730     
+ closing:         805         803         801         799

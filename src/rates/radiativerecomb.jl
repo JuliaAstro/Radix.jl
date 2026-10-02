@@ -21,5 +21,5 @@ end
 function rate(coef::RadRecomb, cell::Cell; index=false, verbose=false)
     if verbose println() end
 
-    (; init=1, final=0, frate=(index ? 0. : den*coef.a/T^coef.η))
+    (; init=1, final=0, frate=(index ? 0. : cell.nₑ*coef.a/cell.T^coef.η), irate=0.)
 end

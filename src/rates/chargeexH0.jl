@@ -6,7 +6,7 @@
 
 const ChargeExH0Desc = "charge exch. h0: Kingdon and Ferland"
 
-struct ChargeExH0{I, R} <: AbstractRate
+struct ChargeExH0{I, R} <: AbstractRate where {R<:AbstractFloat}
     rate::Int8
     label::String
     i::I
@@ -26,9 +26,9 @@ function ChargeExH0(rate::Int32, label::String, ivec::I, rvec::R) where
     ChargeExH0(Int8(rate), label, ivec[1], rvec...)
 end
 
-function rate(coef::ChargeExH0, n::Integer, cell::Cell; index=false, verbose=false)
+function rate(coef::ChargeExH0, cell::Cell; index=false, verbose=false, n=1)
 
-    if index || T > 5
+    if index || cell.T > 5
         res = (; init=1, final=n, frate=0., irate=0.)
     else
         rate = 1e-9*cell.nₕ*coef.a*expo(coef.b*log(cell.T)) * 

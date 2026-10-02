@@ -31,5 +31,5 @@ end
 function rate(coef::AtomicLevel, cell::Cell;
     index=false, verbose=false)
 
-    (; init=coef.i, final=0, frate=0.)
+    (; init=coef.i, final=0, frate=0., irate=0.)
 end

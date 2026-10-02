@@ -4,6 +4,7 @@ export Atom, AtomicLevel, AtomicLine
 export load
 
 
+include("constants.jl")
 include("atom.jl")
 include("cell.jl")
 include("ion.jl")
