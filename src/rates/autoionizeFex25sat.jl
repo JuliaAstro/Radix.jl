@@ -11,8 +11,7 @@ struct AutoionizeFe25Sat{I, R} <: AbstractRate
     label::String
     ion::I           # ion index (XSTAR ionN)
     level::I         # level index
-    parent_ion::I    # parent (N-1 electron) ion index
-    parent_level::I  # level of the parent (N-1 electron) ion
+    parent::Parent{I}           # parent ion and level
     A_auto::R        # autoionization rate (s⁻¹)
     E::R             # energy above ionization limit (eV)
 end
@@ -20,5 +19,5 @@ end
 function AutoionizeFe25Sat(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    AutoionizeFe25Sat(Int8(rate), label, ivec[1:4]..., rvec...)    
+    AutoionizeFe25Sat(Int8(rate), label, ivec[1], ivec[2], Parent(ivec[3], ivec[4]), rvec...)    
 end

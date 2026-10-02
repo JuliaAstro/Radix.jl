@@ -11,17 +11,16 @@ struct ElectronImpact2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     kind::I             # transition type
-    lower::I            # lower level
-    upper::I            # upper level
+    transition::Transition{I}   # lower and upper level
     ion::I              # ion index (XSTAR ionN)
     ΔE::R               # Ry
     C::R
-    upsilon::Vector{R}  # reduced effective collision strengths Υ
+    Υ::Vector{R}  # reduced effective collision strengths
 end
 
 function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ElectronImpact2(Int8(rate), label, ivec..., rvec[1:2]...,
+    ElectronImpact2(Int8(rate), label, ivec[1], Transition(ivec[2], ivec[3]), ivec[4], rvec[1:2]...,
         Vector(rvec[3:end]))
 end

@@ -12,7 +12,7 @@ struct AutoionizeSat{I, R} <: AbstractRate
     spin_mult::I        # 2S+1
     L::I                # orbital angular momentum
     level::I            # level index
-    continuum_level::I  # continuum level
+    parent::Parent{I}           # parent ion (0: not stored) and continuum level
     Z::I                # atomic number
     ion::I              # ion index (XSTAR ionN)
     A_auto::R           # autoionization rate (s⁻¹)
@@ -23,5 +23,6 @@ end
 function AutoionizeSat(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    AutoionizeSat(Int8(rate), label, ivec..., rvec...)
+    AutoionizeSat(Int8(rate), label, ivec[1:3]..., Parent(zero(eltype(ivec)), ivec[4]),
+        ivec[5:6]..., rvec...)
 end

@@ -9,8 +9,7 @@ const CollisionHelikeDesc = ""
 struct CollisionHelike{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    lower::I           # lower level
-    upper::I           # upper level
+    transition::Transition{I}   # lower and upper level
     Z::I               # atomic number
     ion::I             # ion index (XSTAR ionN)
     coeffs::Vector{R}  # fit coefficients
@@ -19,5 +18,5 @@ end
 function CollisionHelike(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionHelike(Int8(rate), label, ivec..., Vector(rvec))
+    CollisionHelike(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec))
 end

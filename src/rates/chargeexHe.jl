@@ -8,7 +8,7 @@ struct ChargeExHe{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     level::I         # level index
-    parent_level::I  # level of the recombined ion
+    parent::Parent{I}           # recombined ion (0: not stored) and level
     a::R
     b::R
     c::R
@@ -23,7 +23,8 @@ function ChargeExHe(rate::Int32, label::String, ivec::I, rvec::R) where
 
     # a single index means "ground level" (XSTAR: idest1=1, idest2=nlevp)
     iv = length(ivec) > 1 ? ivec[1:2] : Int32[1, 1]
-    ChargeExHe(Int8(rate), label, iv..., rvec...)
+    ChargeExHe(Int8(rate), label, iv[1], Parent(zero(eltype(iv)), iv[2]),
+        rvec...)
 end
 
 function rate(coef::ChargeExHe, cell::Cell; index=false, verbose=false,
@@ -31,7 +32,7 @@ function rate(coef::ChargeExHe, cell::Cell; index=false, verbose=false,
     T = cell.T
     res = 1e-9*coef.a*min(T, 1000.0)^coef.b*(1 + coef.c*expo(coef.d*T))
 
-    init, final, frate = ndit > 1 ? (coef.level, nlev + coef.parent_level - 1, res/6) :
+    init, final, frate = ndit > 1 ? (coef.level, nlev + coef.parent.level - 1, res/6) :
         (1, nlev, 0.0)
 
     (; init=init, final=final, frate=frate, irate=index ? 0. : res)

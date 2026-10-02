@@ -16,8 +16,7 @@ struct PhotoionizeSuper{I, R} <: AbstractRate
     L::I                # orbital angular momentum
     spin_mult::I        # 2S+1
     Z::I                # atomic number
-    parent_level::I     # level of the parent (N-1 electron) ion
-    parent_ion::I       # parent (N-1 electron) ion index
+    parent::Parent{I}           # parent ion and level
     level::I            # level index
     ion::I              # ion index (XSTAR ionN)
     ne_grid::Vector{R}  # electron densities (cm⁻³)
@@ -31,7 +30,7 @@ function PhotoionizeSuper(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     Nd, Nt, Nx = ivec[1:3]
-    PhotoionizeSuper(Int8(rate), label, ivec[4:end]..., Vector(rvec[1:Nd]),
+    PhotoionizeSuper(Int8(rate), label, ivec[4:7]..., Parent(ivec[9], ivec[8]), ivec[10:11]..., Vector(rvec[1:Nd]),
         Vector(rvec[Nd+1:Nd+Nt]), reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Nd, Nt),
         Vector(rvec[Nd+Nt+Nd*Nt+1:2:end-1]), Vector(rvec[Nd+Nt+Nd*Nt+2:2:end]))
 end

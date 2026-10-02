@@ -11,17 +11,16 @@ struct ElectronCollision{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     kind::I             # transition type
-    lower::I            # lower level
-    upper::I            # upper level
+    transition::Transition{I}   # lower and upper level
     Z::I                # atomic number
     ion::I              # ion index (XSTAR ionN)
     ΔE::R               # Ry
     C::R
-    upsilon::Vector{R}  # reduced effective collision strengths Υ
+    Υ::Vector{R}  # reduced effective collision strengths
 end
 
 function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ElectronCollision(Int8(rate), label, ivec..., rvec[1:2]..., Vector(rvec[3:7]))
+    ElectronCollision(Int8(rate), label, ivec[1], Transition(ivec[2], ivec[3]), ivec[4:5]..., rvec[1:2]..., Vector(rvec[3:7]))
 end

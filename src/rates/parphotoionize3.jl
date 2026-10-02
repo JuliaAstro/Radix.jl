@@ -14,8 +14,7 @@ struct ParPhotoIonize3{I, R} <: AbstractRate
     n_electrons::I   # electrons in the ion
     n::I             # shell principal quantum number
     l::I             # subshell orbital quantum number
-    parent_level::I  # level of the parent (N-1 electron) ion
-    parent_ion::I    # parent (N-1 electron) ion index
+    parent::Parent{I}           # parent ion and level
     level::I         # level index
     ion::I           # ion index (XSTAR ionN)
     E_th::R          # eV
@@ -29,5 +28,5 @@ end
 function ParPhotoIonize3(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ParPhotoIonize3(Int8(rate), label, ivec..., rvec...)
+    ParPhotoIonize3(Int8(rate), label, ivec[1:3]..., Parent(ivec[5], ivec[4]), ivec[6:7]..., rvec...)
 end

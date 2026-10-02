@@ -14,7 +14,7 @@ struct PhotoionizeDamp{I, R} <: AbstractRate
     L::I               # orbital angular momentum
     twoJ::I            # 2J
     Z::I               # atomic number
-    parent_level::I    # level of the parent (N-1 electron) ion
+    parent::Parent{I}           # parent ion (0: not stored) and level
     superlevel::I      # superlevel index (0 if absent)
     level::I           # level index
     ion::I             # ion index (XSTAR ionN)
@@ -26,6 +26,7 @@ function PhotoionizeDamp(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     iv = length(ivec) < 8 ? (ivec[1:5]..., Int32(0), ivec[6:7]...) : Vector(ivec)
-    PhotoionizeDamp(Int8(rate), label, iv..., Vector(rvec[1:2:end-1]),
+    PhotoionizeDamp(Int8(rate), label, iv[1:4]...,
+        Parent(zero(eltype(iv)), iv[5]), iv[6:8]..., Vector(rvec[1:2:end-1]),
         Vector(rvec[2:2:end]))
 end

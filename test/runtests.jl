@@ -24,6 +24,15 @@ using Test
         end
     end
 
+    @testset "Transition and Parent" begin
+        c = Radix.CollisionHlike1(Int32(60), "c", Int32[3,5,1,2], f32[1,2,3])
+        @test c.transition == Radix.Transition(Int32(3), Int32(5))
+        @test c.ion == 2
+        p = Radix.ParPhotoIonize1(Int32(7), "p", Int32[2,1,3,26,81,22,1,21], f32[1,2])
+        @test p.parent == Radix.Parent(Int32(22), Int32(81))   # ion, level
+        @test (p.level, p.ion) == (1, 21)
+    end
+
     @testset "unported rates error clearly" begin
         c = Radix.CollisionHlike1(Int32(60), "c", Int32[1,2,1,0,0,0,0,0], f32[1,2,3])
         @test_throws ErrorException Radix.rate(c, cell)

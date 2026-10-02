@@ -14,8 +14,7 @@ struct ParPhotoIonize1{I, R} <: AbstractRate
     L::I               # orbital angular momentum
     twoJ::I            # 2J
     Z::I               # atomic number
-    parent_level::I    # level of the parent (N-1 electron) ion
-    parent_ion::I      # parent (N-1 electron) ion index
+    parent::Parent{I}           # parent ion and level
     level::I           # level index
     ion::I             # ion index (XSTAR ionN)
     E_grid::Vector{R}  # energies (Ry)
@@ -25,6 +24,6 @@ end
 function ParPhotoIonize1(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ParPhotoIonize1(Int8(rate), label, ivec..., Vector(rvec[1:2:end-1]),
+    ParPhotoIonize1(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., Vector(rvec[1:2:end-1]),
         Vector(rvec[2:2:end]))
 end

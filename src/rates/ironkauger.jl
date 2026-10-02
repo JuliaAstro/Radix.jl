@@ -9,10 +9,9 @@ const IronKAugerDesc = "Iron K Auger data from Patrick"
 struct IronKAuger{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
-    parent_level::I      # level of the parent (N-1 electron) ion
+    parent::Parent{I}           # parent ion and level
     level::I             # level index
     Z::I                 # atomic number
-    parent_ion::I        # parent (N-1 electron) ion index
     ion::I               # ion index (XSTAR ionN)
     E::R                 # energy relative to E∞ (eV)
     A_widths::Vector{R}  # [A_auto(k), A_auto(k,parent), A_rad(k)] (s⁻¹)
@@ -21,5 +20,5 @@ end
 function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    IronKAuger(Int8(rate), label, ivec..., rvec[1], Vector(rvec[2:end]))
+    IronKAuger(Int8(rate), label, Parent(ivec[4], ivec[1]), ivec[2], ivec[3], ivec[5], rvec[1], Vector(rvec[2:end]))
 end

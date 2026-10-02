@@ -16,8 +16,7 @@ struct PhotoRecombX{I, R} <: AbstractRate
     L::I                # orbital angular momentum
     spin_mult::I        # 2S+1
     Z::I                # atomic number
-    parent_level::I     # level of the parent (N-1 electron) ion
-    parent_ion::I       # parent (N-1 electron) ion index
+    parent::Parent{I}           # parent ion and level
     level::I            # level index
     ion::I              # ion index (XSTAR ionN)
     ne_grid::Vector{R}  # electron densities (cm⁻³)
@@ -31,7 +30,7 @@ function PhotoRecombX(rate::Int32, label::String, ivec::I, rvec::R) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     nd, nt, nx = ivec[1:3]
-    PhotoRecombX(Int8(rate), label, ivec[4:end]..., Vector(rvec[1:nd]),
+    PhotoRecombX(Int8(rate), label, ivec[4:7]..., Parent(ivec[9], ivec[8]), ivec[10:11]..., Vector(rvec[1:nd]),
         Vector(rvec[nd+1:nd+nt]), reshape(rvec[nd+nt+1:nd+nt+nd*nt], nd, nt),
         Vector(rvec[nd+nt+nd*nt+1:2:nd+nt+nd*nt+2*nx-1]),
         Vector(rvec[nd+nt+nd*nt+2:2:nd+nt+nd*nt+2*nx]))
