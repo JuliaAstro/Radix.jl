@@ -33,6 +33,14 @@ using Test
         @test (p.level, p.ion) == (1, 21)
     end
 
+    @testset "functor convenience" begin
+        c = Radix.RadRecomb(Int32(1), "rr", Int32[1], f32[1e-12, 0.7])
+        @test c(cell) == Radix.rate(c, cell)
+        @test c(cell; index=true) == Radix.rate(c, cell; index=true)
+        cells = [Radix.Cell(T, nh, ne) for T in (0.5, 1.0, 2.0)]
+        @test [r.frate for r in c.(cells)] == [Radix.rate(c, x).frate for x in cells]
+    end
+
     @testset "unported rates error clearly" begin
         c = Radix.CollisionHlike1(Int32(60), "c", Int32[1,2,1,0,0,0,0,0], f32[1,2,3])
         @test_throws ErrorException Radix.rate(c, cell)

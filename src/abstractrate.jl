@@ -17,3 +17,6 @@ abstract type AbstractRate end
 # Fallback for rate types whose physics has not been ported yet.
 rate(coef::AbstractRate, cell; kw...) =
     error("rate not implemented for $(typeof(coef))")
+
+# Convenience: coef(cell) is rate(coef, cell), so `coef.(cells)` scans a rate
+(coef::AbstractRate)(cell; kw...) = rate(coef, cell; kw...)
