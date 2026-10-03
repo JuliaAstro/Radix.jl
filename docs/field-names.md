@@ -232,7 +232,8 @@ ported type (except 4, which has no `rate` method). Notes:
   `r3`.
 - The `Atom` records for iron and zinc look wrong (abundance 3.48 and 9.32, mass
   3.70 and 1.0); check the source table.
-- `AtomicLine.rate` is unfinished and only had its field names updated.
+- `AtomicLine` (ucalc 4) has no `rate` method yet (an unfinished draft was removed); `atdb.fits` has no
+  type 4 records to check a port against.
 - The integer meanings of `ChargeExHp` are inferred.
 - `DielecRecombH` and `TotDielecRecomb` store no data yet.
 - `AtomicLine2`: the decay rate is `A` times the escape probability `pesc` and the
