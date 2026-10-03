@@ -158,7 +158,7 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 56, 59, 63, 70, 74, 85, 88, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 59, 63, 70, 74, 85, 88, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -232,6 +232,10 @@ reproduced:
   `ElectronCollision` (ucalc 51), where `idest1` is the upper level, this swaps
   the roles of nearly degenerate levels (energies within 1%). Radix always
   returns `init` = lower, `final` = upper, so the quirk is not reproduced.
+- `RadiativeProb` (ucalc 54) computes the hydrogenic decay rate itself (Gordon's formula, `anl1`);
+  the tabulated `A` of the record is zero and unused. Its energy output multiplies the rate by the
+  dimensionless ΔE/kT instead of ΔE (`ener=delt` in the source), which looks like a bug; reproduced
+  in `ienergy`. 60 of the 1,266 records link levels of equal `n` and give nothing.
 - `CollisionProb` (ucalc 63), transitions that change `n`: XSTAR's `ans1`/`ans2`
   put the large de-excitation-sized rate on the *upward* transition for any
   ordering of the two levels (the source comments "check if ans1 and ans2 are
