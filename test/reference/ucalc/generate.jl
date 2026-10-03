@@ -7,10 +7,10 @@
 # then:  drvu < OUTDIR/typeNN.in > OUTDIR/typeNN.out
 using FITSFiles, Random
 
-const RADIATION_TYPES = (49, 50, 53, 59, 74, 85, 88) # types that need a spectrum
-const PARENT_TYPES = (49, 53, 59)    # types that leave a level of the next ion
+const RADIATION_TYPES = (49, 50, 53, 59, 70, 74, 85, 88, 99) # types that need a spectrum
+const PARENT_TYPES = (49, 53, 59, 70, 99)    # types that leave a level of the next ion
 # positions of the parent level and the parent ion among the integers
-parent_positions(type) = type == 59 ? (4, 5) : (5, 6)
+parent_positions(type) = type == 59 ? (4, 5) : type in (70, 99) ? (8, 9) : (5, 6)
 const CFRAC = (0.0, 0.25, 0.0, 0.5)  # covering fraction per condition (line rates)
 const MAX_TABLE = 800                # longest cross-section table (reals) sampled
 
@@ -69,6 +69,8 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
     open(joinpath(outdir, "type$(lpad(type, 2, '0'))$tag.in"), "w") do io
         for j in sel
             iv, rv = ints(j), reals(j)
+            # PARENT_LEVEL=k leaves level k of the parent ion instead (a test of the excited-parent branch)
+            haskey(ENV, "PARENT_LEVEL") && type in PARENT_TYPES && (iv[parent_positions(type)[1]] = parse(Int, ENV["PARENT_LEVEL"]))
             lv = get(levels, iv[end], NTuple{7, Float64}[])
             for (ci, (t, xpx, xee, f0, f1)) in enumerate(CONDITIONS)
                 println(io, type, " ", ptr[3, j], " ", length(rv), " ", length(iv))
@@ -80,6 +82,7 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 # radiation (only the photoionization types need one) and the level of the
                 # next ion that a photoionization record leaves
                 kpar, gpar, epar = 1, 1.0, 0.0
+                haskey(ENV, "PARENT_LEVEL") && ((gpar, epar) = (3.0, 7.5))   # weight and energy of a made-up parent level
                 if type in PARENT_TYPES
                     ik, ip = parent_positions(type)
                     kpar = iv[ik]                     # parent level of ParPhotoIonize1/2/3
@@ -92,7 +95,9 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 lfast = type in RADIATION_TYPES ? LFAST[mod1(ci, length(LFAST))] : 1
                 println(io, join((0.1, 0.0015, 1.0, norm, kpar, gpar, epar, lfast), " "))
                 # nlev, then only the levels the record refers to
-                need = sort(unique(filter(i -> 1 <= i <= length(lv), vcat(iv[1:end-1], 1, length(lv)))))   # incl. the ground (1) and the continuum (nlev) levels
+                # (the superlevel types use the highest real level at most: nlev - 1)
+                extra = type in (70, 99) ? [min(iv[10], length(lv) - 1)] : Int[]
+                need = sort(unique(filter(i -> 1 <= i <= length(lv), vcat(iv[1:end-1], 1, length(lv), extra))))   # incl. the ground (1) and the continuum (nlev) levels
                 println(io, length(lv), " ", length(need))
                 for i in need
                     (_, E, g, Einf, n, s2, L) = lv[i]

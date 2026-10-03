@@ -31,7 +31,6 @@ function PhotoionizeFeKedge(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 # constants of pexs (resonance series of the Fe K edge) and of the rate
-const Ry_eV_single = Float64(Float32(Ry_eV))   # 13.605692 as the single-precision literal of ucalc
 const pexs_nmax = 30                   # highest principal quantum number of the series
 const pexs_pi = 3.14159
 const pexs_a_coeff = 8.06725

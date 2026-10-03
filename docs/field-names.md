@@ -158,7 +158,35 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 56, 59, 63, 74, 85, 88 and 98.
+38, 49, 50, 51 (5- and 9-point fits), 53, 56, 59, 63, 70, 74, 85, 88, 98 and 99.
+
+### Superlevels (types 70 and 99)
+
+`PhotoionizeSuper` (70) and `PhotoRecombX` (99) tabulate a recombination coefficient on a
+(log₁₀ nₑ, log₁₀ T) grid and a cross-section table. `rate` interpolates the coefficient,
+scales the table so that the Milne relation (`milne_recombination`) reproduces it, integrates it
+with `photoionization_integrals_hunt` (XSTAR's `phint53hunt`) and scales the photoionization rate
+and heating by the ratio of the tabulated to the integrated recombination (`photoionize_superlevel`).
+Both use the last real level (`nlev − 1`) at most as the lower level. Differences and quirks, all
+reproduced:
+
+- Type 70 reads its coefficient table with the temperature running fastest (`logα` has size
+  `(nT, nₑ)`) and type 99 with the density running fastest (`α` has size `(nₑ, nT)`); the type 70
+  code limits its second tabulated density to 10⁸ and, with `neutral=true` (`jkion = 1` in ucalc),
+  the density to 10⁸ cm⁻³; it caps the scaled cross section at 10⁶ Mb and drops the tail below 10⁻⁶
+  of its first point.
+- Type 99 works in single precision. It interpolates in log₁₀ α linearly in T and, only for the
+  density intervals 2 to nₑ−1, linearly in log₁₀ nₑ; at the lowest density, below it and above the
+  table it uses the first density column. log₁₀ T is limited to the table.
+- Neither scales the recombination cooling (`ienergy`) with the other rates, and an energy
+  correction is applied to `fenergy2` and `ienergy2` in type 99 only.
+- When the integrated recombination is below 10⁻⁴⁸ ucalc returns no rates but leaves the
+  integrals `piht2` and `rrcl2` in its energy outputs `ans5` and `ans6`; `ienergy2` and `fenergy2`
+  show them (with the sign of those outputs).
+- `phint53hunt` reuses the bins of earlier passes, but not the weight `atmp22` of `rrcl2`, which keeps
+  the value of the last bin computed in the pass, and with a span of one bin it integrates nothing.
+- All the superlevel records of `atdb.fits` leave the ground level of the parent ion; the
+  excited-parent branch is compared with a made-up parent level (`type99par`).
 
 ## Open items
 

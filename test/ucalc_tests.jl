@@ -37,6 +37,10 @@ function ucalc_radiation(c)
     Radix.Radiation(E, norm .* E .^ (-index))
 end
 
+# the parent ion of the photoionization records (position among the integers)
+parent_ion(c) = c.ints[c.ndesc == 59 ? 5 : c.ndesc in (70, 99) ? 9 : 6]
+parent_level(c) = c.ints[c.ndesc == 59 ? 4 : c.ndesc in (70, 99) ? 8 : 5]
+
 function ucalc_inputs(c)
     coef = Radix.ratemap[c.ndesc](Int32(c.rtype), "", Int32.(c.ints), Float32.(c.reals))
     t, xpx, xee, xh0 = c.cond[1:4]
@@ -46,8 +50,8 @@ function ucalc_inputs(c)
         for v in c.lv]
     # photoionization leaving an excited level of the next ion: its weight and energy (the
     # driver gets them as kpar, gpar, epar)
-    if c.ndesc in (49, 53, 59) && c.rad[5] > 1
-        push!(recs, Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, c.rad[5], c.ndesc == 59 ? c.ints[5] : c.ints[6]],
+    if c.ndesc in (49, 53, 59, 70, 99) && c.rad[5] > 1
+        push!(recs, Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, c.rad[5], parent_ion(c)],
             Float32[c.rad[7], c.rad[6], 1, 0]))
     end
     (coef, cell, Radix.level_table(recs))
@@ -117,18 +121,18 @@ direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
     # single-precision constants in the exponent): also the opacity and recombination-emissivity arrays the integrals add
     # to; the energies measured from the levels (fenergy2, ienergy2) are only compared for
     # parent level 1, since ucalc reads stale memory for the energy of higher ones
-    photo_call = (co, ce, lv, c) -> begin
+    photo_call = (co, ce, lv, c; kw...) -> begin
         op = Radix.Opacity(9999)
         r = Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c), nlev=c.nlev,
             ptmp=(c.cond[11], c.cond[12]), abund=(c.cond[9], c.cond[10]),
-            lfast=Int(c.rad[8]), opacity=op)
+            lfast=Int(c.rad[8]), opacity=op, kw...)
         merge(r, (; sum_total=sum(op.total), sum_continuum=sum(op.continuum),
             sum_em1=sum(op.emissivity[1, :]), sum_em2=sum(op.emissivity[2, :])))
     end
     photo_expected = (o, c) -> merge((; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4],
             init=o[7], final=o[8], opacity=o[11], sum_total=o[12], sum_continuum=o[13],
             sum_em1=o[14], sum_em2=o[15]),
-        c.ints[c.ndesc == 59 ? 4 : 5] == 1 || c.ndesc == 59 ? (; ienergy2=-o[5], fenergy2=-o[6]) : (;))
+        parent_level(c) == 1 || c.ndesc == 59 ? (; ienergy2=-o[5], fenergy2=-o[6]) : (;))
     @testset "type 49 ParPhotoIonize1" begin
         @test check_ucalc("type49"; call=photo_call, expected=photo_expected, rtol=5e-6, atol=1e-100) == 96
     end
@@ -137,6 +141,17 @@ direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
     end
     @testset "type 59 ParPhotoIonize3" begin
         @test check_ucalc("type59"; call=photo_call, expected=photo_expected, rtol=1e-6, atol=1e-100) == 100
+    end
+    @testset "type 70 PhotoionizeSuper" begin
+        # ucalc's jkion = 1: the density is limited to 1e8
+        @test check_ucalc("type70"; call=(co, ce, lv, c) -> photo_call(co, ce, lv, c; neutral=true),
+            expected=photo_expected, rtol=1e-6, atol=1e-100) == 80
+    end
+    @testset "type 99 PhotoRecombX" begin
+        # the energy correction is a difference of nearly equal terms (1.1e-6 at worst)
+        @test check_ucalc("type99"; call=photo_call, expected=photo_expected, rtol=5e-6, atol=1e-100) == 120
+        # an excited level of the parent ion (made up): the energies from the levels are stale in ucalc
+        @test check_ucalc("type99par"; call=photo_call, expected=photo_expected, rtol=5e-6, atol=1e-100) == 40
     end
     @testset "type 74 PhotoionizeDelta" begin
         @test check_ucalc("type74";
