@@ -6,6 +6,8 @@
 # XSTAR data type: 56
 
 const ElectronImpact1Desc = "tabulated collision strength, bautista"
+const min_dE = 1e-16                  # eV; degenerate levels are skipped
+const min_upsilon = 1e-48              # floor of the tabulated Υ before interpolating
 
 struct ElectronImpact1{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -44,17 +46,17 @@ function rate(coef::ElectronImpact1, cell::Cell; levels, index=false,
     (a === nothing || b === nothing) && return none
     lo, up = b.E < a.E ? (b, a) : (a, b)
     ΔE = abs(up.E - lo.E)
-    ΔE <= 1e-16 && return none
+    ΔE <= min_dE && return none
     index && return (; none..., init=lo.level, final=up.level)
 
-    logT = log10(cell.T*1e4)
+    logT = log10(cell.T*T_unit)
     T, Υ = coef.T_grid, coef.Υ
     j = clamp(searchsortedlast(T, logT), 1, max(length(T) - 1, 1))
-    Υ0 = max(1e-36, Float64(Υ[j]))
+    Υ0 = max(min_upsilon, Float64(Υ[j]))
     cijpp = length(T) == 1 ? Υ0 :
-        (Float64(Υ[j+1]) - Υ0)*(logT - T[j])/(T[j+1] - T[j] + 1e-24) + Υ0
+        (Float64(Υ[j+1]) - Υ0)*(logT - T[j])/(T[j+1] - T[j] + tiny) + Υ0
     cijpp = max(0., cijpp)
-    cij = 8.626e-8*cijpp*expo(-ΔE/(0.861707*cell.T))/sqrt(cell.T)/lo.g
-    cji = 8.626e-8*cijpp/sqrt(cell.T)/up.g
+    cij = collision_rate_coeff*cijpp*expo(-ΔE/(kT_eV*cell.T))/sqrt(cell.T)/lo.g
+    cji = collision_rate_coeff*cijpp/sqrt(cell.T)/up.g
     (; init=lo.level, final=up.level, frate=cij*cell.nₑ, irate=cji*cell.nₑ)
 end

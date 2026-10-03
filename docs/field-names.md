@@ -33,6 +33,12 @@ level was `i`, `k`, `j`, `n` or `iN`.
    `E∞` is spelled out (`E_inf`), because a subscript is not a valid identifier
    character.
 7. **Group values that travel together in small structs** (below).
+8. **No numeric literals in expressions.** Every empirical or physical number is a
+   named constant. Numbers used by more than one file are in `src/constants.jl`
+   (`Ry_eV`, `hc_eVÅ`, `T_unit`, `kT_eV`, `collision_rate_coeff`, `cx_unit`, `tiny`, …);
+   numbers that belong to one rate or fit are `const`s at the top of its file
+   (`cxHe_fraction`, `ps_rho_coeff`, `sz_abethe`, …). Only structural numbers stay
+   (0, 1, 2, powers, halving, array indices).
 
 ## Shared vocabulary
 

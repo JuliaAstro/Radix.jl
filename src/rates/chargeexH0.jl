@@ -5,6 +5,7 @@
 # XSTAR data type: 2
 
 const ChargeExH0Desc = "charge exch. h0: Kingdon and Ferland"
+const cxH0_Tmax = 5.0                 # no rate above this temperature (10⁴ K)
 
 struct ChargeExH0{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -27,10 +28,10 @@ end
 
 function rate(coef::ChargeExH0, cell::Cell; index=false, verbose=false, nlev=0)
 
-    if index || cell.T > 5
+    if index || cell.T > cxH0_Tmax
         res = (; init=1, final=nlev, frate=0., irate=0.)
     else
-        rate = 1e-9*cell.nₕ*coef.a*expo(coef.b*log(cell.T)) * 
+        rate = cx_unit*cell.nₕ*coef.a*expo(coef.b*log(cell.T)) * 
             max(0, (1 + coef.c*expo(coef.d*cell.T)))
         frate, irate = coef.rtype == 5 ? (0., rate) : (rate, 0.)
         res = (; init=1, final=nlev, frate=frate, irate=irate)
