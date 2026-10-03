@@ -158,7 +158,7 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 85, 86, 88, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -269,6 +269,14 @@ ported type (except 4, which has no `rate` method). Notes:
   level) as the upper one, and returns the decay as `irate`; reproduced as is. The decay of ions 96
   and 97 is capped at 10¹⁰ s⁻¹ and its energy uses a single-precision erg per eV. The line opacity
   `linopac` is not part of this type.
+- `CollisionSuper` (ucalc 77) reads its table like `RadiativeSuper` (temperature fastest, `C` has size
+  `(nT, nₑ)` and holds log₁₀ of the de-excitation rate) through the shared `interpolate_super_table`. The
+  excitation rate uses the wavelength of the record in the Boltzmann factor with `hc/k = 1.43817e8`
+  (a slightly different value from the usual 1.43878e8) and a weight `2(2l + 1)` where `l` comes from
+  numbering the first level of the record by shells (`level` 1 is 1s, 2 and 3 are 2s and 2p, ...),
+  as `calt77` does with the level index. The temperature floor `2.88e6/λ` K, from the energies of
+  the levels, uses the single-precision value of 12398.4016 (`hc_eVÅ_single`): the factor
+  e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `CollisionProb` (ucalc 63), transitions that change `n`: XSTAR's `ans1`/`ans2`
   put the large de-excitation-sized rate on the *upward* transition for any
   ordering of the two levels (the source comments "check if ans1 and ans2 are

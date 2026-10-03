@@ -31,7 +31,6 @@ end
 
 const superdecay_cap = 1e10               # decay rate cap for ions 96 and 97 (calcium I and II)
 const superdecay_capped_ions = (96, 97)
-const superdecay_T_margin = 1.0           # log₁₀ T may exceed the table by this
 const superdecay_A_linear = 30.0          # a one-point table above this holds A itself
 const superdecay_erg_per_eV = Float64(1.602197f-12)   # ucalc's single-precision erg per eV, for the energy
 
@@ -44,34 +43,7 @@ function superlevel_decay(coef::RadiativeSuper, T, den)
         a = logA[1]
         return (10^(a > superdecay_A_linear ? log10(a) : a), Float64(coef.λ))
     end
-    rne = min(log10(den), logne[nden])
-    rte = clamp(log10(T), logT[1] - superdecay_T_margin, logT[ntem] + superdecay_T_margin)
-    in = 1
-    if rne > logne[1]
-        in = 0
-        while true
-            in += 1
-            in < nden && rne >= logne[in + 1] && continue
-            break
-        end
-    end
-    it = 1
-    if rte >= logT[1]
-        it = 0
-        while true
-            it += 1
-            if it >= ntem
-                it = ntem - 1
-            elseif rte >= logT[it + 1]
-                continue
-            end
-            break
-        end
-    end
-    at(j) = logA[it, j] + (logA[it + 1, j] - logA[it, j])/(logT[it + 1] - logT[it])*(rte - logT[it])
-    rec = at(in)
-    in < nden && (rec += (at(in + 1) - rec)/(logne[in + 1] - logne[in])*(rne - logne[in]))   # (at the last density rne equals logne[in])
-    (exp10(rec), Float64(coef.λ))
+    (exp10(interpolate_super_table(logne, logT, logA, T, den)), Float64(coef.λ))
 end
 
 """
