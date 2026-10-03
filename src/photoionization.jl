@@ -194,7 +194,7 @@ const heat_floor = 1e-43
 
 
 """
-    photoionize_level(coef, cell; levels, radiation, nlev, ptmp=(0.5, 0.5), abund=(0, 0), lfast=1, opacity=nothing, extrapolate, shifted)
+    photoionize_level(coef, cell; levels, radiation, nlev, ptmp=(0.5, 0.5), abund=(0, 0), lfast=1, opacity=nothing, extrapolate, shifted, parent=true, rates_only=false)
 
 Photoionization of a level of an ion by integrating the cross-section table of
 `coef` (fields `level`, `ion`, `parent`, `E_grid` in Ry above the threshold and `σ`
@@ -204,8 +204,11 @@ continuum, the ground state of the next ion), `ptmp` the two escape
 probabilities and `abund` the populations of the initial and final levels (for the
 opacity). `lfast ≥ 2` also integrates the recombination terms. If `opacity` is an
 `Opacity` the continuum opacity and recombination emissivity are added to it.
-`extrapolate` extends the table with an E⁻³ tail (type 49) and `shifted` adds the
-excitation energy of an excited parent level to the threshold (type 53).
+`extrapolate` extends the table with an E⁻³ tail (types 49 and 88) and `shifted` adds the
+excitation energy of an excited parent level to the threshold (type 53). With
+`parent=false` the final level is always the continuum (type 88), and
+`rates_only=true` keeps only the photoionization rate and the opacity, zeroing the
+rest as ucalc type 88 does (the opacity and emissivity arrays are still filled).
 
 Returns `init` (the level) and `final` (`nlev` + parent level − 1), `frate` the
 photoionization rate and `irate` the radiative recombination rate (s⁻¹),
@@ -217,12 +220,12 @@ memory; here it is the continuum energy plus the energy of the parent level.
 """
 function photoionize_level(coef, cell::Cell; levels, radiation, nlev,
     ptmp=(0.5, 0.5), abund=(0.0, 0.0), lfast=1, opacity=nothing, index=false,
-    extrapolate, shifted)
+    extrapolate, shifted, parent=true, rates_only=false)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         fenergy2=0., ienergy2=0., opacity=0.)
     idest1 = Int(coef.level)
-    idest2 = nlev + max(0, Int(coef.parent.level)) - 1
+    idest2 = parent ? nlev + max(0, Int(coef.parent.level)) - 1 : nlev
     (idest1 >= nlev || idest1 <= 0) && return none
     isempty(coef.E_grid) && return none                  # no cross-section table
     index && return (; none..., init=idest1, final=idest2)
@@ -258,9 +261,113 @@ function photoionize_level(coef, cell::Cell; levels, radiation, nlev,
     r = photoionization_integrals(radiation, eth, ε, σ, T, rnist, ptmp;
         abund=abund, ntot=cell.ntot, lfast=lfast, opacity=opacity)
 
+    rates_only && return (; none..., init=idest1, final=idest2, frate=r.pirt,
+        opacity=r.opakab)
+
     dE = abs(e2 - Float64(lo.E))
     fenergy2 = r.piht2*(r.piht - dE*ergsev*r.pirt)/max(heat_floor, r.piht - eth*ergsev*r.pirt)
     ienergy2 = r.rrcl2*(r.rrcl - dE*ergsev*r.rrrt)/max(heat_floor, r.rrcl - eth*ergsev*r.rrrt)
     (; init=idest1, final=idest2, frate=r.pirt, irate=r.rrrt, fenergy=r.piht,
         ienergy=r.rrcl, fenergy2=fenergy2, ienergy2=ienergy2, opacity=r.opakab)
+end
+
+# ---------------------------------------------------------------------------
+# phintfo and enxt: integration with a cross section given on the grid itself
+
+const enxt_eth_factor = 3.0          # lfast = 3: integrate up to max(3 E_th, E_th + 3 kT) ...
+const enxt_kT_factor = 3.0
+const enxt_samples = 16              # ... in about this many steps
+const enxt_Emax = 1e4                # lfast ≥ 4: integrate up to this energy (eV)
+
+"""
+    next_bin(rad, E_th, nb1, T, lfast)
+
+Step `nskp` to the next sampled bin of the photoionization integrals and the last bin
+`nphint` to use (XSTAR's `enxt`).
+"""
+function next_bin(rad::Radiation, E_th, nb1, T, lfast)
+    ncn2 = length(rad.E)
+    bktm = kB_cgs*T*T_unit/ergsev
+    numcon2 = max(grid_min_bins, ncn2 ÷ grid_guard_fraction)
+    if lfast <= 2
+        nphint = ncn2 - numcon2
+        nskp = 1
+    elseif lfast == 3
+        nphint = nbin(rad, max(enxt_eth_factor*E_th, E_th + enxt_kT_factor*bktm))
+        nphint = max(nphint, nb1 + 1)
+        nskp = max(1, (nphint - nb1) ÷ enxt_samples)
+    else
+        nphint = nbin(rad, enxt_Emax)
+        nskp = 1
+    end
+    nphint = max(nphint, nb1 + nskp)
+    (nskp, min(nphint, ncn2 - numcon2))
+end
+
+const fo_saha = 5.216e-21            # Saha-Boltzmann factor of phintfo (cm³ K^{3/2})
+const fo_fourpi = 25.3               # phintfo's value of 8π
+const fo_exptst_floor = 1e-36
+
+"""
+    photoionization_integrals_fo(rad, E_th, σ, T, swrat, xnx; abund=(0, 0), ntot=0, lfast=1, opacity=nothing)
+
+Photoionization and recombination integrals for a cross section `σ` (cm²) given on the
+energy grid of `rad` (XSTAR's `phintfo`): `pirt`, `rrrt`, `piht`, `rrcl`, `piht2`,
+`rrcl2` as in `photoionization_integrals`, and the opacity `opakab` of the first bins.
+`swrat` is the ratio of the statistical weights of the two levels and `xnx` the
+electron density. The recombination terms always run (the convergence test of the
+original never stops the loop).
+"""
+function photoionization_integrals_fo(rad::Radiation, E_th, σ, T, swrat, xnx;
+    abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing)
+
+    epi, bremsa = rad.E, rad.F
+    ncn2 = length(epi)
+    abund1 = abund[1]
+    eth = E_th
+    nb1 = nbin(rad, eth)
+    bktm = kB_cgs*T*T_unit/ergsev
+    rnist = fo_saha*swrat/T/sqrt(T)
+    sumr = sumh = sumh2 = sumc = sumc2 = sumi = 0.0
+    tempr = tempi = atmp2 = atmp22 = 0.0
+    opakab = 0.0
+    nphint = max(ncn2 - max(grid_min_bins, ncn2 ÷ grid_guard_fraction), nb1 + 1)
+    ener = epi[nb1]
+    kl = nb1
+    while kl <= nphint
+        enero = ener
+        ener = epi[kl]
+        epii = ener
+        sgtmp = σ[kl]
+        bremtmp = bremsa[kl]/fo_fourpi
+        tempro = tempr
+        tempr = fo_fourpi*sgtmp*bremtmp/epii
+        deld = ener - enero
+        sumr += (tempr + tempro)*deld/2
+        sumh += (tempr*ener + tempro*enero)*deld*ergsev/2
+        sumh2 += (tempr*(ener - eth) + tempro*(enero - eth))*deld*ergsev/2
+        exptmp = expo(-max(fo_exptst_floor, (epii - eth)/bktm))
+        bbnurj = min(epii, bb_energy_cap)^3*bb_coeff
+        tempi1 = rnist*bbnurj*exptmp*sgtmp/epii
+        tempi2 = rnist*bremtmp*exptmp*sgtmp/epii
+        tempio = tempi
+        tempi = tempi1 + tempi2
+        atmp2o = atmp2
+        atmp2 = tempi1*epii
+        atmp22o = atmp22
+        atmp22 = tempi1*(epii - eth)
+        sumi += (tempi + tempio)*deld/2
+        sumc += (atmp2 + atmp2o)*deld*ergsev/2
+        sumc2 += (atmp22 + atmp22o)*deld*ergsev/2
+        optmp = abund1*sgtmp*ntot
+        kl <= nb1 + 1 && (opakab = optmp)
+        if opacity !== nothing
+            opacity.total[kl] += optmp
+            opacity.continuum[kl] += optmp
+        end
+        nskp, nphint = next_bin(rad, eth, nb1, T, lfast)
+        kl += nskp
+    end
+    (; pirt=sumr, rrrt=xnx*sumi, piht=sumh, rrcl=xnx*sumc, piht2=sumh2,
+        rrcl2=xnx*sumc2, opakab=opakab)
 end

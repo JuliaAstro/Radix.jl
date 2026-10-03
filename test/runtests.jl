@@ -391,6 +391,22 @@ include("ucalc_tests.jl")
             @test nbad == 0
             @test nneg == 36
             @test nev > 598000
+
+            # the other photoionization types: finite results over the same spectrum
+            kinds = Dict(Radix.ParPhotoIonize3 => 0, Radix.PhotoionizeDelta => 0, Radix.PhotoionizeDamp => 0)
+            nbad = 0
+            for (T, ne) in ((0.3, 5e3), (10.0, 1e10))
+                c = Radix.Cell(T, 1e3, ne, 1e10)
+                for r in db
+                    typeof(r).name.wrapper in keys(kinds) || continue
+                    x = Radix.rate(r, c; levels=levels, radiation=rad, nlev=counts[r.ion])
+                    x.init == 0 && continue
+                    kinds[typeof(r).name.wrapper] += 1
+                    all(isfinite, (x.frate, x.irate)) || (nbad += 1)
+                end
+            end
+            @test nbad == 0
+            @test all(>(0), values(kinds))
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"
