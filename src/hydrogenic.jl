@@ -347,3 +347,91 @@ function erc(n, m, T, ic, a)
         (s*expo(-yn), s*n/m*n/m)
     end
 end
+
+# ---------------------------------------------------------------------------
+# collisional ionization of hydrogenic ions: eint, szirc and irc
+
+const eint_floor = 1e-34                          # eint divides by at least this
+
+"""
+    eint(t)
+
+The exponential integrals `(E₁, E₂, E₃)(t)` as XSTAR's `eint`.
+"""
+function eint(t)
+    e1 = expint(t)/max(eint_floor, t*expo(t))
+    e2 = exp(-t) - t*e1
+    e3 = (expo(-t) - t*e2)/2
+    (e1, e2, e3)
+end
+
+# szirc: Bethe-type fit parameters for n = 1:10 and the scalings for higher n (single-precision literals)
+const szirc_a = (1.134, 0.603, 0.412, 0.313, 0.252, 0.211, 0.181, 0.159, 0.142, 0.128, 1.307)
+const szirc_h = (1.48, 3.64, 5.93, 8.32, 10.75, 12.90, 15.05, 17.20, 19.35, 21.50, 2.15)
+const szirc_r = (2.20, 1.90, 1.73, 1.65, 1.60, 1.56, 1.54, 1.52, 1.52, 1.52, 1.52)
+const szirc_nmax = 11
+const szirc_kB = Float64(1.38066f-16)             # erg K⁻¹
+const szirc_Ry_erg = Float64(2.179874f-11)        # erg
+const szirc_coeff = Float64(4.6513f-3)
+const szirc_exchange = 3.36
+
+"""
+    szirc(n, T, rz, rno)
+
+Collisional ionization coefficient from level `n` for the effective charge `rz` and highest bound level
+`rno` at the temperature `T` (K), by Sampson and Zhang's fit (XSTAR's `szirc`).
+"""
+function szirc(n, T, rz, rno)
+    rc = Float64(trunc(Int, rno))
+    an, hn, rrn = n < szirc_nmax ?
+        (szirc_a[n], szirc_h[n], szirc_r[n]) :
+        (szirc_a[end]/n, szirc_h[end]*n, szirc_r[end])
+    tt = T*szirc_kB
+    rn = Float64(n)
+    yy = rz*rz*szirc_Ry_erg/tt*(1/rn/rn - 1/rc/rc - (1/(rc - 1)^2 - 1/rc/rc)/4)
+    e1, e2, e3 = eint(yy)
+    szirc_coeff*sqrt(tt)*rn^5/rz^4*an*yy*(
+        e1/rn - (exp(-yy) - yy*e3)/(3rn) +
+        (yy*e2 - 2yy*e1 + exp(-yy))*3hn/rn/(3 - rrn) + (e1 - e2)*szirc_exchange*yy)
+end
+
+# irc: Hydrogen-like fits for the ionization from n = 1, 2, and higher (rc = 1)
+const irc_K = 157803.0                            # K per Ry
+const irc_fit1 = ((1.133, 0.4059, 0.07014), (1.0785, 0.2319, 0.02947))
+const irc_rn = (0.45, 0.653)
+const irc_coeff = 1.095e-10
+
+"""
+    irc(n, T, rc, rno)
+
+Collisional ionization coefficient from level `n` of an ion of effective charge `rc` for the
+highest bound level `rno` at the temperature `T` (K) (XSTAR's `irc`). For `rc ≠ 1` it is `szirc`.
+"""
+function irc(n, T, rc, rno)
+    rc != 1 && return szirc(n, T, rc, rno)
+    xo = 1 - n*n/rno/rno
+    yn = xo*irc_K/(T*n*n)
+    if n < 3
+        c = irc_fit1[n]
+        an = 1.9603*n*(c[1]/3/xo^3 - c[2]/4/xo^4 + c[3]/5/xo^5)
+        bn = n == 1 ? 2/3*n*n/xo*(3 + 2/xo - 0.603/xo/xo) :
+            2/3*n*n/xo*(3 + 2/xo + (4 - 18.63/n + 36.24/(n*n) - 28.09/(n*n*n))/n/xo/xo)
+        rn = irc_rn[n]
+    else
+        g0 = (0.9935 + 0.2328/n - 0.1296/(n*n))/3/xo^3
+        g1 = -(0.6282 - 0.5598/n + 0.5299/(n*n))/(n*4)/xo^4
+        g2 = (0.3887 - 1.181/n + 1.470/(n*n))/(n*n*5)/xo^5
+        an = 1.9603*n*(g0 + g1 + g2)
+        bn = (4 - 18.63/n + 36.24/(n*n) - 28.09/(n*n*n))/n
+        bn = (3 + 2/xo + bn/xo/xo)*2*n*n/3/xo
+        rn = 1.94*n^(-1.57)
+    end
+    rn *= xo
+    zn = rn + yn
+    ey, ez = expint(yn), expint(zn)
+    se = an*(ey/yn/yn - exp(-rn)*ez/zn/zn)
+    ey = 1 + 1/yn - ey*(2/yn + 1)
+    ez = exp(-rn)*(1 + 1/zn - ez*(2/zn + 1))
+    se += (bn - an*log(2*n*n/xo))*(ey - ez)
+    se*sqrt(T)*yn*yn*n*n*irc_coeff/xo
+end
