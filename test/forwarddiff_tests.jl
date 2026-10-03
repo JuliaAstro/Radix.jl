@@ -36,6 +36,7 @@ const AD_CASES = [
         vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
     "type77" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
     "type86" => (co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev),
+    "type95" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
     "type98" => level_call,
     "type49" => ad_photo, "type53" => ad_photo, "type59" => ad_photo,
     "type74" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c), nlev=c.nlev),

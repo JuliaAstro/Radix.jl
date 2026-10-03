@@ -41,7 +41,7 @@
         # proton mass (ucalc takes 1800 electron masses), 8π (25.3), and four coefficients whose
         # XSTAR values are less accurate than the others: the Saha factor of type 57 (0.35%) and the
         # photon-density, Milne and Saha-8π coefficients (0.1 to 0.2%)
-        looser = Dict(:proton_mass => 3e-2, :eightpi => 1e-2, :saha_coeff_cb => 5e-3, :fo_saha => 3e-3,
+        looser = Dict(:proton_mass => 3e-2, :eightpi => 1e-2, :saha_coeff_cb => 5e-3, :saha_ci => 6e-3, :fo_saha => 3e-3,
             :bb_coeff => 2e-3, :milne_coeff => 2e-3)
         for name in fieldnames(Radix.Constants)
             @test getfield(U, name) ≈ getfield(K, name) rtol=get(looser, name, 1e-3)
@@ -51,7 +51,7 @@
         @test U.fo_saha*U.bb_coeff ≈ K.fo_saha*K.bb_coeff rtol=1.5e-3
         # ... and not identical: it is a different set
         @test U != K
-        @test U.kT_eV == 0.861707
+        @test U.kT_eV == Float64(0.861707f0)   # ucalc's single-precision literal
     end
 
     @testset "hydrogenic decay rates" begin
@@ -95,7 +95,7 @@
     end
 
     @testset "switching the constants" begin
-        @test Radix.with_constants(() -> Radix.constants().kT_eV, U) == 0.861707
+        @test Radix.with_constants(() -> Radix.constants().kT_eV, U) == Float64(0.861707f0)
         @test Radix.constants() === K                     # restored
         @test_throws ErrorException Radix.with_constants(() -> error("x"), U)
         @test Radix.constants() === K                     # restored after an error
