@@ -158,7 +158,7 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 74, 85, 88, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 74, 85, 86, 88, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -242,6 +242,9 @@ reproduced:
   number: `n, L, 2J, level, ion`); the constructor mis-assigned them before and now leaves `Z = 0`.
   `irc` has a separate formula for an effective charge of exactly 1, which no record reaches, so it
   is not checked against `ucalc`.
+- `IronKAuger` (ucalc 86) returns the first Auger width (`A_widths[1]`, the second real of the record)
+  as `frate` whatever the conditions; the radiative width and the width to the parent level are not
+  used by `ucalc`.
 - `CollisionProb` (ucalc 63), transitions that change `n`: XSTAR's `ans1`/`ans2`
   put the large de-excitation-sized rate on the *upward* transition for any
   ordering of the two levels (the source comments "check if ans1 and ans2 are

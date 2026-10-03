@@ -22,3 +22,15 @@ function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R) where
 
     IronKAuger(Int8(rate), label, Parent(ivec[4], ivec[1]), ivec[2], ivec[3], ivec[5], rvec[1], Vector(rvec[2:end]))
 end
+
+"""
+    rate(coef::IronKAuger, cell; nlev, index=false)
+
+Auger decay of a K-vacancy level of iron (XSTAR ucalc type 86): `frate` is the Auger width
+`A_widths[1]` (s⁻¹), independent of the cell, from `init` (the vacancy level) to `final` (`nlev` + the
+level of the parent ion − 1); `irate` is 0. `ucalc` does not look at the levels, so none are needed.
+"""
+function rate(coef::IronKAuger, cell::Cell; nlev, index=false, verbose=false)
+    init, final = Int(coef.level), nlev + Int(coef.parent.level) - 1
+    (; init, final, frate=index ? 0. : Float64(coef.A_widths[1]), irate=0.)
+end
