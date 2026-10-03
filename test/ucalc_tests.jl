@@ -182,6 +182,13 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
         @test check_ucalc("type54"; call=level_call,
             expected=(o, c) -> (; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4], init=o[7], final=o[8])) == 240
     end
+    @testset "type 57 EffectiveCharge" begin
+        # collisional ionization and three-body recombination; ucalc gives rates for 180 of the 1600 sampled cases
+        @test check_ucalc("type57";
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+            expected=(o, c) -> (; frate=o[1], irate=o[2], fenergy=o[6], ienergy=o[5], init=o[7], final=o[8]),
+            rtol=2e-6, atol=1e-100) == 240
+    end
     @testset "type 98 ElectronImpact2" begin
         @test check_ucalc("type98"; call=level_call, expected=with_energy) == 100
     end
