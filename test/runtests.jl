@@ -394,7 +394,8 @@ include("ucalc_tests.jl")
 
             # the other photoionization types: finite results over the same spectrum
             kinds = Dict(Radix.ParPhotoIonize3 => 0, Radix.PhotoionizeDelta => 0,
-                Radix.PhotoionizeDamp => 0, Radix.PhotoionizeFeKedge => 0)
+                Radix.PhotoionizeDamp => 0, Radix.PhotoionizeFeKedge => 0,
+                Radix.PhotoionizeSuper => 0, Radix.PhotoRecombX => 0)
             nbad = 0
             for (T, ne) in ((0.3, 5e3), (10.0, 1e10))
                 c = Radix.Cell(T, 1e3, ne, 1e10)
@@ -408,6 +409,7 @@ include("ucalc_tests.jl")
             end
             @test nbad == 0
             @test all(>(0), values(kinds))
+            @test kinds[Radix.PhotoionizeSuper] > 0 && kinds[Radix.PhotoRecombX] > 0
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"
