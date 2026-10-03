@@ -158,7 +158,7 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 74, 85, 86, 88, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 85, 86, 88, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -245,6 +245,13 @@ reproduced:
 - `IronKAuger` (ucalc 86) returns the first Auger width (`A_widths[1]`, the second real of the record)
   as `frate` whatever the conditions; the radiative width and the width to the parent level are not
   used by `ucalc`.
+- `RadiativeSuper` (ucalc 71) reads its table with the temperature running fastest (`A` has size
+  `(nT, nₑ)`, stored as log₁₀ A; a one-point table holds A or log₁₀ A) and interpolates linearly in
+  log₁₀ T (up to one dex outside the table) and log₁₀ nₑ. `ucalc` takes the statistical weight of the
+  line from the first level of the record (`transition.lower`, which the header calls the lower
+  level) as the upper one, and returns the decay as `irate`; reproduced as is. The decay of ions 96
+  and 97 is capped at 10¹⁰ s⁻¹ and its energy uses a single-precision erg per eV. The line opacity
+  `linopac` is not part of this type.
 - `CollisionProb` (ucalc 63), transitions that change `n`: XSTAR's `ans1`/`ans2`
   put the large de-excitation-sized rate on the *upward* transition for any
   ordering of the two levels (the source comments "check if ans1 and ans2 are

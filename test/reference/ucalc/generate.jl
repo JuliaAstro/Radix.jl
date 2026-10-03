@@ -51,6 +51,8 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
 
     cand = [j for j in 1:N if ptr[2, j] == type]
     type in RADIATION_TYPES && (cand = [j for j in cand if ptr[5, j] <= MAX_TABLE])   # keep the fixtures small
+    # ION=96,97 keeps the records of those ions only
+    haskey(ENV, "ION") && (cand = [j for j in cand if ints(j)[end] in parse.(Int, split(ENV["ION"], ","))])
     rng = MersenneTwister(type)
     if !isempty(selection)
         want = [parse.(Int, split(s, ":")) for s in split(selection, ",")]
@@ -76,7 +78,7 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 println(io, type, " ", ptr[3, j], " ", length(rv), " ", length(iv))
                 println(io, join(iv, " "))
                 println(io, join(rv, " "))
-                amass = type == 50 ? get(mass, iv[3], 1.0) : 1.0       # type 50 ints: i, k, Z, ionN
+                amass = type == 50 ? get(mass, iv[3], 1.0) : type == 71 ? get(mass, iv[5], 1.0) : 1.0   # Z is the third integer of type 50, the fifth of type 71
                 cfrac = type == 50 ? CFRAC[mod1(ci, length(CFRAC))] : 0.0
                 println(io, join((t, xpx, xee, xpx*f0, xpx*f1, 1.0, -1.0, cfrac, 1e-3, 1e-3, 0.5, 0.5, amass), " "))
                 # radiation (only the photoionization types need one) and the level of the

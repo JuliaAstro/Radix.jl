@@ -192,6 +192,20 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     @testset "type 86 IronKAuger" begin
         @test check_ucalc("type86"; call=(co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev), expected=direct) == 160
     end
+    @testset "type 71 RadiativeSuper" begin
+        @test check_ucalc("type71";
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev, mass=c.cond[13],
+                vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
+            expected=(o, c) -> (; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4], init=o[7], final=o[8],
+                opacity=o[11]),
+            rtol=1e-6, atol=1e-100) == 240
+        # calcium I and II (ions 96 and 97), whose decay rate is capped at 1e10
+        @test check_ucalc("type71ions";
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev, mass=c.cond[13],
+                vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
+            expected=(o, c) -> (; irate=o[2], ienergy=-o[3], opacity=o[11]),
+            rtol=1e-6, atol=1e-100) == 8
+    end
     @testset "type 98 ElectronImpact2" begin
         @test check_ucalc("type98"; call=level_call, expected=with_energy) == 100
     end
