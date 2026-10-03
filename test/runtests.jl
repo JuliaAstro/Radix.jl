@@ -393,7 +393,8 @@ include("ucalc_tests.jl")
             @test nev > 598000
 
             # the other photoionization types: finite results over the same spectrum
-            kinds = Dict(Radix.ParPhotoIonize3 => 0, Radix.PhotoionizeDelta => 0, Radix.PhotoionizeDamp => 0)
+            kinds = Dict(Radix.ParPhotoIonize3 => 0, Radix.PhotoionizeDelta => 0,
+                Radix.PhotoionizeDamp => 0, Radix.PhotoionizeFeKedge => 0)
             nbad = 0
             for (T, ne) in ((0.3, 5e3), (10.0, 1e10))
                 c = Radix.Cell(T, 1e3, ne, 1e10)
