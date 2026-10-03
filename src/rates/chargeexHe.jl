@@ -3,6 +3,9 @@
 # XSTAR data type: 9
 
 const ChargeExHeDesc = "charge exch. H0 Kingdon and Ferland"
+const cxHe_Tmax = 1000.0               # the fit is capped at this temperature (10⁴ K)
+const cxHe_fraction = 0.1              # fraction of the fitted rate that XSTAR uses
+const cxHe_levels = 6                  # records with two levels share it over this many
 
 struct ChargeExHe{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -42,7 +45,7 @@ function rate(coef::ChargeExHe, cell::Cell; index=false, verbose=false, nlev=0)
     two = coef.level != 0
     init, final = two ? (coef.level, nlev + coef.parent.level - 1) : (1, nlev)
     index && return (; init, final, frate=0., irate=0.)
-    res = 1e-9*coef.a*min(T, 1000.0)^coef.b*(1 + coef.c*expo(coef.d*T))
-    irate = res*cell.nₕ*0.1/(two ? 6 : 1)
+    res = cx_unit*coef.a*min(T, cxHe_Tmax)^coef.b*(1 + coef.c*expo(coef.d*T))
+    irate = res*cell.nₕ*cxHe_fraction/(two ? cxHe_levels : 1)
     (; init, final, frate=0., irate)
 end

@@ -9,6 +9,15 @@
 
 const AtomicLine2Desc = "op line rad. rates"
 
+const min_wavelength = 1e-34           # Å; lines below this have no wavelength
+const no_wavelength = 0.99e9           # Å; longer wavelengths mark lines without opacity
+const decay_floor = 1e-20              # floor of the decay rate, per unit ntot
+const A_to_f = 1e-16/0.667274          # f = A_to_f A (g_up/g_lo) λ², A in s⁻¹, λ in Å
+const line_xsec = 0.02655              # π e²/(m_e c) (cm² Hz)
+const cm_per_Å = 1e-8
+const cm_per_km = 1e5
+const thermal_speed = 1.29e6           # cm s⁻¹ at 10⁴ K for an atomic mass of 1
+
 struct AtomicLine2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
@@ -51,7 +60,7 @@ function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
     i1, i2 = coef.transition.lower, coef.transition.upper
     (i1 <= 0 || i1 >= nlev || i2 <= 0 || i2 >= nlev) && return none
     elin = abs(Float64(coef.λ))
-    elin <= 1e-34 && return none
+    elin <= min_wavelength && return none
     a = get(levels, (coef.ion, i1), nothing)
     b = get(levels, (coef.ion, i2), nothing)
     (a === nothing || b === nothing) && return none
@@ -59,10 +68,10 @@ function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
     index && return (; none..., init=up.level, final=lo.level)
 
     A = Float64(coef.A)
-    frate = max(A*pesc, 1e-20*cell.ntot)
-    flin = 1e-16*A*up.g*elin^2/(0.667274*lo.g)
-    vtherm = sqrt((vturb*1e5)^2 + (1.29e6/sqrt(mass/cell.T))^2)
-    opacity = elin > 0.99e9 ? 0. : 0.02655*flin*elin*1e-8/vtherm
+    frate = max(A*pesc, decay_floor*cell.ntot)
+    flin = A_to_f*A*up.g*elin^2/lo.g
+    vtherm = sqrt((vturb*cm_per_km)^2 + (thermal_speed/sqrt(mass/cell.T))^2)
+    opacity = elin > no_wavelength ? 0. : line_xsec*flin*elin*cm_per_Å/vtherm
     fenergy = frate*abs(Float64(up.E) - Float64(lo.E))*ergsev
     (; init=up.level, final=lo.level, frate=frate, irate=0., fenergy=fenergy,
         ienergy=0., opacity=opacity)

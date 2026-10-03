@@ -5,6 +5,9 @@
 # XSTAR data type: 63
 
 const CollisionProbDesc = "h-like cij, bautista (hlike ion)"
+const max_dE_over_kT = 50.0           # no rate for transitions with ΔE/kT above this
+const proton_charge = 1.0              # colliding ions are protons
+const proton_mass = 1800.0             # in electron masses
 
 struct CollisionProb{I} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -44,12 +47,12 @@ function rate(coef::CollisionProb, cell::Cell; levels, index=false,
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
-    elin = 12398.54/abs(Float64(b.E) - Float64(a.E) + 1e-24)
-    12398.54/elin/(0.861707*cell.T) > 50 && return none
+    elin = hc_eVÅ/abs(Float64(b.E) - Float64(a.E) + tiny)
+    hc_eVÅ/elin/(kT_eV*cell.T) > max_dE_over_kT && return none
     index && return (; none..., init=a.level, final=b.level)
 
     ni, li, nf, lf, Z = Int(a.n), Int(a.L), Int(b.n), Int(b.L), Int(coef.Z)
-    T = cell.T*1e4                                    # K
+    T = cell.T*T_unit                                    # K
     ans1 = ans2 = 0.0
     if abs(lf - li) == 1
         if nf == ni
@@ -60,7 +63,7 @@ function rate(coef::CollisionProb, cell::Cell; levels, index=false,
                 nn > lii + 1 && (sum += anl1(ni, nn, lii + 1, Z)[1])
             end
             # XSTAR's amcrs is called with ecm = 0, which always ends in velimp
-            cn = velimp(ni, lii, T, Z, 1.0, 1800.0, cell.nₑ, sum)
+            cn = velimp(ni, lii, T, Z, proton_charge, proton_mass, cell.nₑ, sum)
             if lf < li
                 ans1, ans2 = cn, cn*a.g/b.g
             else

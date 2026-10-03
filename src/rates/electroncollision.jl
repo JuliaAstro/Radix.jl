@@ -49,19 +49,19 @@ function rate(coef::ElectronCollision, cell::Cell; levels, index=false,
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
     lo, up = b.E < a.E ? (b, a) : (a, b)
-    eij = Float64(coef.ΔE)*13.605692                 # eV
-    elin = 12398.4016/eij                            # Å
-    (eij <= 0 || elin <= 1e-24) && return none
+    eij = Float64(coef.ΔE)*Ry_eV                 # eV
+    elin = hc_eVÅ/eij                            # Å
+    (eij <= 0 || elin <= tiny) && return none
     n = length(coef.Υ)
     n in (5, 9) || return none
     index && return (; none..., init=lo.level, final=up.level)
 
-    T = max(cell.T*1e4, 2.8777e6/elin)               # K
+    T = max(cell.T*T_unit, T_floor_coeff/elin)               # K
     Υ = n == 5 ?
         chianti_upsilon(coef.kind, coef.ΔE, coef.C, coef.Υ, T) :
         chianti_upsilon(coef.kind, coef.ΔE, coef.C, range(0, 1, length=9), coef.Υ, T)
     Υ = max(0., Υ)
-    cji = 8.626e-8*Υ/sqrt(cell.T)/up.g
-    cij = cji*up.g*expo(-eij/(0.861707*cell.T))/lo.g
+    cji = collision_rate_coeff*Υ/sqrt(cell.T)/up.g
+    cij = cji*up.g*expo(-eij/(kT_eV*cell.T))/lo.g
     (; init=lo.level, final=up.level, frate=cij*cell.nₑ, irate=cji*cell.nₑ)
 end

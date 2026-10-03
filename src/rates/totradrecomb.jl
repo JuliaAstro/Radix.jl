@@ -6,6 +6,7 @@
 # XSTAR data type: 38
 
 const TotRadRecomDesc = "total rr  from badnell amdpp.phys.strath.ac.uk"
+const rr_floor = 1e-48                 # added to the denominator of the fit
 
 struct TotRadRecomb{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -41,10 +42,10 @@ characteristic temperatures `T0`, `T1`, `T2` are in K while `cell.T` is in 10⁴
 function rate(coef::TotRadRecomb, cell::Cell; index=false, verbose=false)
     index && return (; init=1, final=0, frate=0., irate=0.)
     T = cell.T
-    T0, T1 = coef.T0/1e4, coef.T1/1e4
-    b = coef.B + coef.C*exp(-coef.T2/1e4/T)
+    T0, T1 = coef.T0/T_unit, coef.T1/T_unit
+    b = coef.B + coef.C*exp(-coef.T2/T_unit/T)
     term1 = sqrt(T/T0)
     term2 = (1.0 + sqrt(T/T0))^(1.0 - b)
     term3 = (1.0 + sqrt(T/T1))^(1.0 + b)
-    (; init=1, final=0, frate=cell.nₑ*coef.A/(1e-48 + term1*term2*term3), irate=0.)
+    (; init=1, final=0, frate=cell.nₑ*coef.A/(rr_floor + term1*term2*term3), irate=0.)
 end
