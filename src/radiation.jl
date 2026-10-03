@@ -25,19 +25,21 @@ struct Radiation{R<:AbstractFloat}
 end
 
 """
-    Opacity(n)
+    Opacity([R=Float64,] n)
 
 Continuum opacity arrays on a grid of `n` energies that the photoionization rates
 add to when given as `opacity=`: `total` (XSTAR `opakc`, cm⁻¹), `continuum`
 (`opakcont`, lines excluded) and `emissivity` (`rccemis`, 2 × n, recombination
-continuum emissivities in and out).
+continuum emissivities in and out). `R` is the element type: use the type of the temperature
+when differentiating the rates with ForwardDiff.
 """
-struct Opacity{R<:AbstractFloat}
+struct Opacity{R<:Real}
     total::Vector{R}
     continuum::Vector{R}
     emissivity::Matrix{R}
 end
-Opacity(n::Integer) = Opacity(zeros(n), zeros(n), zeros(2, n))
+Opacity(R::Type{<:Real}, n::Integer) = Opacity(zeros(R, n), zeros(R, n), zeros(R, 2, n))
+Opacity(n::Integer) = Opacity(Float64, n)
 
 const ergsev_bremsint = 1.602197e-12     # erg per eV in bremsmap's integral
 

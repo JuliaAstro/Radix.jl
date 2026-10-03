@@ -76,7 +76,7 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
 
     enermx = eth + ε[ntmp]*Ry_eV
     nbn = max(nbin(rad, enermx), min(nb1 + 1, ncn2 - 1))
-    sgbar = zeros(ncn2 + 1)
+    sgbar = zeros(promote_type(eltype(ε), eltype(σ), typeof(eth)), ncn2 + 1)
     kl = nb1
     jk = 1
     e1 = epi[kl]
@@ -494,8 +494,9 @@ function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, 
     nphint = min(nphint, ncn2)
 
     done = falses(ncn2)
-    ansar1 = zeros(ncn2)
-    ansar2 = zeros(ncn2)
+    W = promote_type(eltype(σ), eltype(ε), typeof(T), typeof(swrat), typeof(xnx), eltype(bremsa))
+    ansar1 = zeros(W, ncn2)
+    ansar2 = zeros(W, ncn2)
     nskp = ndelt
     sumr = sumh = sumh2 = sumc = sumc2 = sumi = 0.0
     tst1 = tst2 = tst3 = tst4 = 0.0

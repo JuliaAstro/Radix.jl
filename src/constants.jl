@@ -4,6 +4,14 @@
 const mc² = 5.11e5                    # electron rest energy (eV)
 const ergsev = 1.602176634e-12        # erg per eV (xstarlib constants module)
 const Ry_eV = 13.605692               # Rydberg energy (eV), as used in ucalc
+# Conversions to the precisions of ucalc's arithmetic. They narrow or widen the machine floats the
+# database and the tests use and leave other numbers (dual numbers for automatic differentiation,
+# BigFloat) alone, so that the rates can be differentiated.
+to_single(x::Float64) = Float32(x)
+to_single(x) = x
+to_double(x::Union{Float16, Float32}) = Float64(x)
+to_double(x) = x
+
 const Ry_eV_single = Float64(Float32(Ry_eV))   # 13.605692 as the single-precision literal of ucalc
 const hc_eVÅ = 12398.4016             # h c (eV Å), as used in ucalc
 
