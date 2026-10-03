@@ -10,6 +10,9 @@ include("ucalc_tests.jl")
 # (ftools/xstar/utils/xstarsub.f) so Radix is checked against the Fortran,
 # not against itself. T is in units of 1e4 K, as in XSTAR.
 
+# k × 10⁴ K in eV as ucalc writes it: a single-precision literal
+const ucalc_kT = Float64(0.861707f0)
+
 @testset "Radix.jl" begin
     f32 = Float32
     T, nh, ne = 1.5, 1e3, 2e3
@@ -85,13 +88,13 @@ include("ucalc_tests.jl")
         c = mk(1, 2)
         r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
         Δ = Float64(f32(10.2))
-        cij = 8.626e-8*Υi*exp(-Δ/(0.861707*Tc))/sqrt(Tc)/2
+        cij = 8.626e-8*Υi*exp(-Δ/(ucalc_kT*Tc))/sqrt(Tc)/2
         cji = 8.626e-8*Υi/sqrt(Tc)/8
         @test (r.init, r.final) == (1, 2)
         @test r.frate ≈ cij*2e3  rtol=1e-6
         @test r.irate ≈ cji*2e3  rtol=1e-6
         # detailed balance: cij/cji = (gup/glo) exp(-ΔE/kT)
-        @test r.frate/r.irate ≈ (8/2)*exp(-Δ/(0.861707*Tc))  rtol=1e-6
+        @test r.frate/r.irate ≈ (8/2)*exp(-Δ/(ucalc_kT*Tc))  rtol=1e-6
         # stored upper-first gives the same answer
         @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
         # above the table: last segment extrapolated and clamped at 0
@@ -131,7 +134,7 @@ include("ucalc_tests.jl")
         c = mk(1, 2)
         r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
         @test (r.init, r.final) == (1, 2)
-        @test r.frate/r.irate ≈ (8/2)*exp(-Float64(f32(0.5))*13.605692/(0.861707*Tc))  rtol=1e-6
+        @test r.frate/r.irate ≈ (8/2)*exp(-Float64(f32(0.5))*13.605692/(ucalc_kT*Tc))  rtol=1e-6
         @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
         # the fit temperature is floored where eij/kT would exceed 50
         cold = Radix.rate(c, Radix.Cell(0.01, 1e3, 2e3, 1e4); levels=levels)
@@ -181,7 +184,7 @@ include("ucalc_tests.jl")
         cai, eai = 1e-3, 1.0
         c = Radix.Autoionize(Int32(3), "ai", Int32[1], f32[cai, eai])
         r = Radix.rate(c, cell)
-        @test r.frate ≈ ne*f32(cai)*exp(-f32(eai)/(T*0.861707))/sqrt(T)
+        @test r.frate ≈ ne*f32(cai)*exp(-f32(eai)/(T*ucalc_kT))/sqrt(T)
         @test (r.init, r.final) == (1, 1)
 
         # ucalc label 30 (hydrogenic RR): t6=t/100; beta=Z²/(6.34 t6); vth=3.10782e7 sqrt(t);
@@ -308,7 +311,7 @@ include("ucalc_tests.jl")
                     ok = isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
                     ok &= x.irate == 0 ||
-                        isapprox(x.frate/x.irate, (Float64(up.g)/Float64(lo.g))*Radix.expo(-(Float64(up.E) - Float64(lo.E))/(0.861707*T)); rtol=1e-6)
+                        isapprox(x.frate/x.irate, (Float64(up.g)/Float64(lo.g))*Radix.expo(-(Float64(up.E) - Float64(lo.E))/(ucalc_kT*T)); rtol=1e-6)
                     ok || (nbad += 1)
                 end
             end
@@ -330,7 +333,7 @@ include("ucalc_tests.jl")
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
                     ok = isfinite(x.frate) && isfinite(x.irate)
                     ok &= x.irate == 0 || isapprox(x.frate/x.irate,
-                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.605692/(0.861707*T)); rtol=1e-6)
+                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.605692/(ucalc_kT*T)); rtol=1e-6)
                     ok || (nbad += 1)
                     (x.frate < 0 || x.irate < 0) && (nneg += 1)
                 end
@@ -352,7 +355,7 @@ include("ucalc_tests.jl")
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
                     ok = isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0
                     ok &= x.irate == 0 || isapprox(x.frate/x.irate,
-                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.605692/(0.861707*T)); rtol=1e-6)
+                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.605692/(ucalc_kT*T)); rtol=1e-6)
                     ok || (nbad += 1)
                 end
             end

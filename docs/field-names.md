@@ -199,7 +199,7 @@ unconfirmed.
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -318,6 +318,14 @@ ported type (except 4, which has no `rate` method). Notes:
   temperature floor ΔE/50k, from the energies of the levels, is `T_floor_coeff` over the wavelength
   from the single-precision 12398.4016 of `ucalc` (`hc_eVÅ_single`): with `ucalc_constants()` the
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
+- `CollisionIonize` (ucalc 95) keeps the scaled temperature grid `x_grid` and the strengths `ρ` apart (the old
+  constructor put `T0` in `ρ`, and the header omits the grid). `ucalc` always takes level 1 as the initial
+  level, and its statistical weight, whatever the level of the record; records of rate type 5 end in the
+  continuum and those of rate type 15 (a duplicate set) in level 1. Below the first grid point `ucalc` reads
+  the left end of the interval from before the table (`T0`, about 10⁴, and the last `x_grid`), which makes the
+  interpolation come out at about ρ(x₁); reproduced. The Saha prefactor is `saha_ci` (2.08e-22 for `ucalc`).
+  The factor `ln 2` is the single-precision `0.693147` there, and `kT_eV` of `ucalc_constants()` is now the
+  single-precision `0.861707` too, since the Boltzmann factors amplify its 3e-8 rounding.
 - `CollisionProb` (ucalc 63), transitions that change `n`: XSTAR's `ans1`/`ans2`
   put the large de-excitation-sized rate on the *upward* transition for any
   ordering of the two levels (the source comments "check if ans1 and ans2 are
