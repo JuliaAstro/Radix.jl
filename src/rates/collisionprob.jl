@@ -43,7 +43,7 @@ as is.
 function rate(coef::CollisionProb, cell::Cell; levels, index=false,
     verbose=false)
 
-    none = (; init=0, final=0, frate=0., irate=0.)
+    none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
@@ -86,5 +86,8 @@ function rate(coef::CollisionProb, cell::Cell; levels, index=false,
             (nf > ni || lf > li) && ((ans1, ans2) = (ans2, ans1))
         end
     end
-    (; init=a.level, final=b.level, frate=ans1*cell.nₑ, irate=ans2*cell.nₑ)
+    ΔE = abs(Float64(b.E) - Float64(a.E))
+    frate, irate = ans1*cell.nₑ, ans2*cell.nₑ
+    (; init=a.level, final=b.level, frate, irate,
+        fenergy=frate*ΔE*ergsev, ienergy=irate*ΔE*ergsev)
 end

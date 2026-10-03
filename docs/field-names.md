@@ -201,8 +201,9 @@ reproduced:
   `atdb.fits`; `ucalc` also reads a 9-real form with two more parameters.
 - `PhotoionizeDelta` stored its energies and line strengths one entry off before the real
   layout `[E_inf, E(1..m), f(1..m)]` was checked; fixed with the port of type 74.
-- Rates with `ans5`/`ans6` energies in `ucalc` (types 51, 56, 63, 98: rate × ΔE × erg per eV) do not
-  return those energies yet.
+- The collision rates (types 51, 56, 63, 98) return `fenergy` and `ienergy`, the forward and inverse
+  rates times ΔE (erg cm⁻³ s⁻¹, `ucalc`'s `ans6` and `ans5`). Unlike the photoionization energies
+  they are positive.
 
 - For photoionization leaving an excited parent level, `ucalc` reads the energy of the
   final level (`rlev(1, idest2)` beyond the ion's levels) from stale memory; `fenergy2`

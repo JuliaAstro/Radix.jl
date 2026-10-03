@@ -40,7 +40,7 @@ rates are 0 if a level is missing from `levels` or the two energies coincide.
 function rate(coef::ElectronImpact1, cell::Cell; levels, index=false,
     verbose=false)
 
-    none = (; init=0, final=0, frate=0., irate=0.)
+    none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
@@ -58,5 +58,7 @@ function rate(coef::ElectronImpact1, cell::Cell; levels, index=false,
     cijpp = max(0., cijpp)
     cij = collision_rate_coeff*cijpp*expo(-ΔE/(kT_eV*cell.T))/sqrt(cell.T)/lo.g
     cji = collision_rate_coeff*cijpp/sqrt(cell.T)/up.g
-    (; init=lo.level, final=up.level, frate=cij*cell.nₑ, irate=cji*cell.nₑ)
+    frate, irate = cij*cell.nₑ, cji*cell.nₑ
+    (; init=lo.level, final=up.level, frate, irate,
+        fenergy=frate*ΔE*ergsev, ienergy=irate*ΔE*ergsev)
 end
