@@ -32,7 +32,7 @@ function PhotoionizeSuper(rate::Int32, label::String, ivec::I, rvec::R) where
     Nd, Nt, Nx = ivec[1:3]
     # ucalc reads the table with the temperature running fastest
     PhotoionizeSuper(Int8(rate), label, ivec[4:7]..., Parent(ivec[9], ivec[8]), ivec[10:11]..., Vector(rvec[1:Nd]),
-        Vector(rvec[Nd+1:Nd+Nt]), reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Nt, Nd),
+        Vector(rvec[Nd+1:Nd+Nt]), reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Int(Nt), Int(Nd)),
         Vector(rvec[Nd+Nt+Nd*Nt+1:2:end-1]), Vector(rvec[Nd+Nt+Nd*Nt+2:2:end]))
 end
 

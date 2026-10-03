@@ -31,7 +31,7 @@ function PhotoRecombX(rate::Int32, label::String, ivec::I, rvec::R) where
 
     nd, nt, nx = ivec[1:3]
     PhotoRecombX(Int8(rate), label, ivec[4:7]..., Parent(ivec[9], ivec[8]), ivec[10:11]..., Vector(rvec[1:nd]),
-        Vector(rvec[nd+1:nd+nt]), reshape(rvec[nd+nt+1:nd+nt+nd*nt], nd, nt),
+        Vector(rvec[nd+1:nd+nt]), reshape(rvec[nd+nt+1:nd+nt+nd*nt], Int(nd), Int(nt)),
         Vector(rvec[nd+nt+nd*nt+1:2:nd+nt+nd*nt+2*nx-1]),
         Vector(rvec[nd+nt+nd*nt+2:2:nd+nt+nd*nt+2*nx]))
 end

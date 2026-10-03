@@ -26,5 +26,5 @@ function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R) where
     Nd, Nt = ivec[1:2]
     CollisionSuper(Int8(rate), label, Transition(ivec[3], ivec[4]), ivec[5:6]..., rvec[Nd+Nt+Nd*Nt+1],
         Vector(rvec[1:Nd]), Vector(rvec[Nd+1:Nd+Nt]),
-        reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Nd, Nt))
+        reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Int(Nd), Int(Nt)))
 end
