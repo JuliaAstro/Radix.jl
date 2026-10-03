@@ -145,6 +145,10 @@ direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
             expected=(o, c) -> (; frate=o[1], irate=o[2], init=o[7], final=o[8]),
             rtol=5e-6, atol=1e-100) == 100
     end
+    @testset "type 85 PhotoionizeFeKedge" begin
+        # recombination and the opacity are zeroed in ucalc; the opacity arrays are filled
+        @test check_ucalc("type85"; call=photo_call, expected=photo_expected, rtol=1e-6, atol=1e-100) == 100
+    end
     @testset "type 88 PhotoionizeDamp" begin
         # only the photoionization rate and the opacity are returned; the arrays are still filled.
         # The opacity is a difference of two nearly equal terms, so it magnifies the

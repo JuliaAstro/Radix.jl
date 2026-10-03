@@ -7,7 +7,7 @@
 # then:  drvu < OUTDIR/typeNN.in > OUTDIR/typeNN.out
 using FITSFiles, Random
 
-const RADIATION_TYPES = (49, 50, 53, 59, 74, 88) # types that need a spectrum
+const RADIATION_TYPES = (49, 50, 53, 59, 74, 85, 88) # types that need a spectrum
 const PARENT_TYPES = (49, 53, 59)    # types that leave a level of the next ion
 # positions of the parent level and the parent ion among the integers
 parent_positions(type) = type == 59 ? (4, 5) : (5, 6)

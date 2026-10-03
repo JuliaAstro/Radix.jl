@@ -158,9 +158,16 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 56, 59, 63, 74, 88 and 98.
+38, 49, 50, 51 (5- and 9-point fits), 53, 56, 59, 63, 74, 85, 88 and 98.
 
 ## Open items
+
+- Type 85 (`PhotoionizeFeKedge`) sums sharp resonances, so it is sensitive to the
+  last digit of the energy conversion: it uses `13.605692` as the single-precision
+  literal that `ucalc` has (`Ry_eV_single`); with the double value the rates differ
+  by 2e-5. `ucalc` also takes the resonance charge as the ion index minus 114 (an
+  earlier ion numbering), which gives meaningless charges for the current ion
+  numbers; reproduced as is.
 
 - `ParPhotoIonize3` supports the 6-real form of the record, which is the only one in
   `atdb.fits`; `ucalc` also reads a 9-real form with two more parameters.
