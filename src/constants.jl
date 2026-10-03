@@ -21,3 +21,7 @@ const tiny = 1e-24                    # guard against division by zero and zero 
 # exp() with the argument clamped, as in XSTAR's expo()
 const expo_limit = 60.0
 expo(x) = exp(clamp(x, -expo_limit, expo_limit))
+
+const kB_cgs = 1.380649e-16           # Boltzmann constant (erg K⁻¹)
+const fourpi_xstar = 12.56            # XSTAR's value of 4π in the spectrum integrals
+const Mb = 1e-18                      # cm² per Mb (cross sections are tabulated in Mb)

@@ -349,6 +349,28 @@ include("ucalc_tests.jl")
             end
             @test nrec == 6015
             @test nbad == 0
+
+            # ParPhotoIonize1/2 against a power-law spectrum: all results finite and
+            # photoionization rates non-negative, except for the 18 type-53 records whose
+            # tables start hundreds of eV above the threshold (negative in XSTAR too)
+            counts = level_counts(levels)
+            E = [0.1*exp(0.0015*(i - 1)) for i in 1:9999]
+            rad = Radiation(E, 1e16 .* E .^ -1.0)
+            nbad = 0; nneg = 0; nev = 0
+            for (T, ne) in ((0.3, 5e3), (10.0, 1e10))
+                c = Radix.Cell(T, 1e3, ne, 1e10)
+                for r in db
+                    (r isa Radix.ParPhotoIonize1 || r isa Radix.ParPhotoIonize2) || continue
+                    x = Radix.rate(r, c; levels=levels, radiation=rad, nlev=counts[r.ion], lfast=3)
+                    x.init == 0 && continue
+                    nev += 1
+                    all(isfinite, (x.frate, x.irate, x.fenergy, x.ienergy, x.opacity)) || (nbad += 1)
+                    (x.frate < 0 || x.irate < 0) && (nneg += 1)
+                end
+            end
+            @test nbad == 0
+            @test nneg == 36
+            @test nev > 598000
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"

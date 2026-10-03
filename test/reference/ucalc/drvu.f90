@@ -4,9 +4,14 @@
 !       (nrdt reals)                       the record's reals
 !       t xpx xee xh0 xh1 vturb trad cfrac abund1 abund2 ptmp1 ptmp2 amass
 !                                          t in 1e4 K; densities in cm^-3; amass of the element
+!       e0 dlnE index norm kpar gpar epar lfast radiation: epi(i)=e0 exp(dlnE (i-1)), bremsa(i)=norm epi^-index
+!                                          (norm=0: no radiation); kpar, gpar: level index and statistical
+!                                          weight and energy of the level of the next ion that photoionization leaves;
+!                                          lfast is ucalc's speed switch (recombination integrals need >= 2)
 !       nlev nspec                         levels of the ion, and how many are given below
 !       (nspec lines) i E g Einf n 2S+1 L  the levels the record refers to
-!     and prints ans1..ans6, idest1..idest4, opakab for each case.
+!     and prints ans1..ans6, idest1..idest4, opakab and four checksums of the
+!     arrays ucalc fills (sums of opakc, opakcont, rccemis(1,:), rccemis(2,:)) for each case.
       program drvu
       use globaldata
       implicit none
@@ -22,7 +27,8 @@
       integer lfast,lun11,i,ios,k,nspec
       real(8) vturbi,cfrac,ans1,ans2,ans3,ans4,ans5,ans6,abund1,abund2
       real(8) ptmp1,ptmp2,xpx,opakab,rr,delr,t,trad,tsq,xee,xh1,xh0
-      real(8) E,g,einf,amass
+      real(8) E,g,einf,amass,e0,dlne,sindex,snorm,gpar,epar
+      integer kpar
       integer n,l,s2
       character(49) kdesc2
       real(8), allocatable :: epi(:),bremsa(:),bremsint(:)
@@ -55,7 +61,7 @@
       if (allocated(masterdata%idat1)) deallocate(masterdata%idat1)
       if (allocated(masterdata%rdat1)) deallocate(masterdata%rdat1)
       if (allocated(masterdata%kdat1)) deallocate(masterdata%kdat1)
-      allocate(masterdata%idat1(nidt+10),masterdata%rdat1(nrdt+12),masterdata%kdat1(10))
+      allocate(masterdata%idat1(nidt+20),masterdata%rdat1(nrdt+20),masterdata%kdat1(10))
       masterdata%idat1=0; masterdata%rdat1=0.d0
       read (5,*) (masterdata%idat1(i),i=1,nidt)
       read (5,*) (masterdata%rdat1(2+i),i=1,nrdt)
@@ -73,6 +79,22 @@
       derivedpointers%npar(3)=2; derivedpointers%npar(2)=1
       derivedpointers%nplini(3)=1; derivedpointers%nplin(1)=3
       tsq=sqrt(t)
+      read (5,*) e0,dlne,sindex,snorm,kpar,gpar,epar,lfast
+      do i=1,ncn
+        epi(i)=e0*exp(dlne*(i-1))
+        bremsa(i)=snorm*epi(i)**(-sindex)
+      enddo
+      opakc=0.d0; opakcont=0.d0; rccemis=0.d0; opakab=0.d0
+      ! level record of the next ion (record 5) that the photoionization record leaves
+      masterdata%idat1(nidt+1:nidt+6)=(/1,2,0,26,kpar,2/)
+      masterdata%rdat1(2+nrdt+1:2+nrdt+4)=(/epar,gpar,1.d0,0.d0/)
+      masterdata%nptrs(1,5)=1; masterdata%nptrs(2,5)=6; masterdata%nptrs(3,5)=13
+      masterdata%nptrs(5,5)=4; masterdata%nptrs(6,5)=6; masterdata%nptrs(7,5)=0
+      masterdata%nptrs(8,5)=2+nrdt+1; masterdata%nptrs(9,5)=nidt+1
+      masterdata%nptrs(10,5)=1
+      derivedpointers%npfi(13,2)=5; derivedpointers%npar(5)=4
+      derivedpointers%npnxt(5)=6; derivedpointers%npar(6)=4   ! a real level always has a successor
+      derivedpointers%npnxt(6)=0
       read (5,*) nlev,nspec
       do k=1,nspec
         read (5,*) i,E,g,einf,n,s2,l
@@ -92,6 +114,7 @@
      &   epi,ncn2,bremsa,bremsint,                                      &
      &   leveltemp,                                                     &
      &   nlev,lfast,lun11)
-      write (6,'(6(1pe24.15),4i8,1pe24.15)') ans1,ans2,ans3,ans4,ans5,ans6,idest1,idest2,idest3,idest4,opakab
+      write (6,'(6(1pe24.15),4i8,5(1pe24.15))') ans1,ans2,ans3,ans4,ans5,ans6,idest1,idest2,idest3,idest4,opakab, &
+     &  sum(opakc),sum(opakcont),sum(rccemis(1,:)),sum(rccemis(2,:))
       goto 10
       end

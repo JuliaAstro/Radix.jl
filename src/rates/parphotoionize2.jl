@@ -28,3 +28,13 @@ function ParPhotoIonize2(rate::Int32, label::String, ivec::I, rvec::R) where
     ParPhotoIonize2(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., Vector(rvec[1:2:end-1]),
         Vector(rvec[2:2:end]))
 end
+
+"""
+    rate(coef::ParPhotoIonize2, cell; levels, radiation, nlev, ptmp=(0.5, 0.5), abund=(0, 0), lfast=1, opacity=nothing)
+
+Photoionization from TOPbase's resonance-averaged cross sections (XSTAR ucalc type
+53): as `ParPhotoIonize1` but without the E⁻³ tail, and the threshold includes the
+excitation energy of an excited parent level. See `photoionize_level`.
+"""
+rate(coef::ParPhotoIonize2, cell::Cell; kw...) =
+    photoionize_level(coef, cell; extrapolate=false, shifted=true, kw...)
