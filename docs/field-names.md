@@ -34,8 +34,9 @@ level was `i`, `k`, `j`, `n` or `iN`.
    character.
 7. **Group values that travel together in small structs** (below).
 8. **No numeric literals in expressions.** Every empirical or physical number is a
-   named constant. Numbers used by more than one file are in `src/constants.jl`
-   (`Ry_eV`, `hc_eVÅ`, `T_unit`, `kT_eV`, `collision_rate_coeff`, `cx_unit`, `tiny`, …);
+   named constant. Physical constants come from PhysicalConstants.jl through
+   `Radix.constants()` (see Physical constants); other numbers used by more than one file are
+   in `src/constants.jl` (`cx_unit`, `tiny`, `Mb`, …);
    numbers that belong to one rate or fit are `const`s at the top of its file
    (`cxHe_fraction`, `ps_rho_coeff`, `sz_abethe`, …). Only structural numbers stay
    (0, 1, 2, powers, halving, array indices).
@@ -152,6 +153,46 @@ continuum opacity and recombination emissivity arrays that the integrals add to 
 passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53) with
 `photoionization_integrals` (XSTAR's `phint53`) and `phextrap`.
 
+## Physical constants
+
+The rates take their physical constants from `Radix.constants()`, a `Constants` object evaluated
+from PhysicalConstants.jl with CODATA 2022 by default: k, h, c, the Rydberg, erg per eV, hc/k and
+its temperature floor ΔE/50k, Ry/k, eV/k, the proton-electron mass ratio, the line cross section
+π r_e c, the thermal speed of 1 amu at 10⁴ K, and the Maxwellian collision and Saha prefactors. Use
+another CODATA set with `set_constants!(Constants(PhysicalConstants.CODATA2018))` (also CODATA 2014),
+or temporarily with `with_constants(f, K)`; `Constants(K; field=value)` copies a set with changes.
+
+XSTAR's `ucalc` rounds these differently, sometimes in different ways within one program
+(`kT_eV` = 0.861707, 8.617e-5 and 1.38066e-16 erg/K for k, three values of hc/k, 1800 for the
+proton mass). `ucalc_constants()` has its numbers, field by field; the tests that compare with
+`ucalc` (`ucalc_tests.jl` and the formulas transcribed in `runtests.jl`) run with that set, and
+`constants_tests.jl` checks that the CODATA values are consistent with each other and within the
+rounding of `ucalc`'s (1e-3, 3% for the proton mass). Where `ucalc` is sensitive to the rounding (the
+e^{-ΔE/kT} factors) the CODATA rates differ from it by more than the 1e-6 of the tests: the
+Boltzmann factor amplifies the 3e-5 difference in k by ΔE/kT.
+
+4π and 8π (the normalization of the spectrum in the photoionization integrals) and π (the resonance
+profiles of type 85) are the exact values, and `ucalc` has 12.56, 25.3 and 3.14159. The photoionization
+rate is independent of the choice, since the factor multiplies and divides the flux, but the
+recombination and emissivity terms are not: `ucalc`'s 25.3 is 0.7% above 8π.
+
+Coefficients that XSTAR writes as a number but that are combinations of constants are derived too, and
+checked against its number (within 1.3e-3, except the Saha factor of type 57, 3.5e-3):
+`bb_coeff` = 1/(h³c²) and `fo_saha` = Saha prefactor × 8π (the photon density and the Saha factor of
+the recombination integrals), `milne_coeff` = 4π/((2π m_e)^{3/2} c²) × 1 Mb, `A_to_f` = 1/(8π² r_e c),
+`gordon_A` = (2π/3) α³ c R∞ with the reduced mass of hydrogen (with it the 2p → 1s rate is 6.2649e8 s⁻¹,
+as NIST has it; the infinite-mass value is 5e-4 higher), `ps_alfa` = m_e/2k and `ps_pd` the Debye length
+coefficient of the l-changing collisions, `Ry_K_sz` = Ry/k and `sz_rate_coeff` of Simpson and Zhang's rate,
+and the Saha factor of type 57. `constants_tests.jl` also checks the two routes to the recombination
+coefficient, the Milne integral and the photoionization code's, against each other (1-2%, the accuracy of
+the integrals).
+
+Not derived: XSTAR's fit coefficients and numerical conventions (the fits of `impcfn`, the Bethe and
+Simpson-Zhang tables, `ps_rho_coeff`, `ps_b_coeff`, `impactn_psi_coeff`, `impactn_cr_coeff`, `szirc_coeff`,
+`erc_f_coeff`, the ionization fit constants of type 57, `pexs_a_coeff`, ...). `irc_coeff` = `erc_s_coeff` =
+1.095e-10 is within 1.8e-3 of 2 (8k/πm)^{1/2} π a₀² per √K, which is probably its origin, but this is
+unconfirmed.
+
 ## Reference tests
 
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
@@ -207,9 +248,9 @@ ported type (except 4, which has no `rate` method). Notes:
 ## Open items
 
 - Type 85 (`PhotoionizeFeKedge`) sums sharp resonances, so it is sensitive to the
-  last digit of the energy conversion: it uses `13.605692` as the single-precision
-  literal that `ucalc` has (`Ry_eV_single`); with the double value the rates differ
-  by 2e-5. `ucalc` also takes the resonance charge as the ion index minus 114 (an
+  last digit of the energy conversion: with `ucalc_constants()` it uses `13.605692` as the
+  single-precision literal that `ucalc` has (`Ry_eV_single`); with the double value the rates
+  differ by 2e-5. `ucalc` also takes the resonance charge as the ion index minus 114 (an
   earlier ion numbering), which gives meaningless charges for the current ion
   numbers; reproduced as is.
 
@@ -271,12 +312,12 @@ ported type (except 4, which has no `rate` method). Notes:
   `linopac` is not part of this type.
 - `CollisionSuper` (ucalc 77) reads its table like `RadiativeSuper` (temperature fastest, `C` has size
   `(nT, nₑ)` and holds log₁₀ of the de-excitation rate) through the shared `interpolate_super_table`. The
-  excitation rate uses the wavelength of the record in the Boltzmann factor with `hc/k = 1.43817e8`
-  (a slightly different value from the usual 1.43878e8) and a weight `2(2l + 1)` where `l` comes from
-  numbering the first level of the record by shells (`level` 1 is 1s, 2 and 3 are 2s and 2p, ...),
-  as `calt77` does with the level index. The temperature floor `2.88e6/λ` K, from the energies of
-  the levels, uses the single-precision value of 12398.4016 (`hc_eVÅ_single`): the factor
-  e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
+  excitation rate uses the wavelength of the record in the Boltzmann factor (`hc_over_k`; `ucalc` has
+  1.43817e8) and a weight `2(2l + 1)` where `l` comes from numbering the first level of the record by
+  shells (`level` 1 is 1s, 2 and 3 are 2s and 2p, ...), as `calt77` does with the level index. The
+  temperature floor ΔE/50k, from the energies of the levels, is `T_floor_coeff` over the wavelength
+  from the single-precision 12398.4016 of `ucalc` (`hc_eVÅ_single`): with `ucalc_constants()` the
+  factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `CollisionProb` (ucalc 63), transitions that change `n`: XSTAR's `ans1`/`ans2`
   put the large de-excitation-sized rate on the *upward* transition for any
   ordering of the two levels (the source comments "check if ans1 and ans2 are

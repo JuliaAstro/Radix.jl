@@ -37,7 +37,6 @@ const ph_min_dE = 1e-8               # eV; flat segments below this width
 const ph_tiny_dE = 1e-36
 const ph_tiny = 1e-24
 const bb_energy_cap = 2e4            # eV; the Planck-like factor stops growing here
-const bb_coeff = 1.571e22
 const ph_exp_limit = 200.0           # recombination terms only while (E - E_th)/kT is below this
 
 """
@@ -54,6 +53,7 @@ the continuum opacity and recombination emissivity are added to it. Also returns
 """
 function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
     abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing)
+    K = constants()
 
     epi, bremsa = rad.E, rad.F
     ncn2 = length(epi)
@@ -63,10 +63,10 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
     abund1, abund2 = abund
     pesc = ptmp[1] + ptmp[2]
     eth = E_th
-    bktm = kB_cgs*T*T_unit/ergsev
+    bktm = K.kB_cgs*T*T_unit/K.ergsev
     nphint = ncn2 - max(grid_min_bins, ncn2 ÷ grid_guard_fraction)
     sumr = sumh = sumh2 = sumc = sumc2 = sumi = 0.0
-    ener = eth + ε[1]*Ry_eV
+    ener = eth + ε[1]*K.Ry_eV
     nb1 = nbin(rad, ener)
     while epi[nb1] < ener && nb1 < nphint
         nb1 += 1
@@ -74,13 +74,13 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
     nb1 = max(nb1 - 1, 1)
     nb1 >= nphint && return out
 
-    enermx = eth + ε[ntmp]*Ry_eV
+    enermx = eth + ε[ntmp]*K.Ry_eV
     nbn = max(nbin(rad, enermx), min(nb1 + 1, ncn2 - 1))
     sgbar = zeros(promote_type(eltype(ε), eltype(σ), typeof(eth)), ncn2 + 1)
     kl = nb1
     jk = 1
     e1 = epi[kl]
-    e2 = eth + ε[jk]*Ry_eV
+    e2 = eth + ε[jk]*K.Ry_eV
     s2 = σ[jk]
     if e1 < e2
         kl += 1
@@ -95,7 +95,7 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
             jk += 1
             e2o = e2
             s2o = s2
-            e2 = eth + ε[jk]*Ry_eV
+            e2 = eth + ε[jk]*K.Ry_eV
             s2 = σ[jk]
             sum += (s2 + s2o)*(e2 - e2o)/2
         end
@@ -121,11 +121,11 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
     end
     klmax = kl - 1
 
-    bb(e) = min(bb_energy_cap, e)^3*bb_coeff*2
+    bb(e) = min(bb_energy_cap, e)^3*K.bb_coeff*2
     sgtpp = sgbar[nb1]
-    bremtmpp = bremsa[nb1]/fourpi_xstar
+    bremtmpp = bremsa[nb1]/K.fourpi
     epiip = epi[nb1]
-    temprp = fourpi_xstar*sgtpp*bremtmpp/epiip
+    temprp = K.fourpi*sgtpp*bremtmpp/epiip
     temphp = temprp*epiip
     temphp2 = temprp*(epiip - eth)
     exptst = (epiip - eth)/bktm
@@ -139,11 +139,11 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
     while kl < klmax
         sgtp = max(0.0, sgbar[kl])
         sgtpp = sgbar[kl + 1]
-        bremtmpp = bremsa[kl + 1]/fourpi_xstar
+        bremtmpp = bremsa[kl + 1]/K.fourpi
         epii = epi[kl]
         epiip = epi[kl + 1]
         tempr = temprp
-        temprp = fourpi_xstar*sgtpp*bremtmpp/epiip
+        temprp = K.fourpi*sgtpp*bremtmpp/epiip
         wwir = (epiip - epii)/2
         sumr += tempr*wwir + temprp*wwir
         temph, temph2 = temphp, temphp2
@@ -157,7 +157,7 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
         if exptsto < ph_exp_limit && lfast >= 2
             exptmpp = expo(-exptst)
             tempi = tempip
-            tempip = rnist*bb(epiip)*sgtpp*exptmpp*fourpi_xstar/epiip
+            tempip = rnist*bb(epiip)*sgtpp*exptmpp*K.fourpi/epiip
             atmp2 = tempip*epiip
             tempip *= pesc
             sumi += tempi*wwir + tempip*wwir
@@ -167,8 +167,8 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
             sumc += tempc*wwir + tempcp*wwir
             sumc2 += tempc2*wwir + tempcp2*wwir
             if opacity !== nothing
-                opacity.emissivity[1, kl] += abund2*atmp2*ptmp[1]*ntot/fourpi_xstar
-                opacity.emissivity[2, kl] += abund2*atmp2*ptmp[2]*ntot/fourpi_xstar
+                opacity.emissivity[1, kl] += abund2*atmp2*ptmp[1]*ntot/K.fourpi
+                opacity.emissivity[2, kl] += abund2*atmp2*ptmp[2]*ntot/K.fourpi
             end
         end
         optmp = abund1*ntot*sgtp
@@ -182,11 +182,10 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
         end
         kl += 1
     end
-    (; pirt=sumr, rrrt=sumi, piht=sumh*ergsev, rrcl=sumc*ergsev,
-        piht2=sumh2*ergsev, rrcl2=sumc2*ergsev, opakab=opakab)
+    (; pirt=sumr, rrrt=sumi, piht=sumh*K.ergsev, rrcl=sumc*K.ergsev,
+        piht2=sumh2*K.ergsev, rrcl2=sumc2*K.ergsev, opakab=opakab)
 end
 
-const saha_coeff = 2.07e-16            # Saha-Boltzmann factor (cm³ K^{3/2})
 const saha_T_exp = -1.5
 const min_g = 1e-24                    # statistical weights below this are ignored
 const rnisseu_floor = 1e-37
@@ -221,6 +220,7 @@ memory; here it is the continuum energy plus the energy of the parent level.
 function photoionize_level(coef, cell::Cell; levels, radiation, nlev,
     ptmp=(0.5, 0.5), abund=(0.0, 0.0), lfast=1, opacity=nothing, index=false,
     extrapolate, shifted, parent=true, rates_only=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         fenergy2=0., ienergy2=0., opacity=0.)
@@ -254,10 +254,10 @@ function photoionize_level(coef, cell::Cell; levels, radiation, nlev,
     end
 
     T = cell.T
-    q2 = saha_coeff*cell.nₑ*(T*T_unit)^saha_T_exp
+    q2 = K.saha_coeff*cell.nₑ*(T*T_unit)^saha_T_exp
     rnissel = Float64(lo.g)*q2/Float64(cont.g)
     ethtmp = shifted ? max(0.0, eth - Float64(cont.E)) : 0.0
-    rnist = rnissel*exp(-max(0.0, ethtmp + Ry_eV*ε0)/kT_eV/T)/(rnisseu_floor + 1)
+    rnist = rnissel*exp(-max(0.0, ethtmp + K.Ry_eV*ε0)/K.kT_eV/T)/(rnisseu_floor + 1)
     r = photoionization_integrals(radiation, eth, ε, σ, T, rnist, ptmp;
         abund=abund, ntot=cell.ntot, lfast=lfast, opacity=opacity)
 
@@ -265,8 +265,8 @@ function photoionize_level(coef, cell::Cell; levels, radiation, nlev,
         opacity=r.opakab)
 
     dE = abs(e2 - Float64(lo.E))
-    fenergy2 = r.piht2*(r.piht - dE*ergsev*r.pirt)/max(heat_floor, r.piht - eth*ergsev*r.pirt)
-    ienergy2 = r.rrcl2*(r.rrcl - dE*ergsev*r.rrrt)/max(heat_floor, r.rrcl - eth*ergsev*r.rrrt)
+    fenergy2 = r.piht2*(r.piht - dE*K.ergsev*r.pirt)/max(heat_floor, r.piht - eth*K.ergsev*r.pirt)
+    ienergy2 = r.rrcl2*(r.rrcl - dE*K.ergsev*r.rrrt)/max(heat_floor, r.rrcl - eth*K.ergsev*r.rrrt)
     (; init=idest1, final=idest2, frate=r.pirt, irate=r.rrrt, fenergy=r.piht,
         ienergy=r.rrcl, fenergy2=fenergy2, ienergy2=ienergy2, opacity=r.opakab)
 end
@@ -286,8 +286,9 @@ Step `nskp` to the next sampled bin of the photoionization integrals and the las
 `nphint` to use (XSTAR's `enxt`).
 """
 function next_bin(rad::Radiation, E_th, nb1, T, lfast)
+    K = constants()
     ncn2 = length(rad.E)
-    bktm = kB_cgs*T*T_unit/ergsev
+    bktm = K.kB_cgs*T*T_unit/K.ergsev
     numcon2 = max(grid_min_bins, ncn2 ÷ grid_guard_fraction)
     if lfast <= 2
         nphint = ncn2 - numcon2
@@ -304,8 +305,6 @@ function next_bin(rad::Radiation, E_th, nb1, T, lfast)
     (nskp, min(nphint, ncn2 - numcon2))
 end
 
-const fo_saha = 5.216e-21            # Saha-Boltzmann factor of phintfo (cm³ K^{3/2})
-const fo_fourpi = 25.3               # phintfo's value of 8π
 const fo_exptst_floor = 1e-36
 
 """
@@ -320,14 +319,15 @@ original never stops the loop).
 """
 function photoionization_integrals_fo(rad::Radiation, E_th, σ, T, swrat, xnx;
     abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing)
+    K = constants()
 
     epi, bremsa = rad.E, rad.F
     ncn2 = length(epi)
     abund1 = abund[1]
     eth = E_th
     nb1 = nbin(rad, eth)
-    bktm = kB_cgs*T*T_unit/ergsev
-    rnist = fo_saha*swrat/T/sqrt(T)
+    bktm = K.kB_cgs*T*T_unit/K.ergsev
+    rnist = K.fo_saha*swrat/T/sqrt(T)
     sumr = sumh = sumh2 = sumc = sumc2 = sumi = 0.0
     tempr = tempi = atmp2 = atmp22 = 0.0
     opakab = 0.0
@@ -339,15 +339,15 @@ function photoionization_integrals_fo(rad::Radiation, E_th, σ, T, swrat, xnx;
         ener = epi[kl]
         epii = ener
         sgtmp = σ[kl]
-        bremtmp = bremsa[kl]/fo_fourpi
+        bremtmp = bremsa[kl]/K.eightpi
         tempro = tempr
-        tempr = fo_fourpi*sgtmp*bremtmp/epii
+        tempr = K.eightpi*sgtmp*bremtmp/epii
         deld = ener - enero
         sumr += (tempr + tempro)*deld/2
-        sumh += (tempr*ener + tempro*enero)*deld*ergsev/2
-        sumh2 += (tempr*(ener - eth) + tempro*(enero - eth))*deld*ergsev/2
+        sumh += (tempr*ener + tempro*enero)*deld*K.ergsev/2
+        sumh2 += (tempr*(ener - eth) + tempro*(enero - eth))*deld*K.ergsev/2
         exptmp = expo(-max(fo_exptst_floor, (epii - eth)/bktm))
-        bbnurj = min(epii, bb_energy_cap)^3*bb_coeff
+        bbnurj = min(epii, bb_energy_cap)^3*K.bb_coeff
         tempi1 = rnist*bbnurj*exptmp*sgtmp/epii
         tempi2 = rnist*bremtmp*exptmp*sgtmp/epii
         tempio = tempi
@@ -357,8 +357,8 @@ function photoionization_integrals_fo(rad::Radiation, E_th, σ, T, swrat, xnx;
         atmp22o = atmp22
         atmp22 = tempi1*(epii - eth)
         sumi += (tempi + tempio)*deld/2
-        sumc += (atmp2 + atmp2o)*deld*ergsev/2
-        sumc2 += (atmp22 + atmp22o)*deld*ergsev/2
+        sumc += (atmp2 + atmp2o)*deld*K.ergsev/2
+        sumc2 += (atmp22 + atmp22o)*deld*K.ergsev/2
         optmp = abund1*sgtmp*ntot
         kl <= nb1 + 1 && (opakab = optmp)
         if opacity !== nothing
@@ -397,13 +397,13 @@ function interpolate_cross_section(ε::AbstractVector, σ::AbstractVector, e)
     max(0.0, s)
 end
 
-const intin_inv_kB = 7.2438e15       # 1/k_B (K erg⁻¹) as written in intin
 const intin_exp_limit = 90.0
 const intin_zero = 1e-3
 
 # the two integrals ∫ x² e^{-x} and ∫ x³ e^{-x} of the Milne relation between s1 and s2 (XSTAR's `intin`)
 function milne_terms(s1, s2, s0, T)
-    del = intin_inv_kB/T
+    K = constants()
+    del = K.inv_kB/T
     s1, s2, s0 = s1*del, s2*del, s0*del
     ri2 = 0.0
     if s1 - s0 < intin_exp_limit
@@ -415,8 +415,6 @@ function milne_terms(s1, s2, s0, T)
     (ri2, ri3)
 end
 
-const milne_Ry_erg = 2.17896e-11      # Rydberg (erg) as written in milne
-const milne_coeff = Float64(0.79788f0*40.4153f0)   # (single-precision product)
 const milne_tolerance = Float64(0.01f0)
 const milne_flat = 1e-24
 
@@ -428,14 +426,15 @@ Recombination coefficient (cm³ s⁻¹) from the Milne relation for the cross-se
 sum over the table stops once it changes by less than 1%.
 """
 function milne_recombination(T, ε, σ, E_th)
+    K = constants()
     nt = length(ε)
-    st = (ε[1] + E_th)*milne_Ry_erg
+    st = (ε[1] + E_th)*K.Ry_erg
     sumo, s = 1.0, 0.0
     i = 1
     while abs(s - sumo) > milne_tolerance*s && i < nt
         i += 1
-        s1 = (ε[i - 1] + E_th)*milne_Ry_erg
-        s2 = (ε[i] + E_th)*milne_Ry_erg
+        s1 = (ε[i - 1] + E_th)*K.Ry_erg
+        s2 = (ε[i] + E_th)*K.Ry_erg
         s2 < s1 && return 0.0                         # (XSTAR returns without setting the coefficient)
         v1, v2 = σ[i - 1], σ[i]
         if v1 != 0 || v2 != 0
@@ -446,7 +445,7 @@ function milne_recombination(T, ε, σ, E_th)
             s += ra*ri2 + rb*ri3
         end
     end
-    s*milne_coeff
+    s*K.milne_coeff
 end
 
 const hunt_tolerance = 0.01           # relative change of the integrals that ends the passes
@@ -464,6 +463,7 @@ pass are reused, except for the recombination weight measured from the threshold
 value of the last bin computed in the pass, as in the original.
 """
 function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, xnx)
+    K = constants()
     epi, bremsa = rad.E, rad.F
     ncn2 = length(epi)
     ntmp = length(ε)
@@ -474,17 +474,17 @@ function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, 
     numcon3 = ncn2 - max(grid_min_bins, ncn2 ÷ grid_guard_fraction)
     nb1 >= numcon3 && return zero_sums
 
-    bktm = kB_cgs*T*T_unit/ergsev
-    rnist = fo_saha*swrat/T/sqrt(T)
+    bktm = K.kB_cgs*T*T_unit/K.ergsev
+    rnist = K.fo_saha*swrat/T/sqrt(T)
 
     # the span of the table, in a power of two bins
-    nphint = nbin(rad, ε[ntmp]*Ry_eV_single + eth)
+    nphint = nbin(rad, ε[ntmp]*K.Ry_eV_single + eth)
     ndelt = max(nphint - nb1, 1)
     itmp = trunc(Int, log(ndelt)/hunt_ln2 + 0.5)
     while true
         ndelt = 2^itmp
         nphint = nb1 + ndelt
-        etst = nphint <= numcon3 ? (epi[nphint] - eth)/Ry_eV_single : 0.0
+        etst = nphint <= numcon3 ? (epi[nphint] - eth)/K.Ry_eV_single : 0.0
         if nphint > numcon3 || etst > ε[ntmp]
             itmp -= 1
             itmp > 1 && continue
@@ -512,18 +512,18 @@ function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, 
             enero = ener
             epii = epi[kl]
             ener = epii
-            bremtmp = bremsa[kl]/fo_fourpi
+            bremtmp = bremsa[kl]/K.eightpi
             tempio = tempi
             atmp2o = atmp2
             atmp22o = atmp22
             sgtmp = 0.0
             if ener >= eth
                 if !done[kl]
-                    sgtmp = interpolate_cross_section(ε, σ, (ener - eth)/Ry_eV_single)
+                    sgtmp = interpolate_cross_section(ε, σ, (ener - eth)/K.Ry_eV_single)
                     ansar1[kl] = sgtmp
                     exptmp = expo(-(epii - eth)/bktm)
                     bbnurj = min(bb_energy_cap, epii)^3
-                    tempi1 = rnist*bbnurj*sgtmp*exptmp*bb_coeff/epii
+                    tempi1 = rnist*bbnurj*sgtmp*exptmp*K.bb_coeff/epii
                     tempi2 = rnist*bremtmp*sgtmp*exptmp/epii
                     tempi = tempi1 + tempi2
                     atmp2 = tempi*epii
@@ -536,7 +536,7 @@ function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, 
                 end
             end
             tempro = tempr
-            tempr = fo_fourpi*sgtmp*bremtmp/epii
+            tempr = K.eightpi*sgtmp*bremtmp/epii
             deld = ener - enero
             sumr += (tempr + tempro)*deld/2
             sumh += (tempr*ener + tempro*enero)*deld/2
@@ -552,8 +552,8 @@ function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, 
         tst2 = abs((sumho - sumh)/(sumho + sumh + hunt_min_sum))
         tst4 = abs((sumco - sumc)/(sumco + sumc + hunt_min_sum))
     end
-    (; pirt=sumr, rrrt=xnx*sumi, piht=sumh*ergsev, rrcl=xnx*sumc*ergsev,
-        piht2=sumh2*ergsev, rrcl2=xnx*sumc2*ergsev)
+    (; pirt=sumr, rrrt=xnx*sumi, piht=sumh*K.ergsev, rrcl=xnx*sumc*K.ergsev,
+        piht2=sumh2*K.ergsev, rrcl2=xnx*sumc2*K.ergsev)
 end
 
 # ---------------------------------------------------------------------------
@@ -586,6 +586,7 @@ no rates but leaves the integrals `piht2` and `rrcl2` in its energy outputs; tha
 """
 function photoionize_superlevel(coef, cell::Cell; levels, radiation, nlev, tabulate,
     correct_energy=false, index=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         fenergy2=0., ienergy2=0., opacity=0.)
@@ -620,9 +621,9 @@ function photoionize_superlevel(coef, cell::Cell; levels, radiation, nlev, tabul
         a1, a2 = r.pirt*scale, rec*xnx
         a3, a4, a5, a6 = -r.rrcl, -r.piht*scale, -r.rrcl2, -r.piht2*scale
         if correct_energy
-            dE = (e2 - Float64(lo.E))*ergsev
-            a6 *= (abs(a4) - dE*a1)/max(heat_floor, abs(a4) - ett*ergsev*a1)
-            a5 *= (abs(a3) - dE*a2)/max(heat_floor, abs(a3) - ett*ergsev*a2)
+            dE = (e2 - Float64(lo.E))*K.ergsev
+            a6 *= (abs(a4) - dE*a1)/max(heat_floor, abs(a4) - ett*K.ergsev*a1)
+            a5 *= (abs(a3) - dE*a2)/max(heat_floor, abs(a3) - ett*K.ergsev*a2)
         end
         (a1, a2, a3, a4, a5, a6)
     end

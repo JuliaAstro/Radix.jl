@@ -34,6 +34,7 @@ which is what `ucalc` puts in its energy output (it multiplies by the dimensionl
 `fenergy` is 0.
 """
 function rate(coef::RadiativeProb, cell::Cell; levels, index=false, verbose=false)
+    K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
@@ -48,5 +49,5 @@ function rate(coef::RadiativeProb, cell::Cell; levels, index=false, verbose=fals
     alm, alp = anl1(ni, nf, lf, Int(coef.Z))
     A = li < lf ? alm : alp
     (; init=lo.level, final=up.level, frate=0., irate=A, fenergy=0.,
-        ienergy=A*dE/(kT_eV*cell.T)*ergsev)
+        ienergy=A*dE/(K.kT_eV*cell.T)*K.ergsev)
 end

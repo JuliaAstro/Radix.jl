@@ -30,7 +30,6 @@ function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 const supercoll_min_dE = 1.0              # eV; no rates for levels closer than this
-const supercoll_hc_k = Float64(1.43817f8) # hc/k (Å K) as written in calt77
 const supercoll_xt_max = 100.0            # no excitation rate above this ΔE/kT
 
 # the statistical weight 2(2l+1) of a level numbered by shells: k(k−1)/2+1 .. k(k+1)/2 hold l = 0 .. k−1
@@ -54,6 +53,7 @@ from numbering the first level of the record by shells. `fenergy` and `ienergy` 
 the energy difference of the levels. Both levels must be in `1:nlev`, differ, and be at least 1 eV apart.
 """
 function rate(coef::CollisionSuper, cell::Cell; levels, nlev, index=false, verbose=false)
+    K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper
     index && return (; none..., init=i1, final=i2)
@@ -63,11 +63,11 @@ function rate(coef::CollisionSuper, cell::Cell; levels, nlev, index=false, verbo
     (a === nothing || b === nothing) && return none
     dE = Float64(b.E) - Float64(a.E)
     abs(dE) < supercoll_min_dE && return none
-    T = max(cell.T*T_unit, T_floor_coeff*(dE + tiny)/hc_eVÅ_single)
+    T = max(cell.T*T_unit, K.T_floor_coeff*(dE + tiny)/K.hc_eVÅ_single)
     logC = interpolate_super_table(Float64.(coef.ne_grid), Float64.(coef.T_grid), Float64.(coef.C), T,
         cell.ntot; guard=1e-36)
     cul = exp10(logC)
-    xt = supercoll_hc_k/Float64(coef.λ)/T
+    xt = K.hc_over_k/Float64(coef.λ)/T
     clu = xt < supercoll_xt_max ? cul*exp(-xt)/supercoll_weight(i1) : zero(cul)
-    (; init=i1, final=i2, frate=clu, irate=cul, fenergy=clu*abs(dE)*ergsev, ienergy=cul*abs(dE)*ergsev)
+    (; init=i1, final=i2, frate=clu, irate=cul, fenergy=clu*abs(dE)*K.ergsev, ienergy=cul*abs(dE)*K.ergsev)
 end

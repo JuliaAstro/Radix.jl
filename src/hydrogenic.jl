@@ -16,13 +16,10 @@ const expint_numerator = (8.5733287401, 18.0590169730, 8.6347608925,
     0.2677737343)                                 # x > 1
 
 # Gordon (1929) dipole rates
-const gordon_A_coeff = 2.6761e9                   # s⁻¹
 
 # Pengelly & Seaton (1964) l-changing collisions
 const ps_dnl_coeff = 6.0
 const ps_rho_coeff = 0.72                         # pa = ps_rho_coeff / total decay rate
-const ps_pd_coeff = 6.90                          # pd = ps_pd_coeff √(T/nₑ)
-const ps_alfa_coeff = 3.297e-12                   # alfa = ps_alfa_coeff m/T
 const ps_b_coeff = 1.157
 const ps_exp_cutoff = 50.0                        # no exponential integral above this
 const ps_series_cutoff = 1e-3                     # series instead of closed form below this
@@ -40,13 +37,9 @@ const impcfn_small_slope = 0.01917
 const impcfn_two_exp_gamma = 1.1229               # 2 e^{-γ}
 
 # Seaton's impact-parameter excitation rate (impactn)
-const impactn_ryd_K = 157888.0                    # K per Ry
 const impactn_xm_max = 60.0
-const impactn_ryd_invcm = 109737.0                # Rydberg constant (cm⁻¹)
 const impactn_psi_coeff = 1.644e5
 const impactn_cr_coeff = 6.900e-5
-const kB_eV = 8.617e-5                            # eV K⁻¹
-const invcm_per_eV = 8065.48
 const impactn_b0 = 10.0                           # start of the integration in b
 const impactn_b_fraction = 100.0                  # step is b/this
 const impactn_steps = 90
@@ -65,14 +58,11 @@ const sz_rbethe = (1.83, 1.60, 1.53, 1.495, 1.475, 1.46, 1.45, 1.45, 1.46,
 const sz_fvg1 = (1.133, 1.0785, 0.9935, 0.2328, -0.1296)
 const sz_fvg2 = (-0.4059, -0.2319, 0.6282, -0.5598, 0.5299)
 const sz_fvg3 = (0.07014, 0.02947, 0.3887, -1.181, 1.47)
-const sz_eion = 1.578203e5                        # K per Ry (Z = 1)
-const sz_rate_coeff = 8.63e-6
 const sz_fnn_coeff = 1.9603
 const sz_cnn_coeff = 1.12
 const sz_cnn_exp = 0.006
 
 # Johnson (1972) hydrogenic excitation (erc)
-const erc_ryd_K = 157803.0                        # K per Ry
 const erc_y_max = 40.0
 const erc_szcoll_ic = 10                          # szcoll for ionic charges from here
 const erc_f_coeff = -1.2456e-10
@@ -127,6 +117,7 @@ Spontaneous dipole rates `(alm, alp)` (s⁻¹) from `(ni, lf-1)` and `(ni, lf+1)
 `(nf, lf)` for an ion of charge `iq`, from Gordon's formula.
 """
 function anl1(ni, nf, lf, iq)
+    K = constants()
     alm = 0.0
     alp = 0.0
     for li in (lf - 1, lf + 1)
@@ -150,7 +141,7 @@ function anl1(ni, nf, lf, iq)
         t = t - log(4.0) - rn*log(rn)
         y1 = log(abs(y1 - y2*(rev/rn)^2)) + t
         t = expo(2y1 + x1 + x2 - 2x3 - x4 - x5)
-        an = gordon_A_coeff*iq^4*max(li, lf)*t/(2.0*li + 1)
+        an = K.gordon_A*iq^4*max(li, lf)*t/(2.0*li + 1)
         an *= (1.0/nf^2 - 1.0/ni^2)^3
         li < lf && (alm = an)
         li > lf && (alp = an)
@@ -167,12 +158,13 @@ Pengelly & Seaton (1964), for temperature `T` (K), electron density `ne` and
 total spontaneous decay rate `sum` of the level.
 """
 function velimp(n, l, T, ic, z1, rm, ne, sum)
+    K = constants()
     (l == 0 || sum == 0) && return 0.0
     den = l*(n^2 - l^2) + (l + 1)*(n^2 - (l + 1)^2)
     dnl = ps_dnl_coeff*z1/ic*z1/ic*n*n*(n*n - l*l - l - 1)
     pa = ps_rho_coeff/sum
-    pd = ps_pd_coeff*sqrt(T/ne)
-    alfa = ps_alfa_coeff*rm/T
+    pd = K.ps_pd*sqrt(T/ne)
+    alfa = K.ps_alfa*rm/T
     b = ps_b_coeff*sqrt(dnl)
     bb = b*b
     va = pd/pa
@@ -233,16 +225,17 @@ a hydrogenic ion of charge `ic`, by Seaton's impact-parameter method with the
 strong-coupling cross sections only.
 """
 function impactn(n, m, T, ic, amn)
-    xm = impactn_ryd_K*ic*ic/T/m/m
+    K = constants()
+    xm = K.Ry_K*ic*ic/T/m/m
     xm > impactn_xm_max && return 0.0
     rm, z1 = 1.0, 1.0
-    tk = kB_eV*T
-    ecm = impactn_ryd_invcm*ic*ic*(1.0/n/n - 1.0/m/m)
+    tk = K.kB_eV*T
+    ecm = K.Rinf_invcm*ic*ic*(1.0/n/n - 1.0/m/m)
     ecm3 = ecm^3
     ecm = -ecm
     psi = impactn_psi_coeff*amn/ecm3
     cr, fi, wo, b = 0.0, 0.0, 0.0, impactn_b0
-    ev = abs(ecm)/invcm_per_eV
+    ev = abs(ecm)/K.invcm_per_eV
     done = false
     while !done
         del = b/impactn_b_fraction
@@ -250,7 +243,7 @@ function impactn(n, m, T, ic, amn)
             b -= del
             xsi, phi = impcfn(b)
             w = ic*rm*ev/b*sqrt(2*xsi*psi)
-            wi = w + ecm/invcm_per_eV/2
+            wi = w + ecm/K.invcm_per_eV/2
             if wi/tk >= impactn_wi_max
                 done = true
                 break
@@ -273,6 +266,7 @@ end
 
 # Simpson & Zhang (1988) semi-empirical excitation rate, n=ni → nj (szcoll)
 function szcoll(ni, nj, T, ic)
+    K = constants()
     rn2 = (float(ni)/float(nj))^2
     g1 = g2 = g3 = 0.0
     if ni == 1
@@ -296,9 +290,9 @@ function szcoll(ni, nj, T, ic)
     dnn = ann*hn*(xx^rrn - an*rn2)
     cnn = sz_cnn_coeff*ni*ann*xx
     nj - ni == 1 && (cnn *= expo(-sz_cnn_exp*(ni - 1)^6/ic))
-    yy = sz_eion*ic*ic*(1/float(ni*ni) - 1/float(nj*nj))/T
+    yy = K.Ry_K_sz*ic*ic*(1/float(ni*ni) - 1/float(nj*nj))/T
     e1 = eint1(yy)
-    sz_rate_coeff/sqrt(T)/ni/ni/ic/ic*(dnn*expo(-yy) + (ann + yy*(cnn - dnn))*e1)
+    K.sz_rate_coeff/sqrt(T)/ni/ni/ic/ic*(dnn*expo(-yy) + (ann + yy*(cnn - dnn))*e1)
 end
 
 """
@@ -309,6 +303,7 @@ Hydrogenic electron-impact excitation and de-excitation rates `(se, sd)`
 at `T` (K); `a` is the summed spontaneous rate used by the impact-parameter fit.
 """
 function erc(n, m, T, ic, a)
+    erc_ryd_K = constants().Ry_K_erc
     if ic != 1
         ym = erc_ryd_K*ic*ic/T/m/m
         if ic < erc_szcoll_ic
@@ -370,8 +365,6 @@ const szirc_a = (1.134, 0.603, 0.412, 0.313, 0.252, 0.211, 0.181, 0.159, 0.142, 
 const szirc_h = (1.48, 3.64, 5.93, 8.32, 10.75, 12.90, 15.05, 17.20, 19.35, 21.50, 2.15)
 const szirc_r = (2.20, 1.90, 1.73, 1.65, 1.60, 1.56, 1.54, 1.52, 1.52, 1.52, 1.52)
 const szirc_nmax = 11
-const szirc_kB = Float64(1.38066f-16)             # erg K⁻¹
-const szirc_Ry_erg = Float64(2.179874f-11)        # erg
 const szirc_coeff = Float64(4.6513f-3)
 const szirc_exchange = 3.36
 
@@ -386,9 +379,10 @@ function szirc(n, T, rz, rno)
     an, hn, rrn = n < szirc_nmax ?
         (szirc_a[n], szirc_h[n], szirc_r[n]) :
         (szirc_a[end]/n, szirc_h[end]*n, szirc_r[end])
-    tt = T*szirc_kB
+    K = constants()
+    tt = T*K.kB_szirc
     rn = Float64(n)
-    yy = rz*rz*szirc_Ry_erg/tt*(1/rn/rn - 1/rc/rc - (1/(rc - 1)^2 - 1/rc/rc)/4)
+    yy = rz*rz*K.Ry_erg_szirc/tt*(1/rn/rn - 1/rc/rc - (1/(rc - 1)^2 - 1/rc/rc)/4)
     e1, e2, e3 = eint(yy)
     szirc_coeff*sqrt(tt)*rn^5/rz^4*an*yy*(
         e1/rn - (exp(-yy) - yy*e3)/(3rn) +
@@ -396,7 +390,6 @@ function szirc(n, T, rz, rno)
 end
 
 # irc: Hydrogen-like fits for the ionization from n = 1, 2, and higher (rc = 1)
-const irc_K = 157803.0                            # K per Ry
 const irc_fit1 = ((1.133, 0.4059, 0.07014), (1.0785, 0.2319, 0.02947))
 const irc_rn = (0.45, 0.653)
 const irc_coeff = 1.095e-10
@@ -410,7 +403,7 @@ highest bound level `rno` at the temperature `T` (K) (XSTAR's `irc`). For `rc �
 function irc(n, T, rc, rno)
     rc != 1 && return szirc(n, T, rc, rno)
     xo = 1 - n*n/rno/rno
-    yn = xo*irc_K/(T*n*n)
+    yn = xo*constants().Ry_K_erc/(T*n*n)
     if n < 3
         c = irc_fit1[n]
         an = 1.9603*n*(c[1]/3/xo^3 - c[2]/4/xo^4 + c[3]/5/xo^5)

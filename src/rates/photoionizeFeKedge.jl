@@ -32,7 +32,6 @@ end
 
 # constants of pexs (resonance series of the Fe K edge) and of the rate
 const pexs_nmax = 30                   # highest principal quantum number of the series
-const pexs_pi = 3.14159
 const pexs_a_coeff = 8.06725
 const pexs_window = 30.0               # series start this many widths below the first resonance
 const fe_ion_offset = 114              # ucalc's charge is the ion index minus this
@@ -48,6 +47,7 @@ the oscillator-strength scale, `gam` the resonance width and `scal` a scale fact
 Returns `nothing` if `nmin ≥ 30`.
 """
 function pexs(nmin, zc, eion, far, gam, scal, E)
+    pexs_pi = constants().pi_pexs
     nmin >= pexs_nmax && return nothing
     x = zeros(pexs_nmax)
     a = zeros(pexs_nmax)
@@ -92,13 +92,14 @@ the ion index minus 114, a leftover of an earlier ion numbering, which is reprod
 function rate(coef::PhotoionizeFeKedge, cell::Cell; radiation, abund=(0.0, 0.0),
     opacity=nothing, ptmp=nothing, lfast=nothing, levels=nothing, nlev=nothing,
     index=false, verbose=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         fenergy2=0., ienergy2=0., opacity=0.)
     index && return (; none..., init=Int(coef.level), final=1)
-    ett2 = Float64(coef.E_th)*Ry_eV_single
+    ett2 = Float64(coef.E_th)*K.Ry_eV_single
     σ = pexs(Int(coef.n), Float64(coef.ion - fe_ion_offset), Float64(coef.E_th),
-        Float64(coef.f), Float64(coef.γ), Float64(coef.scale), radiation.E ./ Ry_eV_single)
+        Float64(coef.f), Float64(coef.γ), Float64(coef.scale), radiation.E ./ K.Ry_eV_single)
     σ === nothing && return none
     r = photoionization_integrals_fo(radiation, ett2*fe_threshold_fraction, σ .* Mb,
         cell.T, 1.0, cell.nₑ; abund=abund, ntot=cell.ntot, lfast=1, opacity=opacity)

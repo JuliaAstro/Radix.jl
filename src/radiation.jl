@@ -17,8 +17,9 @@ struct Radiation{R<:AbstractFloat}
         length(E) == length(F) || throw(DimensionMismatch("E and F must have the same length"))
         n = length(E)
         Fint = zeros(R, n)
+        ergsev = constants().ergsev_bremsint
         for k in n - 1:-1:1
-            Fint[k] = Fint[k + 1] + (F[k] + F[k + 1])*(E[k + 1] - E[k])/2*ergsev_bremsint
+            Fint[k] = Fint[k + 1] + (F[k] + F[k + 1])*(E[k + 1] - E[k])/2*ergsev
         end
         new{R}(collect(E), collect(F), Fint)
     end
@@ -40,8 +41,6 @@ struct Opacity{R<:Real}
 end
 Opacity(R::Type{<:Real}, n::Integer) = Opacity(zeros(R, n), zeros(R, n), zeros(R, 2, n))
 Opacity(n::Integer) = Opacity(Float64, n)
-
-const ergsev_bremsint = 1.602197e-12     # erg per eV in bremsmap's integral
 
 # grid constants of nbinc/huntf
 const grid_guard_fraction = 50       # the top 1/50 of the grid (at least 2 bins) is not used
