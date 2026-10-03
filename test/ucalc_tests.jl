@@ -76,6 +76,8 @@ end
 level_call(coef, cell, levels, c) = Radix.rate(coef, cell; levels=levels)
 plain_call(coef, cell, levels, c) = Radix.rate(coef, cell)
 direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
+# the collision types also return the energies rate × ΔE (ans6 forward, ans5 inverse)
+with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
 
 @testset "Radix rates vs XSTAR ucalc" begin
     @testset "type 1 RadRecomb" begin
@@ -106,16 +108,17 @@ direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
                 init=o[7], final=o[8], opacity=o[11]), rtol=1e-6) == 100
     end
     # ElectronCollision returns the lower level first and clamps Υ at 0; ucalc does not
-    clamp0(o, c) = (; frate=max(0, o[1]), irate=max(0, o[2]), init=o[8], final=o[7])
+    clamp0(o, c) = (; frate=max(0, o[1]), irate=max(0, o[2]), init=o[8], final=o[7],
+        fenergy=max(0, o[6]), ienergy=max(0, o[5]))
     @testset "type 51 ElectronCollision" begin
         @test check_ucalc("type51"; call=level_call, expected=clamp0) == 100
         @test check_ucalc("type51n9"; call=level_call, expected=clamp0) == 16   # 9-point fits
     end
     @testset "type 56 ElectronImpact1" begin
-        @test check_ucalc("type56"; call=level_call, expected=direct) == 100
+        @test check_ucalc("type56"; call=level_call, expected=with_energy) == 100
     end
     @testset "type 63 CollisionProb" begin
-        @test check_ucalc("type63"; call=level_call, expected=direct) == 200
+        @test check_ucalc("type63"; call=level_call, expected=with_energy) == 200
     end
     # photoionization (values below 1e-100 are physically zero and depend on the last digit of
     # single-precision constants in the exponent): also the opacity and recombination-emissivity arrays the integrals add
@@ -176,6 +179,6 @@ direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
             atol=1e-100) == 12
     end
     @testset "type 98 ElectronImpact2" begin
-        @test check_ucalc("type98"; call=level_call, expected=direct) == 100
+        @test check_ucalc("type98"; call=level_call, expected=with_energy) == 100
     end
 end

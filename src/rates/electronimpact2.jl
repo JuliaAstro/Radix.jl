@@ -45,7 +45,7 @@ missing from `levels` or `ΔE ≤ 0`.
 function rate(coef::ElectronImpact2, cell::Cell; levels, index=false,
     verbose=false)
 
-    none = (; init=0, final=0, frate=0., irate=0.)
+    none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
@@ -59,5 +59,7 @@ function rate(coef::ElectronImpact2, cell::Cell; levels, index=false,
     Υ = chianti_upsilon(coef.kind, coef.ΔE, coef.C, coef.x_grid, coef.Υ, T)
     cji = collision_rate_coeff*Υ/sqrt(cell.T)/up.g
     cij = cji*up.g*expo(-eij/(kT_eV*cell.T))/lo.g
-    (; init=lo.level, final=up.level, frate=cij*cell.nₑ, irate=cji*cell.nₑ)
+    frate, irate = cij*cell.nₑ, cji*cell.nₑ
+    (; init=lo.level, final=up.level, frate, irate,
+        fenergy=frate*eij*ergsev, ienergy=irate*eij*ergsev)
 end
