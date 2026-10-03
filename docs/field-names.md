@@ -188,6 +188,22 @@ reproduced:
 - All the superlevel records of `atdb.fits` leave the ground level of the parent ion; the
   excited-parent branch is compared with a made-up parent level (`type99par`).
 
+## Automatic differentiation
+
+The rates are generic in the number type of the `Cell`, so ForwardDiff can differentiate
+`frate` and `irate` with respect to the temperature or the densities: build the `Cell` from dual
+numbers (all four fields of the same type) and pass `Opacity(typeof(T), n)` if the opacity
+arrays are used. The coefficient and level data stay `Float32`/`Float64` and are widened as
+needed. `test/forwarddiff_tests.jl` compares the derivatives with finite differences for every
+ported type (except 4, which has no `rate` method). Notes:
+
+- `to_single` and `to_double` (`constants.jl`) round the plain floating-point numbers to the
+  precision of `ucalc`'s arithmetic and leave dual numbers alone; type 99, which mimics single
+  precision, therefore uses `Float64` dual arithmetic when differentiated.
+- Interpolation tables have kinks at their nodes (the derivative is that of one side), and the
+  integrals of types 70 and 99 choose their step adaptively, so derivatives there are only as
+  smooth as the rate itself: the finite differences of type 70 are noisy at the 1% level.
+
 ## Open items
 
 - Type 85 (`PhotoionizeFeKedge`) sums sharp resonances, so it is sensitive to the

@@ -2,6 +2,7 @@ using Radix
 using Test
 
 include("ucalc_tests.jl")
+include("forwarddiff_tests.jl")
 
 # Rate formulas below are transcribed independently from XSTAR's ucalc()
 # (ftools/xstar/utils/xstarsub.f) so Radix is checked against the Fortran,

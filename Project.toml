@@ -8,10 +8,12 @@ FITSFiles = "358a0a88-3548-4ad6-b652-8bdbf64af8e5"
 
 [compat]
 FITSFiles = ">=0.2.0"
+ForwardDiff = "0.10, 1"
 julia = "1.9.0"
 
 [extras]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["ForwardDiff", "Test"]
