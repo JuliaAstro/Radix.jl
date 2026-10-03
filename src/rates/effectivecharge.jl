@@ -32,9 +32,6 @@ const effcharge_rno1 = 1.8887e8
 const effcharge_rno1_exp = Float64(0.3333f0)
 const effcharge_rno2 = 1.814e26
 const effcharge_rno2_exp = Float64(0.13333f0)
-const effcharge_cb = Float64(13.605692f0*1.6021f-19/1.3805f-23)   # Ry in K
-const effcharge_per_Ry_K = Float64(1.16058f4)    # K per eV
-const effcharge_rec_coeff = Float64(2.0779f-16)
 const effcharge_floor = 1e-30
 const effcharge_ete_floor = 1e-20
 const effcharge_cion_floor = 1e-24
@@ -42,6 +39,7 @@ const effcharge_g_floor = 1e-48
 
 # calt57: collisional ionization and three-body recombination rate coefficients of a level of principal quantum number n
 function effective_charge_rates(T, den, E, E_ion, n)
+    K = constants()
     E_ion < E && return (0.0, 0.0)
     rio = (E_ion - E)/effcharge_Ry
     rc = sqrt(rio)*n
@@ -54,16 +52,16 @@ function effective_charge_rates(T, den, E, E_ion, n)
     cion = irc(n, temp, rc, rno)
     if T < tmin
         beta = (sqrt((100rc + 91)/(4rc + 3)) - 5)/4
-        wte = log(1 + T/effcharge_cb/rio)^(beta/(1 + T/effcharge_cb*rio))
-        wtm = log(1 + tmin/effcharge_cb/rio)^(beta/(1 + tmin/effcharge_cb*rio))
-        ete = eint(rio/T*effcharge_cb)[1]
+        wte = log(1 + T/K.Ry_K_cb/rio)^(beta/(1 + T/K.Ry_K_cb*rio))
+        wtm = log(1 + tmin/K.Ry_K_cb/rio)^(beta/(1 + tmin/K.Ry_K_cb*rio))
+        ete = eint(rio/T*K.Ry_K_cb)[1]
         ete < effcharge_ete_floor && return (0.0, 0.0)
-        etm = eint(rio/tmin*effcharge_cb)[1]
+        etm = eint(rio/tmin*K.Ry_K_cb)[1]
         cion = cion*sqrt(tmin/T)*ete/(etm + effcharge_floor)*wte/(wtm + effcharge_floor)
     end
     cion <= effcharge_cion_floor && return (cion, 0.0)
     cion /= n*n
-    (cion, cion*effcharge_rec_coeff*exp((E_ion - E)*effcharge_per_Ry_K/T)/T^1.5)
+    (cion, cion*K.saha_coeff_cb*exp((E_ion - E)*K.eV_K/T)/T^1.5)
 end
 
 """
@@ -77,6 +75,7 @@ including the electron density), `init` the level and `final` the continuum (`nl
 ground level, and a level with a non-positive potential, give nothing. The stored `Zeff` is not used.
 """
 function rate(coef::EffectiveCharge, cell::Cell; levels, nlev, index=false, verbose=false)
+    K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     idest1, idest2 = Int(coef.level), nlev
     index && return (; none..., init=idest1, final=idest2)
@@ -89,5 +88,5 @@ function rate(coef::EffectiveCharge, cell::Cell; levels, nlev, index=false, verb
     cion, crec = effective_charge_rates(cell.T*T_unit, cell.nₑ, Float64(lo.E), eth, Int(coef.n))
     frate = cion*cell.nₑ
     irate = crec*Float64(lo.g)/(effcharge_g_floor + Float64(cont.g))*cell.nₑ*cell.nₑ
-    (; init=idest1, final=idest2, frate, irate, fenergy=-frate*eth*ergsev, ienergy=-irate*eth*ergsev)
+    (; init=idest1, final=idest2, frate, irate, fenergy=-frate*eth*K.ergsev, ienergy=-irate*eth*K.ergsev)
 end

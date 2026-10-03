@@ -7,7 +7,6 @@
 const CollisionProbDesc = "h-like cij, bautista (hlike ion)"
 const max_dE_over_kT = 50.0           # no rate for transitions with ΔE/kT above this
 const proton_charge = 1.0              # colliding ions are protons
-const proton_mass = 1800.0             # in electron masses
 
 struct CollisionProb{I} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -42,13 +41,14 @@ as is.
 """
 function rate(coef::CollisionProb, cell::Cell; levels, index=false,
     verbose=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
-    elin = hc_eVÅ/abs(Float64(b.E) - Float64(a.E) + tiny)
-    hc_eVÅ/elin/(kT_eV*cell.T) > max_dE_over_kT && return none
+    elin = K.hc_eVÅ/abs(Float64(b.E) - Float64(a.E) + tiny)
+    K.hc_eVÅ/elin/(K.kT_eV*cell.T) > max_dE_over_kT && return none
     index && return (; none..., init=a.level, final=b.level)
 
     ni, li, nf, lf, Z = Int(a.n), Int(a.L), Int(b.n), Int(b.L), Int(coef.Z)
@@ -63,7 +63,7 @@ function rate(coef::CollisionProb, cell::Cell; levels, index=false,
                 nn > lii + 1 && (sum += anl1(ni, nn, lii + 1, Z)[1])
             end
             # XSTAR's amcrs is called with ecm = 0, which always ends in velimp
-            cn = velimp(ni, lii, T, Z, proton_charge, proton_mass, cell.nₑ, sum)
+            cn = velimp(ni, lii, T, Z, proton_charge, K.proton_mass, cell.nₑ, sum)
             if lf < li
                 ans1, ans2 = cn, cn*a.g/b.g
             else
@@ -89,5 +89,5 @@ function rate(coef::CollisionProb, cell::Cell; levels, index=false,
     ΔE = abs(Float64(b.E) - Float64(a.E))
     frate, irate = ans1*cell.nₑ, ans2*cell.nₑ
     (; init=a.level, final=b.level, frate, irate,
-        fenergy=frate*ΔE*ergsev, ienergy=irate*ΔE*ergsev)
+        fenergy=frate*ΔE*K.ergsev, ienergy=irate*ΔE*K.ergsev)
 end

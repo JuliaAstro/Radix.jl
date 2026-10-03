@@ -2,9 +2,11 @@ module Radix
 
 export Atom, AtomicLevel, AtomicLine
 export load, level_table, level_counts, Radiation, Opacity
+export Constants, ucalc_constants, constants, set_constants!, with_constants
 
 
 include("constants.jl")
+include("physical.jl")
 include("atom.jl")
 include("cell.jl")
 include("ion.jl")

@@ -1,8 +1,10 @@
 using Radix
 using Test
 
+# The comparisons with XSTAR's ucalc (and the formulas transcribed from it below) need the rounded
+# constants of its source: the rates use CODATA 2022 unless told otherwise.
+Radix.set_constants!(Radix.ucalc_constants())
 include("ucalc_tests.jl")
-include("forwarddiff_tests.jl")
 
 # Rate formulas below are transcribed independently from XSTAR's ucalc()
 # (ftools/xstar/utils/xstarsub.f) so Radix is checked against the Fortran,
@@ -306,7 +308,7 @@ include("forwarddiff_tests.jl")
                     ok = isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
                     ok &= x.irate == 0 ||
-                        isapprox(x.frate/x.irate, (up.g/lo.g)*Radix.expo(-(up.E - lo.E)/(0.861707*T)); rtol=1e-6)
+                        isapprox(x.frate/x.irate, (Float64(up.g)/Float64(lo.g))*Radix.expo(-(Float64(up.E) - Float64(lo.E))/(0.861707*T)); rtol=1e-6)
                     ok || (nbad += 1)
                 end
             end
@@ -416,3 +418,7 @@ include("forwarddiff_tests.jl")
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"
     end
 end
+
+Radix.set_constants!(Radix.Constants())
+include("forwarddiff_tests.jl")
+include("constants_tests.jl")

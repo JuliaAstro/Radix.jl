@@ -12,12 +12,8 @@ const AtomicLine2Desc = "op line rad. rates"
 const min_wavelength = 1e-34           # Å; lines below this have no wavelength
 const no_wavelength = 0.99e9           # Å; longer wavelengths mark lines without opacity
 const decay_floor = 1e-20              # floor of the decay rate, per unit ntot
-const A_to_f = 1e-16/0.667274          # f = A_to_f A (g_up/g_lo) λ², A in s⁻¹, λ in Å
-const line_xsec = 0.02655              # π e²/(m_e c) (cm² Hz)
 const cm_per_Å = 1e-8
 const cm_per_km = 1e5
-const thermal_speed = 1.29e6           # cm s⁻¹ at 10⁴ K for an atomic mass of 1
-const light_speed_xstar = 3e10         # cm s⁻¹, as used for the line photoexcitation
 
 struct AtomicLine2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -58,6 +54,7 @@ included.
 """
 function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
     nlev=typemax(Int), radiation=nothing, cfrac=0.0, index=false, verbose=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         opacity=0.)
@@ -73,15 +70,15 @@ function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
 
     A = Float64(coef.A)
     frate = max(A*pesc, decay_floor*cell.ntot)
-    flin = A_to_f*A*up.g*elin^2/lo.g
-    vtherm = sqrt((vturb*cm_per_km)^2 + (thermal_speed/sqrt(mass/cell.T))^2)
-    sigma = line_xsec*flin*elin*cm_per_Å/vtherm
+    flin = K.A_to_f*A*up.g*elin^2/lo.g
+    vtherm = sqrt((vturb*cm_per_km)^2 + (K.thermal_speed/sqrt(mass/cell.T))^2)
+    sigma = K.line_xsec*flin*elin*cm_per_Å/vtherm
     ener = abs(Float64(up.E) - Float64(lo.E))
     irate = 0.0
     if radiation !== nothing && elin <= no_wavelength
-        irate = sigma*radiation.F[nbin(radiation, ener)]*vtherm/light_speed_xstar*max(0.0, 1 - cfrac)
+        irate = sigma*radiation.F[nbin(radiation, ener)]*vtherm/K.light_speed*max(0.0, 1 - cfrac)
     end
     opacity = elin > no_wavelength ? 0. : sigma
     (; init=up.level, final=lo.level, frate=frate, irate=irate,
-        fenergy=frate*ener*ergsev, ienergy=irate*ener*ergsev, opacity=opacity)
+        fenergy=frate*ener*K.ergsev, ienergy=irate*ener*K.ergsev, opacity=opacity)
 end

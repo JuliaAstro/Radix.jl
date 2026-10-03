@@ -44,22 +44,23 @@ missing from `levels` or `ΔE ≤ 0`.
 """
 function rate(coef::ElectronImpact2, cell::Cell; levels, index=false,
     verbose=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
     lo, up = b.E < a.E ? (b, a) : (a, b)
-    eij = Float64(coef.ΔE)*Ry_eV                 # eV
-    elin = hc_eVÅ/eij                            # Å
+    eij = Float64(coef.ΔE)*K.Ry_eV                 # eV
+    elin = K.hc_eVÅ/eij                            # Å
     (eij <= 0 || elin <= tiny) && return none
     index && return (; none..., init=lo.level, final=up.level)
 
-    T = max(cell.T*T_unit, T_floor_coeff/elin)               # K
+    T = max(cell.T*T_unit, K.T_floor_coeff/elin)               # K
     Υ = chianti_upsilon(coef.kind, coef.ΔE, coef.C, coef.x_grid, coef.Υ, T)
-    cji = collision_rate_coeff*Υ/sqrt(cell.T)/up.g
-    cij = cji*up.g*expo(-eij/(kT_eV*cell.T))/lo.g
+    cji = K.collision_rate_coeff*Υ/sqrt(cell.T)/up.g
+    cij = cji*up.g*expo(-eij/(K.kT_eV*cell.T))/lo.g
     frate, irate = cij*cell.nₑ, cji*cell.nₑ
     (; init=lo.level, final=up.level, frate, irate,
-        fenergy=frate*eij*ergsev, ienergy=irate*eij*ergsev)
+        fenergy=frate*eij*K.ergsev, ienergy=irate*eij*K.ergsev)
 end

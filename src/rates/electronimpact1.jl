@@ -39,13 +39,14 @@ rates are 0 if a level is missing from `levels` or the two energies coincide.
 """
 function rate(coef::ElectronImpact1, cell::Cell; levels, index=false,
     verbose=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
     lo, up = b.E < a.E ? (b, a) : (a, b)
-    ΔE = abs(up.E - lo.E)
+    ΔE = abs(Float64(up.E) - Float64(lo.E))
     ΔE <= min_dE && return none
     index && return (; none..., init=lo.level, final=up.level)
 
@@ -56,9 +57,9 @@ function rate(coef::ElectronImpact1, cell::Cell; levels, index=false,
     cijpp = length(T) == 1 ? Υ0 :
         (Float64(Υ[j+1]) - Υ0)*(logT - T[j])/(T[j+1] - T[j] + tiny) + Υ0
     cijpp = max(0., cijpp)
-    cij = collision_rate_coeff*cijpp*expo(-ΔE/(kT_eV*cell.T))/sqrt(cell.T)/lo.g
-    cji = collision_rate_coeff*cijpp/sqrt(cell.T)/up.g
+    cij = K.collision_rate_coeff*cijpp*expo(-ΔE/(K.kT_eV*cell.T))/sqrt(cell.T)/lo.g
+    cji = K.collision_rate_coeff*cijpp/sqrt(cell.T)/up.g
     frate, irate = cij*cell.nₑ, cji*cell.nₑ
     (; init=lo.level, final=up.level, frate, irate,
-        fenergy=frate*ΔE*ergsev, ienergy=irate*ΔE*ergsev)
+        fenergy=frate*ΔE*K.ergsev, ienergy=irate*ΔE*K.ergsev)
 end

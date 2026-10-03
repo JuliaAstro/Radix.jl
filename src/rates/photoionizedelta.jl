@@ -48,6 +48,7 @@ does not reach the highest line.
 """
 function rate(coef::PhotoionizeDelta, cell::Cell; levels, radiation, nlev,
     index=false, verbose=false)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0.)
     idest1 = Int(coef.level)
@@ -71,9 +72,9 @@ function rate(coef::PhotoionizeDelta, cell::Cell; levels, radiation, nlev,
 
     E, F = radiation.E, radiation.F
     np = length(E)
-    E[np] < (x[m] + xt)*Ry_eV && return (; init=idest1, final=nlev, frate=0., irate=0.)
+    E[np] < (x[m] + xt)*K.Ry_eV && return (; init=idest1, final=nlev, frate=0., irate=0.)
     # the spectrum at the line energies, interpolated linearly in the grid
-    xs = (x[1] + xt)*Ry_eV
+    xs = (x[1] + xt)*K.Ry_eV
     i = np ÷ 2
     while E[i] >= xs
         i -= 1
@@ -86,7 +87,7 @@ function rate(coef::PhotoionizeDelta, cell::Cell; levels, radiation, nlev,
     interp(ip, e) = F[ip] + (F[ip + 1] - F[ip])/(E[ip + 1] - E[ip])*(e - E[ip])
     frate = interp(ipos, xs)*hgh[1]
     for k in 2:m
-        e = (x[k] + xt)*Ry_eV
+        e = (x[k] + xt)*K.Ry_eV
         ip = ipos
         while E[ip] < e
             ip += 1

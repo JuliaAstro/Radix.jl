@@ -32,7 +32,6 @@ end
 const superdecay_cap = 1e10               # decay rate cap for ions 96 and 97 (calcium I and II)
 const superdecay_capped_ions = (96, 97)
 const superdecay_A_linear = 30.0          # a one-point table above this holds A itself
-const superdecay_erg_per_eV = Float64(1.602197f-12)   # ucalc's single-precision erg per eV, for the energy
 
 # calt71: the Einstein A of the record at the conditions of the cell and its wavelength
 function superlevel_decay(coef::RadiativeSuper, T, den)
@@ -60,6 +59,7 @@ longer than 10⁹ Å. Needs levels `init` and `final` between 1 and `nlev`.
 """
 function rate(coef::RadiativeSuper, cell::Cell; levels, mass=1.0, vturb=1.0, ptmp=(0.5, 0.5),
     nlev=typemax(Int), index=false, verbose=false, kw...)
+    K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0., opacity=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper
@@ -71,11 +71,11 @@ function rate(coef::RadiativeSuper, cell::Cell; levels, mass=1.0, vturb=1.0, ptm
     A, elin = superlevel_decay(coef, cell.T*T_unit, cell.ntot)
     decay = A*(ptmp[1] + ptmp[2])
     coef.ion in superdecay_capped_ions && (decay = min(decay, superdecay_cap))
-    flin = A_to_f*A*a.g*elin^2/b.g
-    vtherm = sqrt((vturb*cm_per_km)^2 + (thermal_speed/sqrt(mass/cell.T))^2)
-    sigma = elin > no_wavelength ? 0. : line_xsec*flin*elin*cm_per_Å/vtherm
+    flin = K.A_to_f*A*a.g*elin^2/b.g
+    vtherm = sqrt((vturb*cm_per_km)^2 + (K.thermal_speed/sqrt(mass/cell.T))^2)
+    sigma = elin > no_wavelength ? 0. : K.line_xsec*flin*elin*cm_per_Å/vtherm
     ener = abs(Float64(a.E) - Float64(b.E))
-    energy = decay*ener*ergsev
-    elin > 0.1 && (energy = decay*hc_eVÅ/(elin + tiny)*superdecay_erg_per_eV)
+    energy = decay*ener*K.ergsev
+    elin > 0.1 && (energy = decay*K.hc_eVÅ/(elin + tiny)*K.ergsev_decay)
     (; init=i1, final=i2, frate=0., irate=decay, fenergy=0., ienergy=energy, opacity=sigma)
 end
