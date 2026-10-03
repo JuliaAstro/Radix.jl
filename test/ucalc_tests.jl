@@ -91,12 +91,13 @@ direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
     @testset "type 38 TotRadRecomb" begin
         @test check_ucalc("type38"; call=plain_call, expected=direct) == 100
     end
-    @testset "type 50 AtomicLine2 (without photoexcitation)" begin
-        # ucalc returns the photoexcitation in ans1 (0 here: the driver's spectrum is
-        # empty), the decay in ans2, minus the emitted power in ans3, the opacity last
+    @testset "type 50 AtomicLine2" begin
+        # ucalc returns the photoexcitation in ans1, the decay in ans2, minus the energy of
+        # the decays in ans3 and of the photoexcitations in ans4, and the opacity last
         @test check_ucalc("type50";
             call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13],
-                vturb=c.cond[6], pesc=c.cond[11] + c.cond[12], nlev=c.nlev),
+                vturb=c.cond[6], pesc=c.cond[11] + c.cond[12], nlev=c.nlev,
+                radiation=ucalc_radiation(c), cfrac=c.cond[8]),
             expected=(o, c) -> (; frate=o[2], irate=o[1], fenergy=-o[3], ienergy=-o[4],
                 init=o[7], final=o[8], opacity=o[11]), rtol=1e-6) == 100
     end

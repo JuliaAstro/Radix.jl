@@ -17,6 +17,7 @@ const line_xsec = 0.02655              # π e²/(m_e c) (cm² Hz)
 const cm_per_Å = 1e-8
 const cm_per_km = 1e5
 const thermal_speed = 1.29e6           # cm s⁻¹ at 10⁴ K for an atomic mass of 1
+const light_speed_xstar = 3e10         # cm s⁻¹, as used for the line photoexcitation
 
 struct AtomicLine2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
@@ -36,24 +37,27 @@ function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::AtomicLine2, cell; levels, mass, vturb=1.0, pesc=1.0, nlev=typemax(Int), index=false)
+    rate(coef::AtomicLine2, cell; levels, mass, vturb=1.0, pesc=1.0, nlev=typemax(Int), radiation=nothing, cfrac=0.0, index=false)
 
-Radiative decay of an atomic line (XSTAR ucalc type 50). `levels` is a
-`level_table`, `mass` the atomic mass (amu) of the element, `vturb` the
-turbulent velocity (km/s), `pesc` the sum of the two escape probabilities
-(1 when optically thin) and `nlev` the number of levels of the ion (the
-continuum level `nlev` is excluded).
+Radiative decay and photoexcitation of an atomic line (XSTAR ucalc type 50).
+`levels` is a `level_table`, `mass` the atomic mass (amu) of the element, `vturb`
+the turbulent velocity (km/s), `pesc` the sum of the two escape probabilities (1
+when optically thin), `nlev` the number of levels of the ion (the continuum level
+`nlev` is excluded), `radiation` the incident spectrum and `cfrac` the covering
+fraction.
 
 Returns `init` (upper) and `final` (lower) levels in energy order, the decay rate
-`frate = A·pesc` (s⁻¹, floored at `1e-20 ntot`), the emitted power `fenergy` (erg s⁻¹
-per ion, from the energy difference of the two levels) and the line-centre
-`opacity` (zero for lines without a wavelength). `irate` and `ienergy` are 0:
-XSTAR's photoexcitation from the radiation field is not included until a
-radiation object exists. Records with no wavelength (λ = 0) and records with a
-level missing from `levels` give no rates.
+`frate = A·pesc` (s⁻¹, floored at `1e-20 ntot`), the photoexcitation rate `irate`
+from `radiation` at the line energy (zero without `radiation`, for lines without a
+wavelength, and reduced by `1 - cfrac`), the energies `fenergy` and `ienergy` they
+carry (erg s⁻¹ per ion, from the energy difference of the two levels) and the
+line-centre `opacity` (zero for lines without a wavelength). Records with no
+wavelength (λ = 0) and records with a level missing from `levels` give no rates.
+The line opacity that XSTAR adds to its continuum arrays (`linopac`) is not
+included.
 """
 function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
-    nlev=typemax(Int), index=false, verbose=false)
+    nlev=typemax(Int), radiation=nothing, cfrac=0.0, index=false, verbose=false)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         opacity=0.)
@@ -71,8 +75,13 @@ function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
     frate = max(A*pesc, decay_floor*cell.ntot)
     flin = A_to_f*A*up.g*elin^2/lo.g
     vtherm = sqrt((vturb*cm_per_km)^2 + (thermal_speed/sqrt(mass/cell.T))^2)
-    opacity = elin > no_wavelength ? 0. : line_xsec*flin*elin*cm_per_Å/vtherm
-    fenergy = frate*abs(Float64(up.E) - Float64(lo.E))*ergsev
-    (; init=up.level, final=lo.level, frate=frate, irate=0., fenergy=fenergy,
-        ienergy=0., opacity=opacity)
+    sigma = line_xsec*flin*elin*cm_per_Å/vtherm
+    ener = abs(Float64(up.E) - Float64(lo.E))
+    irate = 0.0
+    if radiation !== nothing && elin <= no_wavelength
+        irate = sigma*radiation.F[nbin(radiation, ener)]*vtherm/light_speed_xstar*max(0.0, 1 - cfrac)
+    end
+    opacity = elin > no_wavelength ? 0. : sigma
+    (; init=up.level, final=lo.level, frate=frate, irate=irate,
+        fenergy=frate*ener*ergsev, ienergy=irate*ener*ergsev, opacity=opacity)
 end

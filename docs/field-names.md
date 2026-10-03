@@ -158,7 +158,7 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50 (without photoexcitation), 51 (5- and 9-point fits), 53, 56, 63 and 98.
+38, 49, 50, 51 (5- and 9-point fits), 53, 56, 63 and 98.
 
 ## Open items
 
@@ -176,9 +176,10 @@ single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2
 - `AtomicLine.rate` is unfinished and only had its field names updated.
 - The integer meanings of `ChargeExHp` are inferred.
 - `DielecRecombH` and `TotDielecRecomb` store no data yet.
-- `AtomicLine2` leaves out XSTAR's photoexcitation from the radiation field (`irate` is 0)
-  until a radiation object exists; the decay rate is `A` times the escape probability
-  `pesc`, as in `ucalc`.
+- `AtomicLine2`: the decay rate is `A` times the escape probability `pesc` and the
+  photoexcitation rate (`irate`) comes from the `radiation` at the line energy, as in
+  `ucalc`; the line opacity XSTAR adds to its continuum arrays (`linopac`) is not
+  included.
 - The second real of `ElectronImpact2` (`gf`) is not used by `ucalc`; its meaning is a guess.
 - For type 98 with kind 1 or 4 and `C < 1`, `ucalc` can read its spline abscissa array
   out of bounds at low temperatures; no record in `atdb.fits` has that combination and

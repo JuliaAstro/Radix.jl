@@ -7,7 +7,9 @@
 # then:  drvu < OUTDIR/typeNN.in > OUTDIR/typeNN.out
 using FITSFiles, Random
 
-const RADIATION_TYPES = (49, 53)     # types that need a spectrum
+const RADIATION_TYPES = (49, 50, 53) # types that need a spectrum
+const PARENT_TYPES = (49, 53)        # types that leave a level of the next ion
+const CFRAC = (0.0, 0.25, 0.0, 0.5)  # covering fraction per condition (line rates)
 const MAX_TABLE = 800                # longest cross-section table (reals) sampled
 
 const LFAST = (1, 2, 3, 3)             # ucalc's speed switch, per condition (radiation types)
@@ -50,7 +52,7 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
     if !isempty(selection)
         want = [parse.(Int, split(s, ":")) for s in split(selection, ",")]
         sel = [j for j in cand if (ints(j)[end], ints(j)[7], ints(j)[5]) in Tuple.(want)]
-    elseif type in RADIATION_TYPES
+    elseif type in PARENT_TYPES
         # half of the records leave the ground level of the next ion, half an excited one
         short = [j for j in cand if ptr[5, j] <= MAX_TABLE]       # keep the fixtures small
         ground = [j for j in short if ints(j)[5] == 1]
@@ -70,11 +72,12 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 println(io, join(iv, " "))
                 println(io, join(rv, " "))
                 amass = type == 50 ? get(mass, iv[3], 1.0) : 1.0       # type 50 ints: i, k, Z, ionN
-                println(io, join((t, xpx, xee, xpx*f0, xpx*f1, 1.0, -1.0, 0.0, 1e-3, 1e-3, 0.5, 0.5, amass), " "))
+                cfrac = type == 50 ? CFRAC[mod1(ci, length(CFRAC))] : 0.0
+                println(io, join((t, xpx, xee, xpx*f0, xpx*f1, 1.0, -1.0, cfrac, 1e-3, 1e-3, 0.5, 0.5, amass), " "))
                 # radiation (only the photoionization types need one) and the level of the
                 # next ion that a photoionization record leaves
                 kpar, gpar, epar = 1, 1.0, 0.0
-                if type in RADIATION_TYPES
+                if type in PARENT_TYPES
                     kpar = iv[5]                      # parent level of ParPhotoIonize1/2
                     pl = get(levels, iv[6], NTuple{7, Float64}[])
                     if 1 <= kpar <= length(pl)
