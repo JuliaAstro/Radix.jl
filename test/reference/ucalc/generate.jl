@@ -7,8 +7,10 @@
 # then:  drvu < OUTDIR/typeNN.in > OUTDIR/typeNN.out
 using FITSFiles, Random
 
-const RADIATION_TYPES = (49, 50, 53) # types that need a spectrum
-const PARENT_TYPES = (49, 53)        # types that leave a level of the next ion
+const RADIATION_TYPES = (49, 50, 53, 59, 74, 85, 88) # types that need a spectrum
+const PARENT_TYPES = (49, 53, 59)    # types that leave a level of the next ion
+# positions of the parent level and the parent ion among the integers
+parent_positions(type) = type == 59 ? (4, 5) : (5, 6)
 const CFRAC = (0.0, 0.25, 0.0, 0.5)  # covering fraction per condition (line rates)
 const MAX_TABLE = 800                # longest cross-section table (reals) sampled
 
@@ -48,15 +50,16 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
     end
 
     cand = [j for j in 1:N if ptr[2, j] == type]
+    type in RADIATION_TYPES && (cand = [j for j in cand if ptr[5, j] <= MAX_TABLE])   # keep the fixtures small
     rng = MersenneTwister(type)
     if !isempty(selection)
         want = [parse.(Int, split(s, ":")) for s in split(selection, ",")]
         sel = [j for j in cand if (ints(j)[end], ints(j)[7], ints(j)[5]) in Tuple.(want)]
     elseif type in PARENT_TYPES
         # half of the records leave the ground level of the next ion, half an excited one
-        short = [j for j in cand if ptr[5, j] <= MAX_TABLE]       # keep the fixtures small
-        ground = [j for j in short if ints(j)[5] == 1]
-        excited = [j for j in short if ints(j)[5] > 1]
+        kp = parent_positions(type)[1]
+        ground = [j for j in cand if ints(j)[kp] == 1]
+        excited = [j for j in cand if ints(j)[kp] > 1]
         pick(v, n) = v[randperm(rng, length(v))[1:min(n, length(v))]]
         sel = vcat(pick(ground, nrec ÷ 2), pick(excited, nrec - nrec ÷ 2))
     else
@@ -78,8 +81,9 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 # next ion that a photoionization record leaves
                 kpar, gpar, epar = 1, 1.0, 0.0
                 if type in PARENT_TYPES
-                    kpar = iv[5]                      # parent level of ParPhotoIonize1/2
-                    pl = get(levels, iv[6], NTuple{7, Float64}[])
+                    ik, ip = parent_positions(type)
+                    kpar = iv[ik]                     # parent level of ParPhotoIonize1/2/3
+                    pl = get(levels, iv[ip], NTuple{7, Float64}[])
                     if 1 <= kpar <= length(pl)
                         gpar, epar = pl[kpar][3], pl[kpar][2]
                     end
@@ -88,7 +92,7 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 lfast = type in RADIATION_TYPES ? LFAST[mod1(ci, length(LFAST))] : 1
                 println(io, join((0.1, 0.0015, 1.0, norm, kpar, gpar, epar, lfast), " "))
                 # nlev, then only the levels the record refers to
-                need = sort(unique(filter(i -> 1 <= i <= length(lv), vcat(iv[1:end-1], length(lv)))))   # incl. the continuum level nlev
+                need = sort(unique(filter(i -> 1 <= i <= length(lv), vcat(iv[1:end-1], 1, length(lv)))))   # incl. the ground (1) and the continuum (nlev) levels
                 println(io, length(lv), " ", length(need))
                 for i in need
                     (_, E, g, Einf, n, s2, L) = lv[i]

@@ -30,3 +30,15 @@ function PhotoionizeDamp(rate::Int32, label::String, ivec::I, rvec::R) where
         Parent(zero(eltype(iv)), iv[5]), iv[6:8]..., Vector(rvec[1:2:end-1]),
         Vector(rvec[2:2:end]))
 end
+
+"""
+    rate(coef::PhotoionizeDamp, cell; levels, radiation, nlev, ptmp=(0.5, 0.5), abund=(0, 0), lfast=1, opacity=nothing)
+
+Photoionization with the damped-excess cross sections (XSTAR ucalc type 88): as
+`ParPhotoIonize1` but always to the continuum, and only the photoionization rate
+`frate` and the opacity are returned (the recombination and energy terms are zero, as
+in ucalc). See `photoionize_level`.
+"""
+rate(coef::PhotoionizeDamp, cell::Cell; kw...) =
+    photoionize_level(coef, cell; extrapolate=true, shifted=false, parent=false,
+        rates_only=true, kw...)

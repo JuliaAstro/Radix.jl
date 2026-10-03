@@ -55,6 +55,7 @@
         epi(i)=0.1d0*exp(0.0015d0*(i-1))
       enddo
       lun11=6; lcon=0; jkion=1; indonly=0; lfast=1; lpriu=0; ncn2=9999
+      np2=100                        ! number of database records (type 59 checks the ion record against it)
       rr=1.d18; delr=1.d17; kdesc2=' '; ml=3; np1r=3; np1i=1; np1k=1; nkdt=0
  10   read (5,*,iostat=ios) ndesc,nrdesc,nrdt,nidt
       if (ios.ne.0) stop
@@ -85,6 +86,11 @@
         bremsa(i)=snorm*epi(i)**(-sindex)
       enddo
       opakc=0.d0; opakcont=0.d0; rccemis=0.d0; opakab=0.d0
+      ! integral of the spectrum from each bin to the top of the 9999-point grid (bremsmap), zero at the top bin
+      bremsint=0.d0
+      do i=9998,1,-1
+        bremsint(i)=bremsint(i+1)+(bremsa(i)+bremsa(i+1))*(epi(i+1)-epi(i))/2.d0*1.602197d-12
+      enddo
       ! level record of the next ion (record 5) that the photoionization record leaves
       masterdata%idat1(nidt+1:nidt+6)=(/1,2,0,26,kpar,2/)
       masterdata%rdat1(2+nrdt+1:2+nrdt+4)=(/epar,gpar,1.d0,0.d0/)
@@ -105,6 +111,10 @@
         leveltemp%ilev(2,i)=s2
         leveltemp%ilev(3,i)=l
       enddo
+      ! ion record (record 2): its first real is the ionization energy, the energy of level nlev
+      masterdata%rdat1(2+nrdt+7)=leveltemp%rlev(1,nlev)
+      masterdata%nptrs(1,2)=1; masterdata%nptrs(5,2)=1; masterdata%nptrs(8,2)=2+nrdt+7
+      masterdata%nptrs(9,2)=1; masterdata%nptrs(10,2)=1
       call ucalc(ndesc,nrdesc,ml,lcon,jkion,vturbi,cfrac,indonly,       &
      &   nrdt,np1r,nidt,np1i,nkdt,np1k,ans1,ans2,                       &
      &   ans3,ans4,ans5,ans6,idest1,idest2,idest3,idest4,               &

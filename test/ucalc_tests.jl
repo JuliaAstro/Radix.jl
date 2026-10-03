@@ -46,8 +46,8 @@ function ucalc_inputs(c)
         for v in c.lv]
     # photoionization leaving an excited level of the next ion: its weight and energy (the
     # driver gets them as kpar, gpar, epar)
-    if c.ndesc in (49, 53) && c.rad[5] > 1
-        push!(recs, Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, c.rad[5], c.ints[6]],
+    if c.ndesc in (49, 53, 59) && c.rad[5] > 1
+        push!(recs, Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, c.rad[5], c.ndesc == 59 ? c.ints[5] : c.ints[6]],
             Float32[c.rad[7], c.rad[6], 1, 0]))
     end
     (coef, cell, Radix.level_table(recs))
@@ -128,12 +128,32 @@ direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
     photo_expected = (o, c) -> merge((; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4],
             init=o[7], final=o[8], opacity=o[11], sum_total=o[12], sum_continuum=o[13],
             sum_em1=o[14], sum_em2=o[15]),
-        c.ints[5] == 1 ? (; ienergy2=-o[5], fenergy2=-o[6]) : (;))
+        c.ints[c.ndesc == 59 ? 4 : 5] == 1 || c.ndesc == 59 ? (; ienergy2=-o[5], fenergy2=-o[6]) : (;))
     @testset "type 49 ParPhotoIonize1" begin
         @test check_ucalc("type49"; call=photo_call, expected=photo_expected, rtol=5e-6, atol=1e-100) == 96
     end
     @testset "type 53 ParPhotoIonize2" begin
         @test check_ucalc("type53"; call=photo_call, expected=photo_expected, rtol=5e-6, atol=1e-100) == 96
+    end
+    @testset "type 59 ParPhotoIonize3" begin
+        @test check_ucalc("type59"; call=photo_call, expected=photo_expected, rtol=1e-6, atol=1e-100) == 100
+    end
+    @testset "type 74 PhotoionizeDelta" begin
+        @test check_ucalc("type74";
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c),
+                nlev=c.nlev),
+            expected=(o, c) -> (; frate=o[1], irate=o[2], init=o[7], final=o[8]),
+            rtol=5e-6, atol=1e-100) == 100
+    end
+    @testset "type 85 PhotoionizeFeKedge" begin
+        # recombination and the opacity are zeroed in ucalc; the opacity arrays are filled
+        @test check_ucalc("type85"; call=photo_call, expected=photo_expected, rtol=1e-6, atol=1e-100) == 100
+    end
+    @testset "type 88 PhotoionizeDamp" begin
+        # only the photoionization rate and the opacity are returned; the arrays are still filled.
+        # The opacity is a difference of two nearly equal terms, so it magnifies the
+        # single-precision constants of XSTAR (2.5e-5 at worst), hence the tolerance
+        @test check_ucalc("type88"; call=photo_call, expected=photo_expected, rtol=1e-4, atol=1e-100) == 48
     end
     @testset "type 53 with tables that start far above the threshold" begin
         # these records give negative photoionization rates in XSTAR too

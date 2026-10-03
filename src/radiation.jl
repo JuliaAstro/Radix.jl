@@ -6,14 +6,21 @@
 
 Photon energy grid `E` (eV, geometrically spaced; XSTAR's `epi`) and the incident
 spectrum `F` on it (XSTAR's `bremsa`). The photoionization rates integrate cross
-sections over it.
+sections over it. `Fint` (XSTAR's `bremsint`) is the flux integrated from each bin to
+the top of the grid, in erg.
 """
 struct Radiation{R<:AbstractFloat}
     E::Vector{R}
     F::Vector{R}
+    Fint::Vector{R}
     function Radiation(E::AbstractVector{R}, F::AbstractVector{R}) where {R<:AbstractFloat}
         length(E) == length(F) || throw(DimensionMismatch("E and F must have the same length"))
-        new{R}(collect(E), collect(F))
+        n = length(E)
+        Fint = zeros(R, n)
+        for k in n - 1:-1:1
+            Fint[k] = Fint[k + 1] + (F[k] + F[k + 1])*(E[k + 1] - E[k])/2*ergsev_bremsint
+        end
+        new{R}(collect(E), collect(F), Fint)
     end
 end
 
@@ -31,6 +38,8 @@ struct Opacity{R<:AbstractFloat}
     emissivity::Matrix{R}
 end
 Opacity(n::Integer) = Opacity(zeros(n), zeros(n), zeros(2, n))
+
+const ergsev_bremsint = 1.602197e-12     # erg per eV in bremsmap's integral
 
 # grid constants of nbinc/huntf
 const grid_guard_fraction = 50       # the top 1/50 of the grid (at least 2 bins) is not used
