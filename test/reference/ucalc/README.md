@@ -1,0 +1,25 @@
+# Reference values from XSTAR's real `ucalc`
+
+`../../ucalc_tests.jl` compares the Julia rates with what the actual Fortran 90
+`ucalc` (ftools/xstar/xstarlib/src) returns for records of `atdb.fits`.
+
+- `drvu.f90` fills XSTAR's module data for one database record (integers, reals,
+  level data, a small pointer chain to an element record) and calls `ucalc`.
+- `build.sh` compiles the xstarlib sources with `gfortran` the way HEASoft does
+  (single-precision literals included) and links the driver.
+- `generate.jl` samples real records of one data type, with their ion's level data,
+  and writes the driver input.
+- `data/typeNN.in` and `data/typeNN.out` are the saved inputs and `ucalc` outputs
+  (`ans1..ans6, idest1..idest4, opakab`); `type51n9` is a synthetic 9-point CHIANTI
+  case.
+
+To regenerate a type (needs `gfortran` and the XSTAR sources):
+
+```bash
+./build.sh /path/to/ftools/xstar/xstarlib/src /tmp/ucalc-build
+julia generate.jl /path/to/atdb.fits /tmp/ucalc-ref 56          # writes type56.in
+/tmp/ucalc-build/drvu < /tmp/ucalc-ref/type56.in > data/type56.out
+```
+
+`ucalc`'s `t` is in units of 10⁴ K. The input format is documented at the top of
+`drvu.f90` and in `generate.jl`.

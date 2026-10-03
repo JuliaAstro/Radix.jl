@@ -1,6 +1,8 @@
 using Radix
 using Test
 
+include("ucalc_tests.jl")
+
 # Rate formulas below are transcribed independently from XSTAR's ucalc()
 # (ftools/xstar/utils/xstarsub.f) so Radix is checked against the Fortran,
 # not against itself. T is in units of 1e4 K, as in XSTAR.
@@ -34,37 +36,27 @@ using Test
     end
 
     @testset "AtomicLine2" begin
-        # Hand-built level table; the levels are listed upper-first on purpose
+        # numbers are checked against ucalc in ucalc_tests.jl; here the edge cases
         lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
             f32[E, g, 1, 13.6])
         levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)])
-        # ucalc label 50: flin = 1e-16 aij ggup elin²/(0.667274 gglo);
-        # vtherm = max(vturb 1e5, 1.3e6/sqrt(a/t)); sigma = 0.02655 flin elin 1e-8/vtherm;
-        # ans1 = aij; ans4 = ans1 (12398.54/elin) ergsev
-        λ, A = 1215.67, 6.265e8
-        c = Radix.AtomicLine2(Int32(4), "lya", Int32[2,1,1,7], f32[λ, 0.4162, A])
-        r = Radix.rate(c, cell; levels=levels, mass=1.01, vturb=1.0)
-        A64, λ64 = Float64(f32(A)), Float64(f32(λ))      # the data are single precision
-        flin = 1e-16*A64*8*λ64^2/(0.667274*2)
-        vth = max(1e5, 1.3e6/sqrt(1.01/T))
-        @test (r.init, r.final) == (2, 1)          # upper first, whatever the stored order
-        @test r.frate == A64
-        @test r.irate == 0
-        @test r.opacity ≈ 0.02655*flin*λ64*1e-8/vth
-        @test r.fenergy ≈ A64*12398.54/λ64*1.602197e-12
-        # stored lower-first gives the same answer
-        c2 = Radix.AtomicLine2(Int32(4), "lya", Int32[1,2,1,7], f32[λ, 0.4162, A])
-        @test Radix.rate(c2, cell; levels=levels, mass=1.01) == Radix.rate(c, cell; levels=levels, mass=1.01)
-        # no wavelength or two-photon: no opacity; unknown level: nothing
-        c3 = Radix.AtomicLine2(Int32(4), "x", Int32[1,2,1,7], f32[1e9, 0, A])
-        @test Radix.rate(c3, cell; levels=levels, mass=1.01).opacity == 0
-        c4 = Radix.AtomicLine2(Int32(9), "2ph", Int32[1,2,1,7], f32[λ, 0, A])
-        @test Radix.rate(c4, cell; levels=levels, mass=1.01).opacity == 0
-        # no wavelength: finite power from the level energy difference
-        c6 = Radix.AtomicLine2(Int32(4), "x", Int32[1,2,1,7], f32[0, 0, A])
-        @test Radix.rate(c6, cell; levels=levels, mass=1.01).fenergy ≈ A64*Float64(f32(10.2))*1.602197e-12
-        c5 = Radix.AtomicLine2(Int32(4), "x", Int32[1,9,1,7], f32[λ, 0, A])
-        @test Radix.rate(c5, cell; levels=levels, mass=1.01).frate == 0
+        mk(i, k; λ=1215.67, A=6.265e8, rt=4) = Radix.AtomicLine2(Int32(rt), "x", Int32[i,k,1,7], f32[λ, 0.4162, A])
+        c = mk(2, 1)
+        r = Radix.rate(c, cell; levels=levels, mass=1.01)
+        @test (r.init, r.final) == (2, 1)                 # upper first, whatever the stored order
+        @test Radix.rate(mk(1, 2), cell; levels=levels, mass=1.01) == r
+        @test r.irate == 0 && r.ienergy == 0              # no photoexcitation yet
+        @test r.frate == Float64(f32(6.265e8))            # A times the escape probability (1)
+        @test Radix.rate(c, cell; levels=levels, mass=1.01, pesc=0.5).frate ≈ r.frate/2
+        # a tiny A is floored at 1e-20 times the density
+        @test Radix.rate(mk(2, 1; A=1e-30), cell; levels=levels, mass=1.01).frate ≈ 1e-20*cell.ntot
+        # lines without a wavelength give nothing; very long wavelengths have no opacity
+        @test Radix.rate(mk(2, 1; λ=0), cell; levels=levels, mass=1.01).frate == 0
+        far = Radix.rate(mk(2, 1; λ=1e9), cell; levels=levels, mass=1.01)
+        @test far.frate > 0 && far.opacity == 0
+        # unknown levels, and the continuum level (index nlev), give nothing
+        @test Radix.rate(mk(2, 9), cell; levels=levels, mass=1.01).frate == 0
+        @test Radix.rate(c, cell; levels=levels, mass=1.01, nlev=2).frate == 0
         @test Radix.rate(c, cell; index=true, levels=levels, mass=1.01).frate == 0
     end
 
@@ -123,23 +115,20 @@ using Test
         mk(i, k; ΔE=0.5) = Radix.ElectronCollision(Int8(3), "x", Int32(2),
             Radix.Transition(Int32(i), Int32(k)), Int32(1), Int32(7),
             f32(ΔE), f32(C0), f32.(kn))
-        # ucalc label 51: tk = max(1e4 t, 2.8777e6/elin), eij = ΔE Ry 13.598,
-        #   cji = 8.626e-8 Υ/(sqrt(t) ggup), cij = cji ggup exp(-eij/(0.861707 t))/gglo
+        # the numbers are checked against ucalc in ucalc_tests.jl
         Tc = 20.0
         c = mk(1, 2)
         r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
-        eij = Float64(f32(0.5))*13.598
-        tk = max(Tc*1e4, 2.8777e6/(12398.54/eij))
-        Υ = Radix.chianti_upsilon(2, Float64(f32(0.5)), Float64(f32(C0)), Float64.(f32.(kn)), tk)
-        cji = 8.626e-8*Υ/sqrt(Tc)/8
-        cij = cji*8*exp(-eij/(0.861707*Tc))/2
         @test (r.init, r.final) == (1, 2)
-        @test r.irate ≈ cji*2e3  rtol=1e-6
-        @test r.frate ≈ cij*2e3  rtol=1e-6
+        @test r.frate/r.irate ≈ (8/2)*exp(-Float64(f32(0.5))*13.605692/(0.861707*Tc))  rtol=1e-6
         @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
         # the fit temperature is floored where eij/kT would exceed 50
         cold = Radix.rate(c, Radix.Cell(0.01, 1e3, 2e3, 1e4); levels=levels)
         @test isfinite(cold.irate) && cold.irate > 0
+        # records with other than 5 or 9 knots are skipped
+        odd = Radix.ElectronCollision(Int8(3), "x", Int32(2), Radix.Transition(Int32(1), Int32(2)),
+            Int32(1), Int32(7), f32(0.5), f32(C0), f32.(kn[1:4]))
+        @test Radix.rate(odd, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
         # a spline that dips below 0 gives zero rates, not negative ones
         neg = Radix.ElectronCollision(Int8(3), "x", Int32(1), Radix.Transition(Int32(1), Int32(2)),
             Int32(1), Int32(7), f32(20.76), f32(1.3), f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363])
@@ -150,24 +139,7 @@ using Test
     end
 
     @testset "CollisionProb" begin
-        # against XSTAR's own Fortran (ucalc 63, double-precision build), 800 cases
-        # from real records; the file lists ni li nf lf Z T E1 E2 g1 g2 ne ans1 ans2
-        nz = 0
-        for line in eachline(joinpath(@__DIR__, "reference", "collisionprob_cases.txt"))
-            startswith(line, "#") && continue
-            ni, li, nf, lf, Zp, Tk, e1, e2, g1, g2, nel, a1, a2 = parse.(Float64, split(line))
-            mk(level, n, L, E, g) = Radix.AtomicLevel(Int32(13), "",
-                Int32[n, 2, L, Zp, level, 7], f32[E, g, 1, 13.6])
-            lv = Radix.level_table([mk(1, ni, li, e1, g1), mk(2, nf, lf, e2, g2)])
-            cp = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)),
-                Int32(Zp), Int32(7))
-            r = Radix.rate(cp, Radix.Cell(Tk/1e4, 0.0, nel, nel); levels=lv)
-            @test r.frate ≈ a1  rtol=1e-6 atol=1e-300
-            @test r.irate ≈ a2  rtol=1e-6 atol=1e-300
-            nz += (a1 != 0)
-        end
-        @test nz > 100                            # the reference is not mostly zeros
-        # unknown level: nothing
+        # the numbers are checked against ucalc in ucalc_tests.jl
         none_lv = Radix.level_table(Radix.AtomicLevel[])
         cpx = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)), Int32(8), Int32(7))
         @test Radix.rate(cpx, Radix.Cell(1.0, 0.0, 1e4, 1e4); levels=none_lv).frate == 0
@@ -282,19 +254,20 @@ using Test
             @test (s2.E, s2.g) == (0, 4)
             @test s2.E_inf ≈ 23.4
 
-            # AtomicLine2: every record resolves to two known levels, the decay
-            # runs downward in energy, and all results are finite
+            # AtomicLine2: the decay runs downward in energy and all results are
+            # finite; the 339 records without a wavelength give nothing, as in ucalc
             cell0 = Radix.Cell(1.0, 1e4, 1e4, 1e4)
-            nbad = 0; nord = 0; nlines = 0
+            nbad = 0; nord = 0; nlines = 0; nskip = 0
             for r in db
                 r isa Radix.AtomicLine2 || continue
                 nlines += 1
                 x = Radix.rate(r, cell0; levels=levels, mass=16.0)
-                x.init == 0 && (nbad += 1; continue)
+                x.init == 0 && (r.λ == 0 ? (nskip += 1) : (nbad += 1); continue)
                 levels[(r.ion, x.init)].E >= levels[(r.ion, x.final)].E || (nord += 1)
                 all(isfinite, (x.frate, x.fenergy, x.opacity)) || (nbad += 1)
             end
             @test nlines == 730369
+            @test nskip == 339
             @test nbad == 0
             @test nord == 0
 
@@ -334,7 +307,7 @@ using Test
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
                     ok = isfinite(x.frate) && isfinite(x.irate)
                     ok &= x.irate == 0 || isapprox(x.frate/x.irate,
-                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.598/(0.861707*T)); rtol=1e-6)
+                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.605692/(0.861707*T)); rtol=1e-6)
                     ok || (nbad += 1)
                     (x.frate < 0 || x.irate < 0) && (nneg += 1)
                 end
@@ -343,6 +316,25 @@ using Test
             @test nnone == 0
             @test nbad == 0
             @test nneg == 0
+
+            # ElectronImpact2 (CHIANTI 2016): finite, non-negative, detailed balance
+            nrec = 0; nbad = 0
+            for T in (0.1, 1.0, 10.0)
+                c = Radix.Cell(T, 1e4, 1e4, 1e4)
+                for r in db
+                    r isa Radix.ElectronImpact2 || continue
+                    T == 0.1 && (nrec += 1)
+                    x = Radix.rate(r, c; levels=levels)
+                    x.init == 0 && (nbad += 1; continue)
+                    lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
+                    ok = isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0
+                    ok &= x.irate == 0 || isapprox(x.frate/x.irate,
+                        (up.g/lo.g)*Radix.expo(-Float64(r.ΔE)*13.605692/(0.861707*T)); rtol=1e-6)
+                    ok || (nbad += 1)
+                end
+            end
+            @test nrec == 841
+            @test nbad == 0
 
             # CollisionProb: all rates finite and non-negative over four (T, nₑ)
             nbad = 0; nrec = 0

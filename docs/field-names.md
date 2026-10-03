@@ -81,7 +81,9 @@ count, not an ion index.
 
 ## Verified against the Fortran and the data
 
-Checked against `ucalc()` in `xstarsub.f` and by loading `atdb.fits`:
+Checked against `ucalc.f90` (the Fortran 90 in `ftools/xstar/xstarlib/src`, which is what
+the `xstar` executable is built from; `utils/xstarsub.f` is an older copy that is not
+built and differs in constants and logic) and by loading `atdb.fits`:
 
 - **`ion` is a global ion index** in the ion table (h_i=1, he_i=2, he_ii=3,
   li_i=4 … fe_xxvi=351), not an electron count. `Ion.N` was this index and
@@ -118,24 +120,45 @@ Checked against `ucalc()` in `xstarsub.f` and by loading `atdb.fits`:
   onto `Parent`) gave identical lower, upper, parent-ion and parent-level values
   for every record of all 45 types that hold data.
 
-## Bugs found and fixed while renaming
+## Bugs found and fixed
 
 - `ratemap[9]` pointed at `ChargeExH0` instead of `ChargeExHe` (59 records).
 - `CollisionHelikeSat` records were built as `CollisionHelike` (427 records).
 - `TwoPhotonRad` called an undefined `TwoPhoton`.
 - `TotRadRecombH` used an undefined `nmax` (now `Z`).
+- Found by comparing with the real `ucalc`: `ChargeExHe` left out the factor `0.1 nₕ`
+  (and put the rate in the wrong direction); `TotRadRecomb` used its characteristic
+  temperatures in K against a temperature in 10⁴ K; `ElectronImpact2` read its
+  integers as `[it, i, k, ionN]` when the record is `[i, k, it, ionN]` and took the
+  scale `C` from the wrong real.
+- The ports made from the older `xstarsub.f` used the wrong constants (13.598 eV per Ry,
+  hc = 12398.54), a wrong sign in the third segment of the 5-point spline, and
+  an out-of-date `AtomicLine2`; all aligned with `ucalc.f90`.
+
+## Reference tests
+
+`test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
+sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
+and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
+single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
+38, 50 (without photoexcitation), 51 (5- and 9-point fits), 56, 63 and 98.
 
 ## Open items
 
 - `CollisionIonize` stores `ρ` from `rvec[2:end]`; the header says it starts at
   `r3`.
-- `ChargeExH0.rate` clamps with `max(0, …)` and tests `T > 5`; neither is in
-  `ucalc`.
 - The `Atom` records for iron and zinc look wrong (abundance 3.48 and 9.32, mass
   3.70 and 1.0); check the source table.
 - `AtomicLine.rate` is unfinished and only had its field names updated.
-- The integer meanings of `ChargeExHe` and `ChargeExHp` are inferred.
+- The integer meanings of `ChargeExHp` are inferred.
 - `DielecRecombH` and `TotDielecRecomb` store no data yet.
+- `AtomicLine2` leaves out XSTAR's photoexcitation from the radiation field (`irate` is 0)
+  until a radiation object exists; the decay rate is `A` times the escape probability
+  `pesc`, as in `ucalc`.
+- The second real of `ElectronImpact2` (`gf`) is not used by `ucalc`; its meaning is a guess.
+- For type 98 with kind 1 or 4 and `C < 1`, `ucalc` can read its spline abscissa array
+  out of bounds at low temperatures; no record in `atdb.fits` has that combination and
+  Radix extrapolates the first segment.
 - XSTAR's matrix assembly for bound-bound collision rates (lrtyp 3) decides which
   level is lower with `e1/e2 − 1 < 0.01` on the absolute level energies. For
   `ElectronCollision` (ucalc 51), where `idest1` is the upper level, this swaps
@@ -211,7 +234,7 @@ brackets are the XSTAR data-type codes.
 | `CollisionIonize` (95) | `level`, `ion`, `E_th`, `T0`, `ρ` |
 | `ElectronCollision` (51) | `kind`, `transition`, `Z`, `ion`, `ΔE`, `C`, `Υ` |
 | `ElectronImpact1` (56) | `transition`, `Z`, `ion`, `T_grid`, `Υ` |
-| `ElectronImpact2` (98) | `kind`, `transition`, `ion`, `ΔE`, `C`, `Υ` |
+| `ElectronImpact2` (98) | `transition`, `kind`, `ion`, `ΔE`, `gf`, `C`, `x_grid`, `Υ` |
 
 **Photoionization**
 

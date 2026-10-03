@@ -27,40 +27,43 @@ function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::AtomicLine2, cell; levels, mass, vturb=1.0, index=false)
+    rate(coef::AtomicLine2, cell; levels, mass, vturb=1.0, pesc=1.0, nlev=typemax(Int), index=false)
 
 Radiative decay of an atomic line (XSTAR ucalc type 50). `levels` is a
-`level_table`, `mass` the atomic mass (amu) of the element and `vturb` the
-turbulent velocity (km/s). Returns `init` (upper) and `final` (lower) levels,
-the decay rate `frate` (= A, s⁻¹), the emitted power `fenergy` (erg s⁻¹ per ion)
-and the line-centre `opacity` (zero for two-photon records and for lines
-without a wavelength). `irate` is always 0: stimulated terms are handled by the
-radiation field. If either level is missing from `levels` the rates are 0. For
-records without a wavelength (λ = 0) the emitted power uses the level energy
-difference, where XSTAR would divide by zero.
+`level_table`, `mass` the atomic mass (amu) of the element, `vturb` the
+turbulent velocity (km/s), `pesc` the sum of the two escape probabilities
+(1 when optically thin) and `nlev` the number of levels of the ion (the
+continuum level `nlev` is excluded).
+
+Returns `init` (upper) and `final` (lower) levels in energy order, the decay rate
+`frate = A·pesc` (s⁻¹, floored at `1e-20 ntot`), the emitted power `fenergy` (erg s⁻¹
+per ion, from the energy difference of the two levels) and the line-centre
+`opacity` (zero for lines without a wavelength). `irate` and `ienergy` are 0:
+XSTAR's photoexcitation from the radiation field is not included until a
+radiation object exists. Records with no wavelength (λ = 0) and records with a
+level missing from `levels` give no rates.
 """
-function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0,
-    index=false, verbose=false)
+function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
+    nlev=typemax(Int), index=false, verbose=false)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         opacity=0.)
-    a = get(levels, (coef.ion, coef.transition.lower), nothing)
-    b = get(levels, (coef.ion, coef.transition.upper), nothing)
+    i1, i2 = coef.transition.lower, coef.transition.upper
+    (i1 <= 0 || i1 >= nlev || i2 <= 0 || i2 >= nlev) && return none
+    elin = abs(Float64(coef.λ))
+    elin <= 1e-34 && return none
+    a = get(levels, (coef.ion, i1), nothing)
+    b = get(levels, (coef.ion, i2), nothing)
     (a === nothing || b === nothing) && return none
     up, lo = a.E < b.E ? (b, a) : (a, b)
     index && return (; none..., init=up.level, final=lo.level)
 
     A = Float64(coef.A)
-    λ = Float64(coef.λ)
-    elin = abs(λ)
+    frate = max(A*pesc, 1e-20*cell.ntot)
     flin = 1e-16*A*up.g*elin^2/(0.667274*lo.g)
-    vtherm = max(vturb*1e5, 1.3e6/sqrt(mass/cell.T))
-    sigma = 0.02655*flin*elin*1e-8/vtherm
-    opacity = (λ > 0.99e9 || coef.rtype == 9) ? 0. : sigma
-    # photon energy (eV); 339 records have no wavelength (λ = 0), where ucalc
-    # would divide by zero, so use the level energies instead
-    E = elin > 0 ? 12398.54/elin : up.E - lo.E
-    fenergy = A*E*ergsev
-    (; init=up.level, final=lo.level, frate=A, irate=0., fenergy=fenergy,
+    vtherm = sqrt((vturb*1e5)^2 + (1.29e6/sqrt(mass/cell.T))^2)
+    opacity = elin > 0.99e9 ? 0. : 0.02655*flin*elin*1e-8/vtherm
+    fenergy = frate*abs(Float64(up.E) - Float64(lo.E))*ergsev
+    (; init=up.level, final=lo.level, frate=frate, irate=0., fenergy=fenergy,
         ienergy=0., opacity=opacity)
 end
