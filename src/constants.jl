@@ -14,6 +14,7 @@ to_double(x) = x
 
 const Ry_eV_single = Float64(Float32(Ry_eV))   # 13.605692 as the single-precision literal of ucalc
 const hc_eVÅ = 12398.4016             # h c (eV Å), as used in ucalc
+const hc_eVÅ_single = Float64(Float32(hc_eVÅ)) # 12398.4016 as the single-precision literal of ucalc
 
 # XSTAR measures temperature in units of 10⁴ K
 const T_unit = 1e4                    # K per unit of temperature

@@ -189,6 +189,10 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
             expected=(o, c) -> (; frate=o[1], irate=o[2], fenergy=o[6], ienergy=o[5], init=o[7], final=o[8]),
             rtol=2e-6, atol=1e-100) == 240
     end
+    @testset "type 77 CollisionSuper" begin
+        @test check_ucalc("type77"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+            expected=with_energy, rtol=1e-6, atol=1e-100) == 240
+    end
     @testset "type 86 IronKAuger" begin
         @test check_ucalc("type86"; call=(co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev), expected=direct) == 160
     end
