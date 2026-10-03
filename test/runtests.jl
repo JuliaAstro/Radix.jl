@@ -45,7 +45,15 @@ include("ucalc_tests.jl")
         r = Radix.rate(c, cell; levels=levels, mass=1.01)
         @test (r.init, r.final) == (2, 1)                 # upper first, whatever the stored order
         @test Radix.rate(mk(1, 2), cell; levels=levels, mass=1.01) == r
-        @test r.irate == 0 && r.ienergy == 0              # no photoexcitation yet
+        @test r.irate == 0 && r.ienergy == 0              # no photoexcitation without a spectrum
+        # photoexcitation from the spectrum at the line energy, reduced by the covering fraction
+        E = [0.1*exp(0.0015*(i - 1)) for i in 1:9999]
+        rad = Radix.Radiation(E, 1e16 .* E .^ -1.0)
+        rp = Radix.rate(c, cell; levels=levels, mass=1.01, radiation=rad)
+        @test rp.irate > 0 && rp.frate == r.frate
+        @test rp.ienergy ≈ rp.irate*10.2*1.602176634e-12  rtol=1e-6    # ΔE of the two levels
+        @test Radix.rate(c, cell; levels=levels, mass=1.01, radiation=rad, cfrac=0.25).irate ≈ 0.75*rp.irate
+        @test Radix.rate(mk(2, 1; λ=1e9), cell; levels=levels, mass=1.01, radiation=rad).irate == 0
         @test r.frate == Float64(f32(6.265e8))            # A times the escape probability (1)
         @test Radix.rate(c, cell; levels=levels, mass=1.01, pesc=0.5).frate ≈ r.frate/2
         # a tiny A is floored at 1e-20 times the density
@@ -271,6 +279,18 @@ include("ucalc_tests.jl")
             @test nbad == 0
             @test nord == 0
 
+            # ... and with a spectrum: photoexcitation rates are finite and non-negative
+            E = [0.1*exp(0.0015*(i - 1)) for i in 1:9999]
+            rad = Radiation(E, 1e16 .* E .^ -1.0)
+            nbad = 0
+            for r in db
+                r isa Radix.AtomicLine2 || continue
+                x = Radix.rate(r, cell0; levels=levels, mass=16.0, radiation=rad, cfrac=0.25)
+                x.init == 0 && continue
+                (isfinite(x.irate) && x.irate >= 0 && isfinite(x.ienergy)) || (nbad += 1)
+            end
+            @test nbad == 0
+
             # ElectronImpact1: levels always resolve, the 188 degenerate pairs
             # (equal energies) are skipped as in ucalc, and the rates are finite,
             # non-negative and obey detailed balance at 1e3, 1e4 and 1e5 K
@@ -349,6 +369,28 @@ include("ucalc_tests.jl")
             end
             @test nrec == 6015
             @test nbad == 0
+
+            # ParPhotoIonize1/2 against a power-law spectrum: all results finite and
+            # photoionization rates non-negative, except for the 18 type-53 records whose
+            # tables start hundreds of eV above the threshold (negative in XSTAR too)
+            counts = level_counts(levels)
+            E = [0.1*exp(0.0015*(i - 1)) for i in 1:9999]
+            rad = Radiation(E, 1e16 .* E .^ -1.0)
+            nbad = 0; nneg = 0; nev = 0
+            for (T, ne) in ((0.3, 5e3), (10.0, 1e10))
+                c = Radix.Cell(T, 1e3, ne, 1e10)
+                for r in db
+                    (r isa Radix.ParPhotoIonize1 || r isa Radix.ParPhotoIonize2) || continue
+                    x = Radix.rate(r, c; levels=levels, radiation=rad, nlev=counts[r.ion], lfast=3)
+                    x.init == 0 && continue
+                    nev += 1
+                    all(isfinite, (x.frate, x.irate, x.fenergy, x.ienergy, x.opacity)) || (nbad += 1)
+                    (x.frate < 0 || x.irate < 0) && (nneg += 1)
+                end
+            end
+            @test nbad == 0
+            @test nneg == 36
+            @test nev > 598000
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"

@@ -141,15 +141,33 @@ built and differs in constants and logic) and by loading `atdb.fits`:
   hc = 12398.54), a wrong sign in the third segment of the 5-point spline, and
   an out-of-date `AtomicLine2`; all aligned with `ucalc.f90`.
 
+## Radiation and Opacity
+
+Photoionization needs the radiation field, which is not part of `Cell`:
+`Radiation(E, F)` holds XSTAR's energy grid (`epi`, eV, geometrically spaced) and the
+spectrum on it (`bremsa`). The rates take it as `radiation=`, the number of levels of
+the ion as `nlev=` (`level_counts(levels)` gives it for every ion), the escape
+probabilities as `ptmp=` and the populations as `abund=`. `Opacity(n)` holds the
+continuum opacity and recombination emissivity arrays that the integrals add to when
+passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53) with
+`photoionization_integrals` (XSTAR's `phint53`) and `phextrap`.
+
 ## Reference tests
 
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 50 (without photoexcitation), 51 (5- and 9-point fits), 56, 63 and 98.
+38, 49, 50, 51 (5- and 9-point fits), 53, 56, 63 and 98.
 
 ## Open items
+
+- For photoionization leaving an excited parent level, `ucalc` reads the energy of the
+  final level (`rlev(1, idest2)` beyond the ion's levels) from stale memory; `fenergy2`
+  and `ienergy2` use the continuum energy plus the parent level's energy instead and are
+  only compared with `ucalc` for the ground parent level.
+- 18 `ParPhotoIonize2` records (tables starting hundreds of eV above the shifted
+  threshold) give negative photoionization rates; XSTAR gives the same values.
 
 - `CollisionIonize` stores `ρ` from `rvec[2:end]`; the header says it starts at
   `r3`.
@@ -158,9 +176,10 @@ single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2
 - `AtomicLine.rate` is unfinished and only had its field names updated.
 - The integer meanings of `ChargeExHp` are inferred.
 - `DielecRecombH` and `TotDielecRecomb` store no data yet.
-- `AtomicLine2` leaves out XSTAR's photoexcitation from the radiation field (`irate` is 0)
-  until a radiation object exists; the decay rate is `A` times the escape probability
-  `pesc`, as in `ucalc`.
+- `AtomicLine2`: the decay rate is `A` times the escape probability `pesc` and the
+  photoexcitation rate (`irate`) comes from the `radiation` at the line energy, as in
+  `ucalc`; the line opacity XSTAR adds to its continuum arrays (`linopac`) is not
+  included.
 - The second real of `ElectronImpact2` (`gf`) is not used by `ucalc`; its meaning is a guess.
 - For type 98 with kind 1 or 4 and `C < 1`, `ucalc` can read its spline abscissa array
   out of bounds at low temperatures; no record in `atdb.fits` has that combination and

@@ -46,3 +46,17 @@ loaded database, for the rates that need level energies and weights.
 """
 level_table(records) =
     Dict((r.ion, r.level) => r for r in records if r isa AtomicLevel)
+
+"""
+    level_counts(levels)
+
+Dictionary `ion => number of levels` (the highest level index, the continuum
+level) from a `level_table`.
+"""
+function level_counts(levels)
+    n = Dict{eltype(first(keys(levels))), Int}()
+    for (ion, level) in keys(levels)
+        n[ion] = max(get(n, ion, 0), Int(level))
+    end
+    n
+end
