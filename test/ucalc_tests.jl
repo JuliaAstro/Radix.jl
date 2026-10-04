@@ -214,6 +214,13 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
             expected=(o, c) -> (; irate=o[2], ienergy=-o[3], opacity=o[11]),
             rtol=1e-6, atol=1e-100) == 8
     end
+    @testset "type 92 CollisionAPED" begin
+        # the temperatures of the first fixture are mostly outside the table (no rates); the others are inside it
+        for (name, n) in (("type92", 240), ("type92hot", 240), ("type92k116", 48))
+            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv),
+                expected=with_energy, rtol=1e-6, atol=1e-100) == n
+        end
+    end
     @testset "type 95 CollisionIonize" begin
         @test check_ucalc("type95"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
             expected=with_energy, rtol=1e-6, atol=1e-100) == 160

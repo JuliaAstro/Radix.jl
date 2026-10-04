@@ -17,7 +17,7 @@ and 1.38066e-16 in places), so some physical constants have more than one field,
 are equal for CODATA. Fields:
 
 - `ergsev` erg per eV, with `ergsev_bremsint` (the spectrum integral) and `ergsev_decay` (type 71) variants.
-- `kB_cgs` (erg K⁻¹), `kB_szirc`, `kB_eV` (eV K⁻¹) and `kT_eV` (k × 10⁴ K, in eV): Boltzmann's constant.
+- `kB_cgs` (erg K⁻¹), `kB_szirc`, `kB_eV` (eV K⁻¹), `kB_keV` (keV K⁻¹) and `kT_eV` (k × 10⁴ K, in eV): Boltzmann's constant.
 - `Ry_eV` (hcR∞), `Ry_eV_single` (`ucalc`'s single-precision literal), `Ry_erg` and `Ry_erg_szirc`.
 - `hc_eVÅ` (eV Å) with `hc_eVÅ_single`, `hc_over_k` (Å K) and `T_floor_coeff` (K Å; the collision rates
   use a temperature of at least `T_floor_coeff/λ`, i.e. ΔE/50k).
@@ -31,7 +31,7 @@ are equal for CODATA. Fields:
   of types 57 and 95, the latter for T in 10⁴ K), `A_to_f` (1/(8π² r_e c) in Å² s⁻¹), `milne_coeff` (4π/((2π m_e)^{3/2} c²) × Mb, cgs),
   `gordon_A` (the hydrogenic dipole rate, (2π/3) α³ c R∞ s⁻¹ with the reduced mass of hydrogen), `ps_alfa` (m_e/2k), `ps_pd` (the
   Debye length coefficient (k/(4π α ħ c))^{1/2}), `Ry_K_sz` (Ry/k in the Simpson-Zhang excitation)
-  and `sz_rate_coeff` (the Maxwellian rate coefficient with T in K).
+  `sz_rate_coeff` and `ups_coeff` (the Maxwellian rate coefficient with T in K, in two uses).
 - `proton_mass` in electron masses, `light_speed` (cm s⁻¹), `line_xsec` (π e²/(m_e c), cm² Hz),
   `thermal_speed` (cm s⁻¹ of an atom of 1 amu at 10⁴ K),
   `collision_rate_coeff` (Maxwellian Υ rate coefficient for T in 10⁴ K, cm³ s⁻¹) and `saha_coeff` (cm³ K^{3/2}).
@@ -43,6 +43,7 @@ struct Constants
     kB_cgs::Float64
     kB_szirc::Float64
     kB_eV::Float64
+    kB_keV::Float64
     kT_eV::Float64
     Ry_eV::Float64
     Ry_eV_single::Float64
@@ -73,6 +74,7 @@ struct Constants
     ps_pd::Float64
     Ry_K_sz::Float64
     sz_rate_coeff::Float64
+    ups_coeff::Float64
     proton_mass::Float64
     light_speed::Float64
     line_xsec::Float64
@@ -107,7 +109,7 @@ function Constants(codata::Module=CODATA2022)
     collision = value(u"cm^3/s*K^(1/2)", sqrt(2π)*ħ^2/(mₑ^1.5*k^0.5))
     Constants((;
         ergsev, ergsev_bremsint=ergsev, ergsev_decay=ergsev,
-        kB_cgs=kB, kB_szirc=kB, kB_eV=value(u"eV/K", k), kT_eV=value(u"eV/K", k)*T_unit,
+        kB_cgs=kB, kB_szirc=kB, kB_eV=value(u"eV/K", k), kB_keV=value(u"keV/K", k), kT_eV=value(u"eV/K", k)*T_unit,
         Ry_eV=Ry, Ry_eV_single=Ry, Ry_erg, Ry_erg_szirc=Ry_erg,
         hc_eVÅ=hc, hc_eVÅ_single=hc, hc_over_k=hc_k, T_floor_coeff=hc_k/T_floor_dE_over_kT,
         Ry_K=value(u"K", h*c*R∞/k), Ry_K_erc=value(u"K", h*c*R∞/k), Ry_K_cb=value(u"K", h*c*R∞/k),
@@ -120,7 +122,7 @@ function Constants(codata::Module=CODATA2022)
         milne_coeff=value(u"g^(-3/2)*cm^-2*s^2", 4π/((2π*mₑ)^1.5*c^2))*Mb,
         gordon_A=value(u"Hz", 2π/3*α^3*c*R∞/(1 + mₑ/mₚ)), ps_alfa=value(u"K*s^2/cm^2", mₑ/(2k)),
         ps_pd=value(u"cm^(-1/2)*K^(-1/2)", sqrt(k/(4π*α*ħ*c))),
-        Ry_K_sz=value(u"K", h*c*R∞/k), sz_rate_coeff=collision,
+        Ry_K_sz=value(u"K", h*c*R∞/k), sz_rate_coeff=collision, ups_coeff=collision,
         proton_mass=value(Unitful.NoUnits, mₚ/mₑ), light_speed=value(u"cm/s", c),
         line_xsec=value(u"cm^2/s", π*rₑ*c),
         thermal_speed=value(u"cm/s", sqrt(2*k*T_unit*u"K"/mᵤ)),
@@ -135,7 +137,7 @@ numbers to about 1e-6; see `with_constants`.
 """
 ucalc_constants() = Constants((;
     ergsev=1.602176634e-12, ergsev_bremsint=1.602197e-12, ergsev_decay=Float64(1.602197f-12),
-    kB_cgs=1.380649e-16, kB_szirc=Float64(1.38066f-16), kB_eV=8.617e-5, kT_eV=Float64(0.861707f0),
+    kB_cgs=1.380649e-16, kB_szirc=Float64(1.38066f-16), kB_eV=8.617e-5, kB_keV=Float64(8.617385f-8), kT_eV=Float64(0.861707f0),
     Ry_eV=13.605692, Ry_eV_single=Float64(13.605692f0), Ry_erg=2.17896e-11,
     Ry_erg_szirc=Float64(2.179874f-11),
     hc_eVÅ=12398.4016, hc_eVÅ_single=Float64(12398.4016f0), hc_over_k=Float64(1.43817f8),
@@ -145,7 +147,7 @@ ucalc_constants() = Constants((;
     fourpi=12.56, eightpi=25.3, pi_pexs=3.14159,
     bb_coeff=1.571e22, fo_saha=5.216e-21, saha_coeff_cb=Float64(2.0779f-16), saha_ci=2.08e-22, A_to_f=1e-16/0.667274,
     milne_coeff=Float64(0.79788f0*40.4153f0), gordon_A=2.6761e9, ps_alfa=3.297e-12, ps_pd=6.90,
-    Ry_K_sz=1.578203e5, sz_rate_coeff=8.63e-6,
+    Ry_K_sz=1.578203e5, sz_rate_coeff=8.63e-6, ups_coeff=Float64(8.629f-6),
     proton_mass=1800.0, light_speed=3e10, line_xsec=0.02655, thermal_speed=1.29e6,
     collision_rate_coeff=8.626e-8, saha_coeff=2.07e-16))
 
