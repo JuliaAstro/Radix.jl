@@ -87,6 +87,12 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
         @test check_ucalc("type02";
             call=(co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev), expected=direct) == 100
     end
+    @testset "type 7 DielecRecomb1" begin
+        @test check_ucalc("type07"; call=plain_call, expected=direct, rtol=1e-6) == 240
+    end
+    @testset "type 22 DielecRecombH" begin
+        @test check_ucalc("type22"; call=plain_call, expected=direct, rtol=1e-6) == 12   # zero above 6e4 K
+    end
     @testset "type 9 ChargeExHe" begin
         @test check_ucalc("type09";
             call=(co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev), expected=direct) == 100
@@ -103,6 +109,9 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
         radiation=ucalc_radiation(c), cfrac=c.cond[8])
     line_expected = (o, c) -> (; frate=o[2], irate=o[1], fenergy=-o[3], ienergy=-o[4],
         init=o[7], final=o[8], opacity=o[11])
+    @testset "type 39 TotDielecRecomb" begin
+        @test check_ucalc("type39"; call=plain_call, expected=direct, rtol=1e-6, atol=1e-100) == 240   # (subnormal rates are zero)
+    end
     @testset "type 50 AtomicLine2" begin
         # ucalc returns the photoexcitation in ans1, the decay in ans2, minus the energy of
         # the decays in ans3 and of the photoexcitations in ans4, and the opacity last

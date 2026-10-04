@@ -198,8 +198,7 @@ unconfirmed.
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
-single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
+single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -320,6 +319,12 @@ ported type (except 4, which has no `rate` method). Notes:
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `RadiativeAPED` (ucalc 91) is `ucalc`'s type 50 (it jumps to that code): `rate` builds the equivalent
   `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
+- The dielectronic recombination rates (`DielecRecomb1` 7, `DielecRecombH` 22, `TotDielecRecomb` 39) return `frate` to the
+  ground level of the next ion (`init = 1`, `final = 0`), without levels. The `T0` and `T1` of type 7 are in
+  units of 10⁴ K, as `ucalc` uses them with the temperature in those units (the header said K). `DielecRecombH` (Storey)
+  has five coefficients (`coeffs`; the header mentions a sixth) and is zero above 6×10⁴ K; `TotDielecRecomb` (Badnell)
+  holds `C` and `T` term arrays (`T` in K, divided by 10⁴ here). Type 8 (`DielecRecomb2`) has no records
+  in `atdb.fits` and no reference data: not ported.
 - `RadiativeFeDecay` (ucalc 82) takes the levels of the Fe UTA ions from two record types: the regular
   ones (type 6) and the UTA levels (`AtomicLevelFe`, type 83: energy and weight only, 986 records, for
   ions 327-341), so `level_table` includes both, the second as an `AtomicLevel` with zero quantum numbers.
