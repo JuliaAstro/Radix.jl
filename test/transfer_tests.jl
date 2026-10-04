@@ -1,0 +1,165 @@
+# The transfer through a slab of zones: escape probabilities, line-centre and edge opacities, optical depths, marching.
+
+using FITSFiles
+
+function toy_transfer_tests()
+    @testset "Transfer" begin
+        @testset "escape probabilities" begin
+            # the real pescl and pescv of XSTAR (test/reference/ucalc/drvpesc.f90)
+            reference = [(0.0, 0.5, 0.5), (1e-7, 0.5, 4.9999995000000252e-01), (1e-5, 4.9999500003339298e-01, 4.9999500002499991e-01),
+                         (1.001e-5, 4.9999499503221262e-01, 4.9999499502504996e-01), (1e-3, 4.9950033316673026e-01, 4.9950024991668751e-01),
+                         (0.1, 4.5317311730504545e-01, 4.5241870901797976e-01), (0.5, 3.1606027941427883e-01, 3.0326532985631671e-01),
+                         (0.999999, 2.1616632768946523e-01, 1.8393990452553372e-01), (1.0, 2.3507898053286461e-01, 1.8393972058572117e-01),
+                         (2.718281828, 6.1045705702968939e-02, 3.2994017937802017e-02), (10.0, 1.4402601402409445e-02, 2.2699964881242427e-05),
+                         (1e3, 1.1278741806394859e-04, 4.9999999800209860e-13), (1e5, 1.3772360005478127e-06, 4.9999999800209860e-13),
+                         (1e8, 2.3465975655243779e-09, 4.9999999800209860e-13)]
+            for (tau, l, v) in reference
+                @test Radix.pescl(tau) ≈ l rtol=1e-13
+                @test Radix.pescv(tau) ≈ v rtol=1e-13
+            end
+            @test Radix.pescl(0.0) == 0.5 && Radix.pescv(0.0) == 0.5
+            @test issorted([Radix.pescv(t) for t in 0:0.5:30]; rev=true)
+            @test Radix.pescl(1.0) > Radix.pescl(1.0 + 1e-9) > Radix.pescl(10.0)        # decreasing across the change of the formula
+            @test Radix.pescv(100.0) == 0.5*Float64(1f-12)                              # the floor
+        end
+
+        f32 = Float32
+        lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, level, 5], f32[E, g, 1, 13.6])
+        levels = Radix.levels([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 13.6, 1)]; masses=Dict(5 => 1.0))
+        line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
+        other = Radix.AtomicLine2(Int32(3), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)   # rate type 3: no depth
+        elements = Radix.Elements([[line, other]], levels, [5])
+        mixture = Radix.Mixture(levels, [1], [0.5], [elements])
+        ntot = 1e6
+        balance = (; nₑ=1e4, nₕ=0.0, populations=[[0.7, 0.3, 0.0]])
+
+        @testset "opacities and optical depths" begin
+            cell = Radix.Cell(1.0, 0.0, 1e4, ntot)
+            opacities = Radix.record_opacities(mixture, balance, 1.0, ntot)
+            # a line: the cross section at its centre times the density of its lower level (population × abundance × ntot)
+            @test opacities[1][1] ≈ Radix.rate(line, cell).opacity*0.7*0.5*ntot
+            @test opacities[1][1] > 0 && opacities[1][2] == 0                    # (only the lines of rate type 4 and 9)
+            depths = Radix.OpticalDepths(mixture)
+            @test depths.inward == [[0.0, 0.0]] && depths.outward == [[0.0, 0.0]]
+            Radix.add_zone!(depths, opacities, 1e13)
+            @test depths.inward[1][1] ≈ opacities[1][1]*1e13 && depths.outward[1][1] == 0
+            Radix.add_zone!(depths, opacities, 2e13; direction=:outward)
+            @test depths.outward[1][1] ≈ opacities[1][1]*2e13
+            Radix.add_zone!(depths, opacities, 1e13)
+            @test depths.inward[1][1] ≈ 2*opacities[1][1]*1e13                    # the zones add
+            @test_throws ArgumentError Radix.add_zone!(depths, opacities, 1.0; direction=:sideways)
+            # the escape probabilities from the depths
+            τ1, τ2 = depths.inward[1][1], depths.outward[1][1]
+            escape = Radix.escape_probabilities(mixture, depths)
+            @test escape[1][1] == (Radix.pescl(τ1), Radix.pescl(τ2)) && escape[1][2] == (0.5, 0.5)
+            cf = 0.3
+            @test Radix.escape_probabilities(mixture, depths; cfrac=cf)[1][1] ==
+                (Radix.pescl(τ1)*(1 - cf), Radix.pescl(τ2)*(1 - cf) + 2*Radix.pescl(τ1 + τ2)*cf)
+            @test Radix.escape_probabilities(mixture, Radix.OpticalDepths(mixture))[1][1] == (0.5, 0.5)    # a thin slab
+        end
+
+        @testset "the escape of one element" begin
+            per_element = [[(0.1, 0.2), (0.3, 0.4)]]
+            @test Radix.element_escape(per_element, 1) == [(0.1, 0.2), (0.3, 0.4)]
+            @test Radix.element_escape([(0.1, 0.2), (0.3, 0.4)], 1) == [(0.1, 0.2), (0.3, 0.4)]    # one vector of pairs for all
+            @test Radix.element_escape(nothing, 3) === nothing
+            f = coef -> (0.5, 0.5)
+            @test Radix.element_escape(f, 2) === f
+        end
+
+        @testset "marching" begin
+            # one ion, ionization at 1 s⁻¹ and recombination at α nₑ: nothing for the transfer to do (no lines): the zones are solved
+            # in turn at their own radius, with the temperature and the electron fraction of the one before
+            hlevels = Radix.levels([lv(1, 0.0, 2), lv(2, 13.6, 1)]; masses=Dict(5 => 1.0))
+            hrate = RecombiningToyRate(Int8(3), Int32(5), 2e-4)
+            helements = Radix.Elements([[hrate]], hlevels, [5])
+            hmixture = Radix.Mixture(hlevels, [1], [1.0], [helements])
+            compton = Radix.ComptonTable([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0])
+            E = Radix.xstar_energy_grid(999)
+            L = 1e30 ./ E
+            run = Radix.march_zones(hmixture, 1e4, compton, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false)
+            @test length(run.zones) == 2
+            @test [z.r for z in run.zones] == [1e13, 2e13] && [z.Δr for z in run.zones] == [1e12, 3e12]
+            @test run.zones[1].radiation.F == Radix.map_spectrum(Radix.point_source(E, L, 1e13)).F
+            @test run.zones[2].radiation.F[10] ≈ run.zones[1].radiation.F[10]/4                  # 1/r²
+            @test all(z -> z.T == 1.0 && z.xee == 1.0, run.zones)
+            @test run.depths.inward == [[0.0]] && run.zones[1].escape == [[(0.5, 0.5)]]
+            @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
+        end
+    end
+end
+
+# the reference run of XSTAR (test/reference/xstar_pow_xi2): two zones of 5×10¹² cm at 10¹³ and 1.5×10¹³ cm, the second the one of the
+# table of ion fractions. Its files give the optical depths of the lines (depth_inward) and of the recombination edges.
+function transfer_balance_tests(db)
+    @testset "Transfer of the database" begin
+        levels = Radix.levels(db)
+        coheat = joinpath(dirname(get(ENV, "RADIX_ATDB", "")), "coheat.dat")
+        isfile(coheat) || (@info "Skipping the transfer tests (coheat.dat next to atdb.fits is needed)"; return)
+        compton = Radix.load_compton(coheat)
+        mixture = Radix.Mixture(db, levels; multiplier=Dict(3 => 0.0, 4 => 0.0, 5 => 0.0))
+        dir = joinpath(@__DIR__, "reference", "xstar_pow_xi2")
+        spectrum = fits(joinpath(dir, "xout_cont1.fits"))[3].data
+        lines = fits(joinpath(dir, "xout_lines1.fits"))[3].data
+        edges = fits(joinpath(dir, "xout_rrc1.fits"))[3].data
+        abundances = fits(joinpath(dir, "xout_abund1.fits"))[2].data
+        E, L = Float64.(spectrum.energy), Float64.(spectrum.incident)*1e38
+        run = Radix.march_zones(mixture, 1e4, compton, E, L, [(1e13, 5e12), (1.5e13, 5e12)]; T=100.0, iterate=false)
+        ionlabel = Dict(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion)
+        label(ion, level) = strip(levels[(Int(ion), Int(level))].label)
+
+        @testset "the two zones against the table of the reference run" begin
+            for (z, row) in zip(run.zones, (2, 3))
+                @test abs(z.imbalance - abundances.frac_heat_error[row]) < 2e-3
+            end
+            # the optical depths are those of the first zone's lines, which are tiny: the second zone is as without trapping
+            @test maximum(maximum, run.depths.inward) < 6e-3
+            @test run.zones[2].heating ≈ Radix.heating_cooling(mixture, Radix.ionization_balance(mixture, 100.0, 1e4;
+                radiation=run.zones[2].radiation, iterate=false), 100.0, 1e4, compton; radiation=run.zones[2].radiation).heating rtol=1e-5
+        end
+
+        @testset "optical depths of the lines" begin
+            depth = Dict{Tuple{String, String, String}, Float64}()
+            for (k, el) in enumerate(mixture.elements), j in eachindex(el.rates)
+                c = el.rates[j]
+                (c isa Radix.AtomicLine2 && c.rtype in Radix.line_rate_types) || continue
+                lo, up = el.lo[j], el.up[j]
+                lo == 0 && continue
+                key = (ionlabel[Int(c.ion)], label(c.ion, c.transition.lower), label(c.ion, c.transition.upper))
+                run.depths.inward[k][j] > 0 && (depth[key] = get(depth, key, 0.0) + run.depths.inward[k][j])
+            end
+            ratios = Float64[]
+            for i in eachindex(lines.ion)
+                ref = Float64(lines.depth_inward[i])
+                ref > 1e-9 || continue
+                key = (strip(lines.ion[i]), strip(lines.lower_level[i]), strip(lines.upper_level[i]))
+                mine = get(depth, key, nothing)
+                mine === nothing && (mine = get(depth, (key[1], key[3], key[2]), 0.0))      # (the levels in the other order)
+                push!(ratios, mine/ref)
+            end
+            @test length(ratios) > 400
+            @test all(r -> abs(r - 1) < 2e-2, ratios)
+            @test abs(sort(ratios)[length(ratios) ÷ 2] - 1) < 2e-3                           # the median
+        end
+
+        @testset "optical depths of the recombination edges" begin
+            # the edges of H-like and He-like ions, which have a single record each (the table has no parent level to tell the others)
+            wanted = Dict(("o_viii", "1s1.2S_1/2") => 871.4, ("c_vi", "1s1.2S_1/2") => 490.0, ("he_ii", "1s1.2S_1/2") => 54.42,
+                          ("si_xiii", "1s2.1S_0") => 2438.0, ("ne_x", "1s1.2S_1/2") => 1362.0, ("mg_xii", "1s1.2S_1/2") => 1963.0)
+            for ((ion, level), eth) in wanted
+                refs = [Float64(edges.depth_outward[i]) for i in eachindex(edges.ion)
+                        if strip(edges.ion[i]) == ion && strip(edges.level[i]) == level && abs(Float64(edges.energy[i]) - eth) < 1]
+                @test length(refs) == 1
+                mine = 0.0
+                for (k, el) in enumerate(mixture.elements), j in eachindex(el.rates)
+                    c = el.rates[j]
+                    c isa Radix.ParPhotoIonize2 || continue
+                    el.lo[j] == 0 && continue
+                    (ionlabel[Int(c.ion)] == ion && label(c.ion, c.level) == level) || continue
+                    mine += run.depths.inward[k][j]
+                end
+                @test mine ≈ only(refs) rtol=1e-2
+            end
+        end
+    end
+end
