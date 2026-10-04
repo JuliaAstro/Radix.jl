@@ -20,3 +20,13 @@ function CollisionHelike(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionHelike(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec))
 end
+
+"""
+    rate(coef::CollisionHelike, cell; levels, nlev=typemax(Int), index=false)
+
+Collisional excitation and de-excitation of a He-like ion from a quadratic fit of the effective collision
+strength in log₁₀(T/Z³) (XSTAR ucalc type 68, `calt68`), clamped at 0, with a temperature of at least
+ΔE/50k; otherwise like `rate(::CollisionLS, ...)`.
+"""
+rate(coef::CollisionHelike, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false) =
+    helike_fit_collision(coef, cell, levels, nlev, index, :helike)
