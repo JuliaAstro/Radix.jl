@@ -18,7 +18,8 @@ are equal for CODATA. Fields:
 
 - `ergsev` erg per eV, with `ergsev_bremsint` (the spectrum integral) and `ergsev_decay` (type 71) variants.
 - `kB_cgs` (erg K⁻¹), `kB_szirc`, `kB_eV` (eV K⁻¹), `kB_keV` (keV K⁻¹) and `kT_eV` (k × 10⁴ K, in eV): Boltzmann's constant.
-- `Ry_eV` (hcR∞), `Ry_eV_single` (`ucalc`'s single-precision literal), `Ry_erg` and `Ry_erg_szirc`.
+- `Ry_eV` (hcR∞), `Ry_eV_single` (`ucalc`'s single-precision literal), `Ry_eV_coarse` (the 13.6 eV that `ucalc` writes
+  in several places for the hydrogen ionization energy and the Rydberg), `Ry_erg` and `Ry_erg_szirc`.
 - `hc_eVÅ` (eV Å) with `hc_eVÅ_single`, `hc_over_k` (Å K) and `T_floor_coeff` (K Å; the collision rates
   use a temperature of at least `T_floor_coeff/λ`, i.e. ΔE/50k).
 - `Ry_K`, `Ry_K_erc`, `Ry_K_cb` (the Rydberg over k, in K), `eV_K` (eV/k in K), `inv_kB` (K erg⁻¹).
@@ -51,6 +52,7 @@ struct Constants
     kT_eV::Float64
     Ry_eV::Float64
     Ry_eV_single::Float64
+    Ry_eV_coarse::Float64
     Ry_erg::Float64
     Ry_erg_szirc::Float64
     hc_eVÅ::Float64
@@ -119,7 +121,7 @@ function Constants(codata::Module=CODATA2022)
     Constants((;
         ergsev, ergsev_bremsint=ergsev, ergsev_decay=ergsev,
         kB_cgs=kB, kB_szirc=kB, kB_eV=value(u"eV/K", k), kB_keV=value(u"keV/K", k), kT_eV=value(u"eV/K", k)*T_unit,
-        Ry_eV=Ry, Ry_eV_single=Ry, Ry_erg, Ry_erg_szirc=Ry_erg,
+        Ry_eV=Ry, Ry_eV_single=Ry, Ry_eV_coarse=Ry, Ry_erg, Ry_erg_szirc=Ry_erg,
         hc_eVÅ=hc, hc_eVÅ_single=hc, hc_over_k=hc_k, T_floor_coeff=hc_k/T_floor_dE_over_kT,
         Ry_K=value(u"K", h*c*R∞/k), Ry_K_erc=value(u"K", h*c*R∞/k), Ry_K_cb=value(u"K", h*c*R∞/k),
         eV_K=value(u"K", eV/k), inv_kB=value(u"K/erg", 1/k),
@@ -149,7 +151,7 @@ numbers to about 1e-6; see `with_constants`.
 ucalc_constants() = Constants((;
     ergsev=1.602176634e-12, ergsev_bremsint=1.602197e-12, ergsev_decay=Float64(1.602197f-12),
     kB_cgs=1.380649e-16, kB_szirc=Float64(1.38066f-16), kB_eV=8.617e-5, kB_keV=Float64(8.617385f-8), kT_eV=Float64(0.861707f0),
-    Ry_eV=13.605692, Ry_eV_single=Float64(13.605692f0), Ry_erg=2.17896e-11,
+    Ry_eV=13.605692, Ry_eV_single=Float64(13.605692f0), Ry_eV_coarse=Float64(13.6f0), Ry_erg=2.17896e-11,
     Ry_erg_szirc=Float64(2.179874f-11),
     hc_eVÅ=12398.4016, hc_eVÅ_single=Float64(12398.4016f0), hc_over_k=Float64(1.43817f8),
     T_floor_coeff=2.8777e6,

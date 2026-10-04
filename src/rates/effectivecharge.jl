@@ -25,7 +25,6 @@ function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R) where
     EffectiveCharge(Int8(rate), label, iv..., rvec[1])
 end
 
-const effcharge_Ry = Float64(13.6f0)             # Rydberg in the ionization-potential ratio
 const effcharge_n_max_density = 1e18             # cm⁻³
 const effcharge_tmin_coeff = 3.8e4
 const effcharge_rno1 = 1.8887e8
@@ -41,7 +40,7 @@ const effcharge_g_floor = 1e-48
 function effective_charge_rates(T, den, E, E_ion, n)
     K = constants()
     E_ion < E && return (0.0, 0.0)
-    rio = (E_ion - E)/effcharge_Ry
+    rio = (E_ion - E)/K.Ry_eV_coarse
     rc = sqrt(rio)*n
     den = min(den, effcharge_n_max_density)
     tmin = effcharge_tmin_coeff*rc*sqrt(rc)

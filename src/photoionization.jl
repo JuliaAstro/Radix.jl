@@ -4,7 +4,6 @@
 const phextrap_step = 1.3            # energy factor between extrapolated points
 const phextrap_floor = 1e-27         # stop extrapolating below this cross section (cm²)
 const phextrap_Emax = 2e5            # ... or above this energy (eV)
-const phextrap_Ry = 13.6             # eV per Ry in the extrapolation
 
 """
     phextrap(ε, σ, E_th, ncn2)
@@ -19,14 +18,15 @@ function phextrap(ε::AbstractVector, σ::AbstractVector, E_th, ncn2)
     eout = Float64.(ε[1:n-1]); sout = Float64.(σ[1:n-1])
     n < 2 && return (eout, sout)
     s1 = σ[n-1]
-    e1 = ε[n-1]*phextrap_Ry + E_th
+    Ry = constants().Ry_eV_coarse
+    e1 = ε[n-1]*Ry + E_th
     nadd = 0
     while s1 > phextrap_floor && nadd + n < ncn2 && e1 < phextrap_Emax
         e2 = e1*phextrap_step
         s2 = s1/phextrap_step^3
         nadd += 1
         push!(sout, s2)
-        push!(eout, (e2 - E_th)/phextrap_Ry)
+        push!(eout, (e2 - E_th)/Ry)
         e1, s1 = e2, s2
     end
     (eout, sout)
@@ -559,7 +559,6 @@ end
 # ---------------------------------------------------------------------------
 # superlevels (ucalc types 70 and 99)
 
-const super_Ry = Float64(13.6f0)      # ucalc divides the threshold energy by 13.6 to get Rydbergs
 const super_log_density_max = 8.0     # type 70 limits its second tabulated log₁₀ density to this
 const super_density_cap = 1e8         # type 70 limits the density of a neutral ion to this
 const super_xs_cap = 1e6              # type 70 caps the scaled cross section (Mb)
@@ -611,7 +610,7 @@ function photoionize_superlevel(coef, cell::Cell; levels, radiation, nlev, tabul
 
     T = cell.T
     xnx = cell.nₑ
-    rec, ε, xs = tabulate(T*T_unit, cell.ntot, ett/super_Ry)
+    rec, ε, xs = tabulate(T*T_unit, cell.ntot, ett/K.Ry_eV_coarse)   # (ucalc divides by 13.6)
     σ = max.(xs*Mb, 0.0)
     r = photoionization_integrals_hunt(radiation, ett, ε, σ, T, swrat, xnx)
     ans = if r.rrrt <= rrrt_floor
