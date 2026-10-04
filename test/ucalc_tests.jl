@@ -236,6 +236,12 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
             expected=(o, c) -> (; irate=o[2], ienergy=-o[3], opacity=o[11]),
             rtol=1e-6, atol=1e-100) == 8
     end
+    @testset "type 76 TwoPhotonDecay" begin
+        # ucalc returns the decay in ans2 and minus its energy in ans3
+        @test check_ucalc("type76"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+            expected=(o, c) -> (; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4], init=o[7], final=o[8]),
+            rtol=1e-6, atol=1e-100) == 340
+    end
     @testset "types 72 and 75: autoionization of satellite levels" begin
         # ucalc returns the capture-like rate in ans1 and the rate times nₑ in ans2
         @test check_ucalc("type72"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
