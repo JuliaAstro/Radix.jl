@@ -19,6 +19,19 @@ struct HotToyRate <: Radix.AbstractRate
 end
 Radix.rate(c::HotToyRate, cell; kw...) = (; init=1, final=2, frate=cell.T^2, irate=cell.T)
 
+# the matrix by the plain loop over the records: record_rates of each, added in the order of the records
+function record_by_record_matrix(layout, cell; kw...)
+    A = zeros(layout.N, layout.N)
+    for j in eachindex(layout.rates)
+        layout.lo[j] == 0 && continue
+        lo, up = layout.lo[j], layout.up[j]
+        ans1, ans2 = Radix.record_rates(layout, j, cell; kw...)
+        A[up, lo] += ans1;  A[up, up] -= ans2
+        A[lo, up] += ans2;  A[lo, lo] -= ans1
+    end
+    A
+end
+
 function toy_balance_tests()
   @testset "Level balance" begin
     f32 = Float32
@@ -129,6 +142,30 @@ function toy_balance_tests()
         @test y[:, 1] == Radix.level_populations(Radix.element_matrix(layout, cells[1]; radiation=spectra[1]))
     end
 
+    @testset "records grouped by type" begin
+        line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
+        rates = [toy(1, 2, 3.0, 5.0), line, toy(2, 3, 1.0, 2.0), HotToyRate(Int8(3), Int32(5)), toy(0, 0, 1.0, 1.0),
+                 toy(2, 4, 2.0, 3.0; type=1), toy(3, 4, 7.0, 11.0; type=7), line]
+        layout = Radix.Elements([rates], levels, [5])
+        active = findall(!iszero, layout.lo)
+        @test length(active) == length(rates) - 1                       # all but the record without levels
+        # every record that enters the matrix is in one group, with the others of its type
+        @test sort(vcat(first.(layout.groups)...)) == active
+        @test length(layout.groups) == 3                                # ToyRate (of any rate type), AtomicLine2 and HotToyRate
+        @test all(g -> all(i -> layout.rates[g[1][i]] === g[2][i] && typeof(g[2][i]) === eltype(g[2]), eachindex(g[1])), layout.groups)
+        # the matrix is that of the plain loop, to the last bit, with or without radiation and escape probabilities
+        E = Radix.xstar_energy_grid()
+        rad = Radix.point_source(E, 1e30 ./ E, 1e13)
+        escape = [(0.1j, 0.2) for j in eachindex(rates)]
+        for kw in ((;), (; radiation=rad), (; escape), (; radiation=rad, escape))
+            @test Radix.element_matrix(layout, cell; kw...) == record_by_record_matrix(layout, cell; kw...)
+            @test Matrix(Radix.element_matrix(layout, cell; sparse=true, kw...)) == record_by_record_matrix(layout, cell; kw...)
+        end
+        # a photoionization (rate type 1) from an excited level has no forward rate
+        A = Radix.element_matrix(Radix.Elements([[toy(2, 4, 2.0, 3.0; type=1)]], levels, [5]), cell)
+        @test A[4, 2] == 0 && A[2, 4] == 3.0
+    end
+
     @testset "sparse matrices" begin
         rates = [toy(1, 2, 3.0, 5.0), toy(2, 3, 1.0, 2.0), toy(3, 4, 7.0, 11.0; type=7)]
         layout = Radix.Elements([rates], levels, [5])
@@ -205,6 +242,15 @@ function element_balance_tests(db)
                 # (the iterative refinement gives the tiny ion fractions too)
                 @test Radix.ion_fractions(Radix.level_populations(sparse), layout) ≈
                       Radix.ion_fractions(Radix.level_populations(dense), layout) rtol=1e-6
+            end
+        end
+        @testset "the grouped matrix is that of the plain loop" begin
+            cell = Radix.Cell(100.0, 0.0, 1e4, 1e4)
+            E = Float64.(fits(joinpath(@__DIR__, "reference", "xstar_pow_xi2", "xout_cont1.fits"))[3].data.energy)
+            rad = Radix.point_source(E, 1e30 ./ E, 1e13)
+            for Z in (2, 8)
+                layout = Radix.Elements(db, levels, Z)
+                @test Radix.element_matrix(layout, cell; radiation=rad) == record_by_record_matrix(layout, cell; radiation=rad)
             end
         end
         @testset "the layout agrees with the rates" begin
