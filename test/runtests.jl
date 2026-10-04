@@ -262,7 +262,7 @@ const ucalc_kT = Float64(0.861707f0)
             # levels: the reals must be read from the right place (FITSFiles
             # work-around in load); every level has a positive weight
             levels = level_table(db)
-            @test length(levels) == 38235
+            @test length(levels) == 38235 + 986      # the AtomicLevel records and the Fe UTA levels (AtomicLevelFe)
             @test all(l -> l.g > 0, values(levels))
             s2 = levels[(122, 1)]                       # S II ground level 3p3 4S
             @test (s2.E, s2.g) == (0, 4)
