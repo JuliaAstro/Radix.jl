@@ -130,6 +130,13 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     @testset "type 56 ElectronImpact1" begin
         @test check_ucalc("type56"; call=level_call, expected=with_energy) == 100
     end
+    @testset "type 60 and 62 CollisionHlike1 and 2" begin
+        # the "hot" fixtures reach 1e9 K and more, where the scaled temperature is fixed
+        for (name, n) in (("type60", 240), ("type62", 240), ("type60hot", 120), ("type62hot", 120))
+            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+                expected=with_energy, rtol=1e-6, atol=1e-100) == n
+        end
+    end
     @testset "type 63 CollisionProb" begin
         @test check_ucalc("type63"; call=level_call, expected=with_energy) == 200
     end

@@ -13,6 +13,8 @@ include("ucalc_tests.jl")
 # k × 10⁴ K in eV as ucalc writes it: a single-precision literal
 const ucalc_kT = Float64(0.861707f0)
 
+struct UnportedRate <: Radix.AbstractRate end
+
 @testset "Radix.jl" begin
     f32 = Float32
     T, nh, ne = 1.5, 1e3, 2e3
@@ -168,7 +170,8 @@ const ucalc_kT = Float64(0.861707f0)
     end
 
     @testset "unported rates error clearly" begin
-        c = Radix.CollisionHlike1(Int32(60), "c", Int32[1,2,1,0,0,0,0,0], f32[1,2,3])
+        # (a rate type without a `rate` method, here a made-up one, falls back to an error)
+        c = UnportedRate()
         @test_throws ErrorException Radix.rate(c, cell)
     end
 
