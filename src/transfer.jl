@@ -134,25 +134,30 @@ function escape_probabilities(mixture::Mixture, depths::OpticalDepths; cfrac=0.0
 end
 
 """
-    march_zones(mixture, ntot, compton, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, kw...)
+    march_zones(mixture, ntot, compton, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, kw...)
 
 The zones of a slab, one after the other, for a point source of the spectrum `L` (erg s⁻¹ erg⁻¹, 10³⁸ erg/s × the XSTAR file) on the
 energy grid `E`: `zones` is a vector of `(r, Δr)`, the distance of the zone from the source and its thickness (cm), each solved at
-its own radius with the radiation of the mapped incident spectrum (`map_spectrum`) and the escape probabilities of the lines and
-recombination edges that the optical depths of the zones before it give. With `equilibrium=true` the temperature of each is the
-thermal equilibrium (`thermal_equilibrium`, from `T` and the `xee` of the previous zone), otherwise `T` is kept and the
-electron fraction iterated (`ionization_balance`). Further keywords go to those functions.
+its own radius with the radiation of the incident spectrum attenuated by the continuum depth of the zones before it,
+`exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
+edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
+(`thermal_equilibrium`, from `T` and the `xee` of the previous zone), otherwise `T` is kept and the electron fraction iterated
+(`ionization_balance`). `attenuate=false` leaves the spectrum as it is. Further keywords go to those functions.
+
+After each zone the opacities are added to the depths (`stpcut`): the lines and edges to the `OpticalDepths`, the continuum
+opacity (`continuum_opacity`: Thomson, the strongest photoionization edges of each bin and free-free) to `dpthc`.
 
 Returns the named tuples of the zones (the result of `thermal_equilibrium` or `ionization_balance` with `heating_cooling`, and the
-fields `r`, `Δr`, `radiation`, `escape`) and the final `OpticalDepths`. The continuum is not attenuated (the zones of XSTAR's reference
-run are optically thin) and the diffuse emission is not added.
+fields `r`, `Δr`, `radiation`, `escape`, `opacity`), the final `OpticalDepths` and the continuum depth `dpthc`. The diffuse emission is
+not added to the radiation and the lines do not enter the continuum opacity (`linopac`).
 """
 function march_zones(mixture::Mixture, ntot, compton::ComptonTable, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
-        lfast=photoionization_lfast, kw...)
+        attenuate=true, lfast=photoionization_lfast, kw...)
     depths = OpticalDepths(mixture)
+    dpthc = zeros(length(E))
     results = NamedTuple[]
     for (r, Δr) in zones
-        radiation = map_spectrum(point_source(E, L, r))
+        radiation = map_spectrum(point_source(E, attenuate ? L .* exp.(-dpthc) : L, r))
         escape = escape_probabilities(mixture, depths; cfrac)
         zone = if equilibrium
             thermal_equilibrium(mixture, ntot, compton; radiation, escape, T, xee, lfast, kw...)
@@ -160,9 +165,12 @@ function march_zones(mixture::Mixture, ntot, compton::ComptonTable, E, L, zones;
             balance = ionization_balance(mixture, T, ntot; radiation, escape, xee, lfast, kw...)
             (; heating_cooling(mixture, balance, T, ntot, compton; radiation, escape, lfast)..., T=Float64(T), balance...)
         end
-        push!(results, (; zone..., r, Δr, radiation, escape))
         T, xee = zone.T, zone.xee
-        add_zone!(depths, record_opacities(mixture, zone, zone.T, ntot; radiation, lfast), Δr)
+        edges = record_opacities(mixture, zone, zone.T, ntot; radiation, lfast)
+        opacity = continuum_opacity(mixture, zone, zone.T, ntot, radiation, edges; cfrac, lfast)
+        push!(results, (; zone..., r, Δr, radiation, escape, opacity))
+        add_zone!(depths, edges, Δr)
+        dpthc .+= opacity.total .* Δr
     end
-    (; zones=results, depths)
+    (; zones=results, depths, dpthc)
 end

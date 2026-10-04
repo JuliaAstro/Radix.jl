@@ -30,6 +30,7 @@ include("elements.jl")
 include("heating.jl")
 include("mixture.jl")
 include("transfer.jl")
+include("continuum.jl")
 
 include("abundances.jl")
 

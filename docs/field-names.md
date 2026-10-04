@@ -276,6 +276,25 @@ the depths in `calc_hmc_ion`:
   (`depth_inward`) and `xout_rrc1.fits` (its `depth_outward`, which is the inward one) are their sum. This reproduces the line depths of
   all 451 lines above 10⁻⁹ to 1% (median 0.9999984, with XSTAR's constants) and the edge depths of the H-like and He-like ions
   (the others have several records with the same level and threshold and no parent level in the table to tell them apart) to 0.1-0.3%.
+- **Continuum opacity and attenuation** (`src/continuum.jl`, `continuum_opacity`, used by `march_zones`). `calc_emis_all` starts
+  `opakc` at Thomson scattering `nₑ σ_T (1 - cfrac)`, adds the photoionization opacity of the records (called with the populations as
+  `abund`) and then free-free (`free_free_opacity`, only in the total, not in `opakcont`); `stpcut` adds `opakc Δr` to `dpthc`. Only the
+  `nrank = 10` strongest edges of each energy bin enter (`rlbin`, ranked by the edge opacity of the zone; the bin of an edge is that
+  of its edge energy, `E_grid[1] × 13.598` for type 49 and `max(0.1, E∞ - E)` of the level for the others, set once by `xstarsetup`)
+  and every record of rate type 42. The transmitted spectrum is `incident × exp(-dpthc)`. Against XSTAR's slab of 10²¹ cm⁻²
+  (`test/reference/xstar_thick_slab`) the depth `dpthc` of all 999 bins agrees to a median of 0.9987 and within 5%
+  (Thomson scattering 0.1%, the He II edge 2.5%). Not ported: `linopac`, the Voigt profiles of the lines that `calc_emis_ion` adds to
+  `opakc` (they limit the step of XSTAR's `step.f90`, so the zones cannot be predicted yet), and `heatt`, which
+  updates the flux zone by zone as `F(1 - τ fac) + 12.56 ε fac Δr` with the diffuse emission `ε` of the recombination continua and
+  bremsstrahlung added (the next zone's flux is that of `heatt`, not `zremsz exp(-dpthc)`). Both matter for the ionization deep in
+  a slab: XSTAR's He II fraction rises 2.4% in the first zone of the reference slab, Radix's 0.8%.
+- **`gsmooth2` zeroes the continuum when `vturbi > 0`.** XSTAR 2.59j smooths `opakc`, `rccemis` and `brcems` with a Gaussian of width
+  `E vtherm/c` whenever `vturbi > 1e-34` (the default is 1 km/s). That is about 10⁻⁴ E, and the bins of a grid of 999 points are 1.6% wide
+  (of 9999 points 0.16%: the same for T below 4×10⁵ K): the loop ends at the first neighbour with `exp(-earg) = 0`, and never adds the bin
+  itself, so the smoothed arrays are 0 below 20 keV. The continuum is then not absorbed in the slab and has no diffuse emission (the
+  `transmitted` column of the output is the incident spectrum and `emit_inward` is 10⁻¹⁷ instead of 10¹⁵). Radix does not do it; use
+  `vturbi=0` for reference runs of the continuum (the lines are unaffected).
+
 - **Line trapping is negligible in that slab**: the largest depth is 4×10⁻³ (O VIII Lyα), which changes the heating and cooling of the second
   zone by 10⁻⁷. The 0.5% difference of the equilibrium temperature of that zone is not trapping.
 
