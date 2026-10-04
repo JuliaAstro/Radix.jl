@@ -76,5 +76,5 @@ coefficients from the third real on, τ limited to 1 and Υ extrapolated beyond 
 and `ienergy` the rates times ΔE. `init` is the lower and `final` the upper level by energy, both in `1:nlev`;
 the temperature of the fit is at least ΔE/50k. Weights have 1e-16 added.
 """
-rate(coef::CollisionHlike1, cell::Cell; index=false, verbose=false) =
+rate(coef::CollisionHlike1, cell::Cell; index=false) =
     hlike_collision(coef, cell, index, false)

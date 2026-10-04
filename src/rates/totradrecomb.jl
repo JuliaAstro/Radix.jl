@@ -39,7 +39,7 @@ end
 Total radiative recombination (XSTAR ucalc type 38, Badnell's fit). The
 characteristic temperatures `T0`, `T1`, `T2` are in K while `cell.T` is in 10⁴ K.
 """
-function rate(coef::TotRadRecomb, cell::Cell; index=false, verbose=false)
+function rate(coef::TotRadRecomb, cell::Cell; index=false)
     index && return (; init=1, final=0, frate=0., irate=0.)
     T = cell.T
     T0, T1 = coef.T0/T_unit, coef.T1/T_unit

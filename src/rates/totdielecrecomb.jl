@@ -32,7 +32,7 @@ end
 Total dielectronic recombination to the ground level of the next ion (XSTAR ucalc type 39), the sum
 `frate = nₑ T^{-3/2} Σᵢ Cᵢ e^{-Tᵢ/T}` of the terms of Badnell's fit, with T in 10⁴ K and the Tᵢ in K.
 """
-function rate(coef::TotDielecRecomb, cell::Cell; index=false, verbose=false)
+function rate(coef::TotDielecRecomb, cell::Cell; index=false)
     index && return (; init=1, final=0, frate=0., irate=0.)
     T = cell.T
     dirt = sum(Float64(c)*exp(-Float64(t)/T_unit/T) for (c, t) in zip(coef.C, coef.T); init=0.0)

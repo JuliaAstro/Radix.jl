@@ -49,7 +49,7 @@ than one step away, the threshold is outside the grid, or the integrated spectru
 is negligible. Only the 6-real form of the record is supported. `ptmp` and `lfast` are
 accepted for uniformity with the other photoionization rates but not used.
 """
-function rate(coef::ParPhotoIonize3, cell::Cell; radiation=NO_RADIATION, abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false, verbose=false)
+function rate(coef::ParPhotoIonize3, cell::Cell; radiation=NO_RADIATION, abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
 

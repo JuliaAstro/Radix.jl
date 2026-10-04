@@ -40,7 +40,7 @@ He charge exchange (XSTAR ucalc type 9). The rate goes into `irate`
 with two levels. `init` and `final` are the levels (`final` counts from the first
 level of the recombined ion, `nlev`, the number of levels of the ion).
 """
-function rate(coef::ChargeExHe, cell::Cell; index=false, verbose=false, nlev=0)
+function rate(coef::ChargeExHe, cell::Cell; index=false, nlev=0)
     T = cell.T
     two = coef.level != 0
     init, final = two ? (coef.level, nlev + coef.parent.level - 1) : (1, nlev)

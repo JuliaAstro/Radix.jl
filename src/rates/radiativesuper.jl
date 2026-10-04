@@ -57,7 +57,7 @@ line (from its wavelength above 0.1 Å, from the levels otherwise) and `opacity`
 opacity for the atomic `mass` (amu, from the level table by default) and the turbulent velocity `vturb` (km/s), both zero for lines
 longer than 10⁹ Å. Needs levels `init` and `final` between 1 and `nlev`.
 """
-function rate(coef::RadiativeSuper, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, ptmp=(0.5, 0.5), index=false, verbose=false, kw...)
+function rate(coef::RadiativeSuper, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, ptmp=(0.5, 0.5), index=false, kw...)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

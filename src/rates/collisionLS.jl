@@ -106,5 +106,5 @@ clamped at 0 and the temperature is not floored. `irate` is the de-excitation ra
 `frate = irate g_u e^{-ΔE/kT}/g_l` (T in 10⁴ K) and `fenergy`, `ienergy` the rates times the energy difference of the
 levels; `init` is the lower and `final` the upper level by energy, both in `1:nlev`.
 """
-rate(coef::CollisionLS, cell::Cell; index=false, verbose=false) =
+rate(coef::CollisionLS, cell::Cell; index=false) =
     helike_fit_collision(coef, cell, index, :ls)

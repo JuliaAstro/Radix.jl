@@ -29,7 +29,7 @@ Autoionization of an Fe XXIV satellite level (XSTAR ucalc type 75) with the rate
 `irate` is that rate times the electron density and `frate` is 0. `init` is the level (at least 1) and `final` the
 level of the parent ion counted from the continuum (`nlev` + parent level − 1, at least 1).
 """
-function rate(coef::AutoionizeFe25Sat, cell::Cell; index=false, verbose=false)
+function rate(coef::AutoionizeFe25Sat, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     init = max(Int(coef.level), 1)

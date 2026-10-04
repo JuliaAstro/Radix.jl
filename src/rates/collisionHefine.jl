@@ -29,5 +29,5 @@ temperature floor ΔE/50k and the energy of the rates instead of the energy diff
 order them. Υ is the first term of type 69's fit (and two more if there are more than 6 coefficients, a form
 the database does not have) and is not clamped at 0; otherwise like `rate(::CollisionLS, ...)`.
 """
-rate(coef::CollisionHeFine, cell::Cell; index=false, verbose=false) =
+rate(coef::CollisionHeFine, cell::Cell; index=false) =
     helike_fit_collision(coef, cell, index, :fine)

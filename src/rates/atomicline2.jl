@@ -52,7 +52,7 @@ wavelength (λ = 0) and records with a level missing from the level table give n
 The line opacity that XSTAR adds to its continuum arrays (`linopac`) is not
 included.
 """
-function rate(coef::AtomicLine2, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false, verbose=false)
+function rate(coef::AtomicLine2, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

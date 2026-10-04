@@ -26,5 +26,5 @@ end
 As `rate(::CollisionHlike1, ...)` (XSTAR ucalc type 62 runs the same code) with the second form of the fit:
 the polynomial stops three coefficients before the end and `c[m-2] ln(c[m-1] τ) e^{-c[m] τ}` is added.
 """
-rate(coef::CollisionHlike2, cell::Cell; index=false, verbose=false) =
+rate(coef::CollisionHlike2, cell::Cell; index=false) =
     hlike_collision(coef, cell, index, true)

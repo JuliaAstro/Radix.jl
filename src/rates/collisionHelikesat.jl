@@ -54,7 +54,7 @@ factor and the energy of the rates), as `ucalc` does. `irate` is the de-excitati
 e^{-ΔE/kT}/g_l`, `fenergy` and `ienergy` the rates times that energy; `init` is the lower and `final` the
 upper level by energy, both in `1:nlev`.
 """
-function rate(coef::CollisionHelikeSat, cell::Cell; index=false, verbose=false)
+function rate(coef::CollisionHelikeSat, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

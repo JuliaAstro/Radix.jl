@@ -30,7 +30,7 @@ the upper level by energy (the stored order is not reliable); both must be in `1
 comes from the `LevelTable` of the coefficient (`attach_levels`). Negative Υ
 is taken as 0.
 """
-function rate(coef::CollisionFe19, cell::Cell; index=false, verbose=false)
+function rate(coef::CollisionFe19, cell::Cell; index=false)
     K = constants()
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)

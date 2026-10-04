@@ -94,7 +94,7 @@ cross section (XSTAR ucalc type 99), see `photoionize_superlevel`. The energies 
 are corrected with the energy of the levels. The other keywords of the photoionization rates are
 accepted and ignored.
 """
-function rate(coef::PhotoRecombX, cell::Cell; radiation=NO_RADIATION, index=false, ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing, verbose=false)
+function rate(coef::PhotoRecombX, cell::Cell; radiation=NO_RADIATION, index=false, ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing)
     photoionize_superlevel(coef, cell, (T, n, E_th) -> superlevel_cross_section(coef, T, n, E_th);
         radiation, index, correct_energy=true)
 end

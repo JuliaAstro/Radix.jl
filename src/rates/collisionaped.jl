@@ -62,7 +62,7 @@ outside `T_min`..`T_max` or the grid) and the rates are `frate = 8.629e-6 Υ e^{
 `irate = 8.629e-6 Υ/(√T g_u)` with χ = ΔE/kT and the electron density; `fenergy` and `ienergy` are the
 rates times ΔE. The first level of the record is the lower one whatever the energies. Other kinds throw an error.
 """
-function rate(coef::CollisionAPED, cell::Cell; index=false, verbose=false)
+function rate(coef::CollisionAPED, cell::Cell; index=false)
     levels = levels_of(coef)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
