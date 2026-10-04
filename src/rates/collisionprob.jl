@@ -8,16 +8,16 @@ const CollisionProbDesc = "h-like cij, bautista (hlike ion)"
 const max_dE_over_kT = 50.0           # no rate for transitions with ΔE/kT above this
 const proton_charge = 1.0              # colliding ions are protons
 
-struct CollisionProb{I, L<:LevelTable} <: AbstractRate
+struct CollisionProb{I, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
     Z::I      # atomic number
     ion::I    # ion index (XSTAR ionN)
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function CollisionProb(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function CollisionProb(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     CollisionProb(Int8(rate), label, Transition(ivec[2], ivec[3]), ivec[4:5]..., levels)

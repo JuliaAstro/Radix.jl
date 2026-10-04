@@ -6,16 +6,16 @@
 
 const CollisionHlike2Desc = ""
 
-struct CollisionHlike2{I, R, L<:LevelTable} <: AbstractRate
+struct CollisionHlike2{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     ion::I             # ion index (XSTAR ionN)
     coeffs::Vector{R}  # fit coefficients
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function CollisionHlike2(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function CollisionHlike2(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     CollisionHlike2(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[4], Vector(rvec), levels)

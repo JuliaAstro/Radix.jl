@@ -5,17 +5,17 @@
 
 const CollisionFe19Desc = "Bhatia Fe XIX collision strengths"
 
-struct CollisionFe19{I, R, L<:LevelTable} <: AbstractRate
+struct CollisionFe19{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     Z::I        # atomic number
     ion::I      # ion index (XSTAR ionN)
     Υ::R  # effective collision strength
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function CollisionFe19(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function CollisionFe19(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     CollisionFe19(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec[1], levels)    
@@ -28,7 +28,7 @@ Collisional excitation and de-excitation of Fe XIX from a constant effective col
 Υ (XSTAR ucalc type 81): `irate = nₑ C Υ/(√T g_u)` and `frate = irate g_u e^{-ΔE/kT}/g_l` (T in 10⁴ K, `C` the
 Maxwellian coefficient), `fenergy` and `ienergy` the rates times ΔE. `init` is the lower and `final`
 the upper level by energy (the stored order is not reliable); both must be in `1:nlev` of the ion. The level data
-comes from the `LevelTable` of the coefficient (its `levels` field). Negative Υ
+comes from the `Levels` of the coefficient (its `levels` field). Negative Υ
 is taken as 0.
 """
 function rate(coef::CollisionFe19, cell::Cell; index=false)

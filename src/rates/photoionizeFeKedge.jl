@@ -7,7 +7,7 @@
 
 const PhotoionizeFeKedgeDesc = "Iron K Pi xsections, spectator Auger summed"
 
-struct PhotoionizeFeKedge{I, R, L<:LevelTable} <: AbstractRate
+struct PhotoionizeFeKedge{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I             # principal quantum number
@@ -22,10 +22,10 @@ struct PhotoionizeFeKedge{I, R, L<:LevelTable} <: AbstractRate
     f::R
     γ::R
     scale::R         # scaling factor
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function PhotoionizeFeKedge(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function PhotoionizeFeKedge(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     PhotoionizeFeKedge(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., rvec..., levels)

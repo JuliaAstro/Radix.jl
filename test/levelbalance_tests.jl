@@ -54,14 +54,14 @@ function toy_balance_tests()
         @test Radix.element_ions(vcat(reverse(ions), [Radix.Atom("he", Int32(2), Int32(2), 0.1f0, 4.0f0)]), 2) == [5, 6]
         t6(i, f, a, b; type=3) = ToyRate(Int8(type), Int32(6), (; init=i, final=f, frate=a, irate=b))
         rates = [[toy(1, 4, 2.0, 1.0; type=7), toy(1, 2, 3.0, 5.0)], [t6(1, 2, 7.0, 11.0; type=7)]]
-        layout = Radix.ElementLayout(rates, two, [5, 6])
+        layout = Radix.Elements(rates, two, [5, 6])
         @test layout.N == 5 && layout.offset == [0, 3] && layout.nlev == [4, 2] && size(layout) == (5, 5)
         A = Radix.element_matrix(layout, cell)
         @test size(A) == (5, 5)
         @test A[4, 1] == 2.0 && A[1, 4] == 1.0 && A[2, 1] == 3.0 && A[1, 2] == 5.0     # ionization of ion 5 goes to ion 6
         @test A[5, 4] == 7.0 && A[4, 5] == 11.0                                         # and that of ion 6 to the nucleus
         # a photoionization that leaves ion 6 in its level 1 has `final` beyond the continuum of ion 5
-        A = Radix.element_matrix(Radix.ElementLayout([[toy(1, 5, 2.0, 1.0; type=7)], Radix.AbstractRate[]], two, [5, 6]), cell)
+        A = Radix.element_matrix(Radix.Elements([[toy(1, 5, 2.0, 1.0; type=7)], Radix.AbstractRate[]], two, [5, 6]), cell)
         @test A[5, 1] == 2.0 && A[1, 5] == 1.0
         A0 = Radix.element_matrix(layout, cell)
         x = Radix.level_populations(A0)
@@ -79,7 +79,7 @@ function toy_balance_tests()
 
     @testset "escape probabilities and radiation" begin
         line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
-        layout = Radix.ElementLayout([[line]], levels, [5])
+        layout = Radix.Elements([[line]], levels, [5])
         decay(A) = A[1, 2]
         thin = decay(Radix.element_matrix(layout, cell))
         # `escape` as a pair for each record, or as a function of the record
@@ -105,7 +105,7 @@ function toy_balance_tests()
         # every cell has its own radiation and line trapping: the populations of the cell are those of the single-cell solve
         E = Radix.xstar_energy_grid()
         line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
-        layout = Radix.ElementLayout([[line, toy(1, 3, 1e-2, 5e-2), toy(3, 4, 1e-3, 2e-3)]], levels, [5])
+        layout = Radix.Elements([[line, toy(1, 3, 1e-2, 5e-2), toy(3, 4, 1e-3, 2e-3)]], levels, [5])
         cells = [Radix.Cell(T, 0.0, 1e4, 1e4) for T in (0.5, 1.0, 2.0), _ in 1:2]
         spectra = [Radix.point_source(E, 1e30 ./ E, 1e13*k) for k in 1:length(cells)]
         trapping = i -> [(0.5/i, 0.5/i), (0.5, 0.5), (0.5, 0.5)]
@@ -155,7 +155,7 @@ function element_balance_tests(db)
             # the matrix entries of a record are those of its levels at any temperature (index=true), including the records
             # that exist only above a temperature
             cell = Radix.Cell(100.0, 0.0, 1e4, 1e4)
-            layout = Radix.ElementLayout(db, levels, 2)
+            layout = Radix.Elements(db, levels, 2)
             missing_pairs = 0
             for (j, coef) in enumerate(layout.rates)
                 r = Radix.rate(coef, cell)
@@ -179,7 +179,7 @@ function element_balance_tests(db)
             floor = 1e-9
             cell = Radix.Cell(100.0, 0.0, 1e4, 1e4)
             for (symbol, Z) in (("h", 1), ("he", 2), ("c", 6), ("n", 7), ("o", 8), ("ne", 10))
-                layout = Radix.ElementLayout(db, levels, Z)
+                layout = Radix.Elements(db, levels, Z)
                 for (r, row) in ((1e13, 2), (1.5e13, 3))
                     radiation = Radix.point_source(E, LE, r)
                     x = Radix.level_populations(Radix.element_matrix(layout, cell; radiation))

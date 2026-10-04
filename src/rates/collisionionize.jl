@@ -7,7 +7,7 @@
 
 const CollisionIonizeDesc = "Bryans CI rates"
 
-struct CollisionIonize{I, R, L<:LevelTable} <: AbstractRate
+struct CollisionIonize{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     level::I      # level index
@@ -16,10 +16,10 @@ struct CollisionIonize{I, R, L<:LevelTable} <: AbstractRate
     T0::R         # K
     x_grid::Vector{R}  # scaled temperature of the fit
     ρ::Vector{R}  # effective collision strengths
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function CollisionIonize(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function CollisionIonize(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     n = (length(rvec) - 2) ÷ 2

@@ -7,7 +7,7 @@
 
 const ParPhotoIonize1Desc = "op pi xsections for inner shells"
 
-struct ParPhotoIonize1{I, R, L<:LevelTable} <: AbstractRate
+struct ParPhotoIonize1{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I               # principal quantum number
@@ -19,10 +19,10 @@ struct ParPhotoIonize1{I, R, L<:LevelTable} <: AbstractRate
     ion::I             # ion index (XSTAR ionN)
     E_grid::Vector{R}  # energies (Ry)
     σ::Vector{R}       # cross sections (Mb)
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function ParPhotoIonize1(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function ParPhotoIonize1(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     ParPhotoIonize1(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., Vector(rvec[1:2:end-1]),

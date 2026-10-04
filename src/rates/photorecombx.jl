@@ -9,7 +9,7 @@
 
 const PhotoRecombXDesc = "Recombination and photoionization of superlevels"
 
-struct PhotoRecombX{I, R, L<:LevelTable} <: AbstractRate
+struct PhotoRecombX{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I                # principal quantum number
@@ -24,10 +24,10 @@ struct PhotoRecombX{I, R, L<:LevelTable} <: AbstractRate
     α::Matrix{R}        # α (cm³ s⁻¹; values below -1e-31 are log₁₀ α), size (ne, T)
     E_grid::Vector{R}   # energies
     σ::Vector{R}        # cross sections
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function PhotoRecombX(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function PhotoRecombX(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     nd, nt, nx = ivec[1:3]

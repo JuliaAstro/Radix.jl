@@ -9,7 +9,7 @@
 
 const ElectronImpact2Desc = "chianti2016 collisional rates"
 
-struct ElectronImpact2{I, R, L<:LevelTable} <: AbstractRate
+struct ElectronImpact2{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
@@ -20,10 +20,10 @@ struct ElectronImpact2{I, R, L<:LevelTable} <: AbstractRate
     C::R                        # scale parameter
     x_grid::Vector{R}           # nodes of the reduced fit, in [0, 1]
     Υ::Vector{R}                # reduced effective collision strengths at the nodes
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     n = (length(rvec) - 3) ÷ 2

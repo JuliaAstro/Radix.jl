@@ -6,7 +6,7 @@
 
 const RadiativeFeDecayDesc = "Fe UTA rad rates"
 
-struct RadiativeFeDecay{I, R, L<:LevelTable} <: AbstractRate
+struct RadiativeFeDecay{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -16,10 +16,10 @@ struct RadiativeFeDecay{I, R, L<:LevelTable} <: AbstractRate
     gf::R      # weighted oscillator strength
     A_rad::R   # s⁻¹
     A_auto::R  # s⁻¹
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function RadiativeFeDecay(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function RadiativeFeDecay(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     RadiativeFeDecay(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3], rvec..., levels)

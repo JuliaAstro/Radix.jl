@@ -448,5 +448,5 @@ end
 Radix.set_constants!(Radix.Constants())
 include("forwarddiff_tests.jl")
 include("constants_tests.jl")
-include("leveltable_tests.jl")
+include("levels_tests.jl")
 toy_balance_tests()

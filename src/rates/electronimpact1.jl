@@ -9,7 +9,7 @@ const ElectronImpact1Desc = "tabulated collision strength, bautista"
 const min_dE = 1e-16                  # eV; degenerate levels are skipped
 const min_upsilon = 1e-48              # floor of the tabulated Υ before interpolating
 
-struct ElectronImpact1{I, R, L<:LevelTable} <: AbstractRate
+struct ElectronImpact1{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -17,10 +17,10 @@ struct ElectronImpact1{I, R, L<:LevelTable} <: AbstractRate
     ion::I              # ion index (XSTAR ionN)
     T_grid::Vector{R}   # log₁₀ of the temperatures (K)
     Υ::Vector{R}       # effective collision strengths
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     ElectronImpact1(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec[1:end÷2]),

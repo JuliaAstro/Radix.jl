@@ -5,7 +5,7 @@
 
 const EffectiveChargeDesc = "effective charge to be used in coll. ion."
 
-struct EffectiveCharge{I, R, L<:LevelTable} <: AbstractRate
+struct EffectiveCharge{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I      # principal quantum number
@@ -15,10 +15,10 @@ struct EffectiveCharge{I, R, L<:LevelTable} <: AbstractRate
     level::I  # level index
     ion::I    # ion index (XSTAR ionN)
     Zeff::R   # effective charge
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     # records of five integers leave out the atomic number

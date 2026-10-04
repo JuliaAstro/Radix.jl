@@ -7,7 +7,7 @@
 
 const PhotoionizeDeltaDesc = "Delta functions to add to phot. x-sections  DR"
 
-struct PhotoionizeDelta{I, R, L<:LevelTable} <: AbstractRate
+struct PhotoionizeDelta{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I               # principal quantum number
@@ -20,10 +20,10 @@ struct PhotoionizeDelta{I, R, L<:LevelTable} <: AbstractRate
     E_inf::R           # eV
     E_grid::Vector{R}  # energies (eV)
     f::Vector{R}       # cm²
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function PhotoionizeDelta(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function PhotoionizeDelta(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     m = (length(rvec) - 1) ÷ 2

@@ -47,7 +47,7 @@ const level_data_types = (6, 13, 14, 83)   # AtomicLevel, Atom, Ion and AtomicLe
 """
     level_table(records; masses=Dict())
 
-The `LevelTable` of a loaded database (or any collection of records): the `AtomicLevel` records, the Fe UTA levels
+The `Levels` of a loaded database (or any collection of records): the `AtomicLevel` records, the Fe UTA levels
 (`AtomicLevelFe`, which hold only the energy and the weight, added as `AtomicLevel`s with zero quantum numbers unless
 the level is already there), and the atomic masses of the ions from the `Atom` and `Ion` records. `masses`
 (`ion => mass`) adds to or replaces those.
@@ -70,6 +70,6 @@ function level_table(records; masses=Dict{Int, Float64}())
         r isa Ion && haskey(element_mass, Int(r.Z)) && (mass[Int(r.ion)] = element_mass[Int(r.Z)])
     end
     merge!(mass, Dict(Int(k) => Float64(v) for (k, v) in masses))
-    LevelTable(levels, nlev, mass)
+    Levels(levels, nlev, mass)
 end
 

@@ -1,4 +1,4 @@
-# The level data of a rate is stored in its coefficients (a LevelTable in the field `levels`), so that
+# The level data of a rate is stored in its coefficients (a Levels in the field `levels`), so that
 # `rate(coef, cell)` needs nothing else.
 
 @testset "Level data in the coefficients" begin
@@ -10,7 +10,7 @@
     table = Radix.level_table(records)
 
     @testset "the table" begin
-        @test table isa LevelTable
+        @test table isa Levels
         @test length(table) == 6 && haskey(table, (7, 2)) && table[(7, 2)].g == 8     # a dictionary of levels
         @test get(table, (7, 9), nothing) === nothing
         @test nlevels(table, 7) == 3 && nlevels(table, 8) == 3 && nlevels(table, 99) == 0
