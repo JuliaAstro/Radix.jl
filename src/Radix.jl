@@ -23,6 +23,7 @@ include("rates/rates.jl")
 include("ratemap.jl")
 
 include("atomicdb.jl")
+include("levelbalance.jl")
 
 include("abundances.jl")
 
