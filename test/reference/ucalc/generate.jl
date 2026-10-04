@@ -23,6 +23,13 @@ const CONDITIONS = (            # t [1e4 K], xpx [cm⁻³], xee, xh0/xpx, xh1/xp
     (100.0, 1e12, 1.0, 1e-6, 1.0),
 )
 
+# TEMPS=t1,t2,t3,t4 replaces the temperatures (in 10⁴ K) of the four conditions
+function conditions()
+    haskey(ENV, "TEMPS") || return CONDITIONS
+    ts = parse.(Float64, split(ENV["TEMPS"], ","))
+    ntuple(i -> (ts[i], CONDITIONS[i][2:end]...), length(CONDITIONS))
+end
+
 # optional: TAG and SELECTION "ion:level:kpar,ion:level:kpar,..." to sample chosen records only
 function main(path, outdir, type, nrec = 25, tag = "", selection = "")
     a = open(io -> fits(io; scale = false), path)
@@ -51,6 +58,8 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
 
     cand = [j for j in 1:N if ptr[2, j] == type]
     type in RADIATION_TYPES && (cand = [j for j in cand if ptr[5, j] <= MAX_TABLE])   # keep the fixtures small
+    # KIND=116 keeps the records whose third integer is that (the kind of fit of type 92)
+    haskey(ENV, "KIND") && (cand = [j for j in cand if ints(j)[3] == parse(Int, ENV["KIND"])])
     # ION=96,97 keeps the records of those ions only
     haskey(ENV, "ION") && (cand = [j for j in cand if ints(j)[end] in parse.(Int, split(ENV["ION"], ","))])
     rng = MersenneTwister(type)
@@ -74,7 +83,7 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
             # PARENT_LEVEL=k leaves level k of the parent ion instead (a test of the excited-parent branch)
             haskey(ENV, "PARENT_LEVEL") && type in PARENT_TYPES && (iv[parent_positions(type)[1]] = parse(Int, ENV["PARENT_LEVEL"]))
             lv = get(levels, iv[end], NTuple{7, Float64}[])
-            for (ci, (t, xpx, xee, f0, f1)) in enumerate(CONDITIONS)
+            for (ci, (t, xpx, xee, f0, f1)) in enumerate(conditions())
                 println(io, type, " ", ptr[3, j], " ", length(rv), " ", length(iv))
                 println(io, join(iv, " "))
                 println(io, join(rv, " "))

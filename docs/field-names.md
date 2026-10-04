@@ -199,7 +199,7 @@ unconfirmed.
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 91, 95, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 91, 92, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -320,6 +320,16 @@ ported type (except 4, which has no `rate` method). Notes:
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `RadiativeAPED` (ucalc 91) is `ucalc`'s type 50 (it jumps to that code): `rate` builds the equivalent
   `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
+- `CollisionAPED` (ucalc 92) had its integers in the wrong places (`[lower, upper, kind, Z, ionN]`, not
+  `[1, lower, upper, Z, ionN]`) and its temperature limits in the grid; the record is now `transition`,
+  `kind`, `T_min`, `T_max`, `T_grid` and `Υ`. `calc_maxwell_rates` has some thirty kinds of fit; the
+  database has only kind 113 (1,302 records) and 116 (12), interpolated electron collision strengths with
+  13 and 16 points (kinds `100 + n`), which are all `rate` supports (other kinds throw an error). The
+  interpolation is log-log, gives 0 outside the first `n − 1` points (the last point is never used) and
+  the rates are 0 outside `T_min`..`T_max`. The first level of the record is the lower one, whatever the
+  level energies, and the Boltzmann factor uses `kB_keV` (`ucalc` has 8.617385e-8) and `ups_coeff`
+  (8.629e-6). With the default temperatures of the fixtures only a quarter of the cases fall inside the
+  table (`T_min` is 1.15e5 K); `type92hot` uses hotter ones.
 - `CollisionIonize` (ucalc 95) keeps the scaled temperature grid `x_grid` and the strengths `ρ` apart (the old
   constructor put `T0` in `ρ`, and the header omits the grid). `ucalc` always takes level 1 as the initial
   level, and its statistical weight, whatever the level of the record; records of rate type 5 end in the
