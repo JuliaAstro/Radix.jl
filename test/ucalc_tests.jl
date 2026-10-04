@@ -165,6 +165,12 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     @testset "type 59 ParPhotoIonize3" begin
         @test check_ucalc("type59"; call=photo_call, expected=photo_expected, rtol=1e-6, atol=1e-100) == 100
     end
+    @testset "types 66, 68 and 69: He-like collision fits" begin
+        for (name, n) in (("type66", 24), ("type68", 208), ("type69", 480))
+            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+                expected=with_energy, rtol=1e-6, atol=1e-100) == n
+        end
+    end
     @testset "type 70 PhotoionizeSuper" begin
         # ucalc's jkion = 1: the density is limited to 1e8
         @test check_ucalc("type70"; call=(co, ce, lv, c) -> photo_call(co, ce, lv, c; neutral=true),

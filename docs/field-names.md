@@ -198,7 +198,7 @@ unconfirmed.
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
-single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 70, 71, 73, 74, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
+single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 66, 68, 69, 70, 71, 73, 74, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -319,6 +319,18 @@ ported type (except 4, which has no `rate` method). Notes:
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `RadiativeAPED` (ucalc 91) is `ucalc`'s type 50 (it jumps to that code): `rate` builds the equivalent
   `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
+- `CollisionLS` (ucalc 69), `CollisionHelike` (68) and `CollisionHeFine` (66) are three fits of the He-like effective
+  collision strength with the same rate: type 69 (Kato and Nakazaki; 6 coefficients, or 9 with a non-resonant part,
+  the first being an energy in eV that scales the temperature) is clamped at 0 and has no temperature floor; type 68 is
+  a quadratic in log₁₀(T/Z³), clamped at 0, with the floor ΔE/50k; type 66 (fine structure; six coefficients in the
+  database, `calt66` also reads two more terms) uses the energy of the record, not of the levels, for the Boltzmann
+  factor, the floor and the energy of the rates, and is not clamped. `ucalc` reads the first coefficient of types 66
+  and 69 in eV with `eboltz = 1.160443e4` K/eV (`eV_K_ls`). The scaled energy is limited to (0.05, 77) in type 69 and
+  to 77 in type 66; at 77 the fits cancel two large terms (y²/2 times `d`), which amplifies any rounding of the
+  exponential integral by ~3000: `ucalc`'s `expint` has single-precision coefficients (`single_expint` of
+  `ucalc_constants()`, 2e-7 effect elsewhere), and the 66 and 69 fits differ from `ucalc` by 1e-4 without it. The
+  default uses the full coefficients. `calt69` prints an error and leaves Υ unset for y < 1e-20, which the
+  database does not reach.
 - `CollisionHlike1` (ucalc 60) and `CollisionHlike2` (62, which `ucalc` runs through the same code) evaluate the
   fits of `calt6062` in the scaled temperature τ = kT/Ry (the constant `Ry_per_K`; `ucalc` has 6.33652e-6, which is
   Ry/k for the Simpson-Zhang value 1.578203e5 K), limited to 1 (above 10⁹ K it is fixed), with the

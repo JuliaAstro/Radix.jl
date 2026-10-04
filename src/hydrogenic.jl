@@ -14,6 +14,10 @@ const expint_denominator = (9.5733223454, 25.6329561486, 21.0996530827,
     3.9584969228)                                 # x > 1
 const expint_numerator = (8.5733287401, 18.0590169730, 8.6347608925,
     0.2677737343)                                 # x > 1
+# the same coefficients rounded to single precision, as ucalc's expint has them
+const expint_series_single = map(x -> Float64(Float32(x)), expint_series)
+const expint_denominator_single = map(x -> Float64(Float32(x)), expint_denominator)
+const expint_numerator_single = map(x -> Float64(Float32(x)), expint_numerator)
 
 # Gordon (1929) dipole rates
 
@@ -94,15 +98,16 @@ end
 polynomial fits for x > 1 and the series for x ≤ 1.
 """
 function expint(x)
+    single = constants().single_expint
     if x <= 1
-        a0, a1, a2, a3, a4, a5 = expint_series
+        a0, a1, a2, a3, a4, a5 = single ? expint_series_single : expint_series
         e1 = x > 0 ?
             a0 + a1*x + a2*x^2 + a3*x^3 + a4*x^4 + a5*x^5 - log(x) :
             -a0 + a1*x + a2*x^2 + a3*x^3 + a4*x^4 + a5*x^5 - log(-x)
         e1*x*expo(x)
     else
-        b1, b2, b3, b4 = expint_denominator
-        c1, c2, c3, c4 = expint_numerator
+        b1, b2, b3, b4 = single ? expint_denominator_single : expint_denominator
+        c1, c2, c3, c4 = single ? expint_numerator_single : expint_numerator
         (x^4 + c1*x^3 + c2*x^2 + c3*x + c4)/(x^4 + b1*x^3 + b2*x^2 + b3*x + b4)
     end
 end

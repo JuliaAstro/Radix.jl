@@ -44,8 +44,11 @@
         looser = Dict(:proton_mass => 3e-2, :eightpi => 1e-2, :saha_coeff_cb => 5e-3, :saha_ci => 6e-3, :fo_saha => 3e-3,
             :bb_coeff => 2e-3, :milne_coeff => 2e-3)
         for name in fieldnames(Radix.Constants)
+            getfield(K, name) isa Bool && continue
             @test getfield(U, name) ≈ getfield(K, name) rtol=get(looser, name, 1e-3)
         end
+        # ucalc's exponential integral has single-precision coefficients, the default has the full ones
+        @test U.single_expint && !K.single_expint
         # fo_saha and bb_coeff only occur together in the recombination term, and their product
         # agrees better than either does
         @test U.fo_saha*U.bb_coeff ≈ K.fo_saha*K.bb_coeff rtol=1.5e-3
@@ -79,6 +82,17 @@
             α = Radix.milne_recombination(T*1e4, ε, σ/Radix.Mb, Eth/Ry)
             @test r.rrrt/swrat ≈ α rtol=3e-2
         end
+    end
+
+    @testset "the exponential integral" begin
+        # E₁(x) = expint(x)/(x e^x): the fit is good to ~2e-8 either way, the single-precision
+        # coefficients of ucalc differ from the full ones by about that much
+        for x in (0.05, 0.5, 1.0, 2.0, 10.0, 50.0)
+            ref = Radix.expint(x)
+            u = Radix.with_constants(() -> Radix.expint(x), U)
+            @test u ≈ ref rtol=5e-7
+        end
+        @test Radix.expint(1.0) ≈ 0.5963473623231942 rtol=1e-6     # x e^x E₁(x) at x = 1, E₁(1) = 0.2193839344
     end
 
     @testset "other CODATA sets" begin

@@ -19,3 +19,15 @@ function CollisionHeFine(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionHeFine(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec))
 end
+
+"""
+    rate(coef::CollisionHeFine, cell; levels, nlev=typemax(Int), index=false)
+
+Collisional excitation and de-excitation of a He-like ion from the fine-structure fits (XSTAR ucalc type 66,
+`calt66`): the first coefficient is the energy (eV) of the transition, used for the Boltzmann factor, the
+temperature floor ΔE/50k and the energy of the rates instead of the energy difference of the levels, which only
+order them. Υ is the first term of type 69's fit (and two more if there are more than 6 coefficients, a form
+the database does not have) and is not clamped at 0; otherwise like `rate(::CollisionLS, ...)`.
+"""
+rate(coef::CollisionHeFine, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false) =
+    helike_fit_collision(coef, cell, levels, nlev, index, :fine)

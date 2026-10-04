@@ -55,6 +55,9 @@ const AD_CASES = [
     "type49" => ad_photo, "type53" => ad_photo, "type59" => ad_photo,
     "type74" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c), nlev=c.nlev),
     "type85" => ad_photo, "type88" => ad_photo, "type99" => ad_photo,
+    "type66" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+    "type68" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+    "type69" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
     "type70" => (co, ce, lv, c) -> ad_photo(co, ce, lv, c; neutral=true),
     "type49 (opacity arrays)" => ad_with_opacity,
 ]
