@@ -54,6 +54,17 @@ their own `J`.
 point_source(E::AbstractVector, L::AbstractVector, r) = Radiation(E, L ./ (4π*r^2))
 
 """
+    map_spectrum(radiation, E=radiation.E)
+
+The spectrum of `radiation` on the energy grid `E` as XSTAR's `bremsmap` maps it before the balance of a zone: each bin of
+`E` takes the flux of the bin of `radiation` that is nearest to it (`nbin`). That function does not go above the bin
+`n - max(2, n ÷ 50)` of the grid (the top 2% of the bins are not used), so for the same grid the flux of every higher bin
+is that of the last one below: a flat tail where a power law falls. The Compton heating, which the high energies dominate,
+depends on it (+50% for an E⁻¹ spectrum on XSTAR's grid).
+"""
+map_spectrum(rad::Radiation, E::AbstractVector{<:AbstractFloat}=rad.E) = Radiation(E, [rad.F[nbin(rad, e)] for e in E])
+
+"""
     Opacity([R=Float64,] n)
 
 Continuum opacity arrays on a grid of `n` energies that the photoionization rates
