@@ -223,6 +223,10 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
             expected=(o, c) -> (; irate=o[2], ienergy=-o[3], opacity=o[11]),
             rtol=1e-6, atol=1e-100) == 8
     end
+    @testset "type 81 CollisionFe19" begin
+        @test check_ucalc("type81"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+            expected=with_energy, rtol=1e-6, atol=1e-100) == 240
+    end
     @testset "type 82 RadiativeFeDecay" begin
         # ucalc returns the photoexcitation in ans1, the decay in ans2 and the energy of the photoexcitations in ans3
         @test check_ucalc("type82";
