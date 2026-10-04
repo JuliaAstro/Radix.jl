@@ -6,7 +6,7 @@
 
 const TwoPhotonDecayDesc = "2 photon decay"
 
-struct TwoPhotonDecay{I, R} <: AbstractRate
+@with_levels struct TwoPhotonDecay{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -21,14 +21,16 @@ function TwoPhotonDecay(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::TwoPhotonDecay, cell; levels, nlev=typemax(Int), index=false)
+    rate(coef::TwoPhotonDecay, cell; index=false)
 
 Two-photon decay of a level (XSTAR ucalc type 76): `irate` is the stored `A` (s⁻¹), `frate` is 0, `init` the higher and
 `final` the lower level by energy (both in `1:nlev`), and `ienergy` is `A` times the energy difference of the levels.
 `ucalc` also adds the two-photon continuum, a spectrum `E²(E_max − E)` normalized to `A`, to its emissivity array;
 that is not included.
 """
-function rate(coef::TwoPhotonDecay, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false)
+function rate(coef::TwoPhotonDecay, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper

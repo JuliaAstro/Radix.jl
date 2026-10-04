@@ -6,7 +6,7 @@
 
 const RadiativeProbDesc = "h-like cij, bautista (hlike ion)"
 
-struct RadiativeProb{I, R} <: AbstractRate
+@with_levels struct RadiativeProb{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -24,7 +24,7 @@ end
 const radiativeprob_min_dE = 1e-24     # added to the level energy difference before inverting it
 
 """
-    rate(coef::RadiativeProb, cell; levels, index=false)
+    rate(coef::RadiativeProb, cell; index=false)
 
 Hydrogenic radiative decay (XSTAR ucalc type 54) between the two levels of the record, from
 Gordon's formula (`anl1`): `irate` is the decay rate `A` (s⁻¹) from the upper to the lower level, from `(n, l+1)`
@@ -33,7 +33,8 @@ Nothing is returned if the two levels have the same `n`. `ienergy` is the rate t
 which is what `ucalc` puts in its energy output (it multiplies by the dimensionless ΔE/kT, not by ΔE);
 `fenergy` is 0.
 """
-function rate(coef::RadiativeProb, cell::Cell; levels, index=false, verbose=false)
+function rate(coef::RadiativeProb, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)

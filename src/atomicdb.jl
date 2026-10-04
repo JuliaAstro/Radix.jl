@@ -35,38 +35,40 @@ function load(io::IO)
         # end
         rates[j] = rate(type, label, ivec, rvec)
     end
+    # the levels of every ion and the masses of the elements go into the rates that need them
+    table = level_table(rates)
+    for j in eachindex(rates)
+        rates[j] isa AbstractRate && (rates[j] = attach_levels(rates[j], table))
+    end
     rates
 end
 
 """
-    level_table(records)
+    level_table(records; masses=Dict())
 
-Dictionary `(ion, level) => AtomicLevel` over the `AtomicLevel` records of a
-loaded database, for the rates that need level energies and weights. The Fe UTA levels
-(`AtomicLevelFe`, which hold only the energy and the weight) are added as `AtomicLevel`s
-with zero quantum numbers, unless the level is already there.
+The `LevelTable` of a loaded database (or any collection of records): the `AtomicLevel` records, the Fe UTA levels
+(`AtomicLevelFe`, which hold only the energy and the weight, added as `AtomicLevel`s with zero quantum numbers unless
+the level is already there), and the atomic masses of the ions from the `Atom` and `Ion` records. `masses`
+(`ion => mass`) adds to or replaces those.
 """
-function level_table(records)
-    table = Dict((r.ion, r.level) => r for r in records if r isa AtomicLevel)
+function level_table(records; masses=Dict{Int, Float64}())
+    levels = Dict((r.ion, r.level) => r for r in records if r isa AtomicLevel)
     for r in records
         r isa AtomicLevelFe || continue
-        haskey(table, (r.ion, r.level)) && continue
+        haskey(levels, (r.ion, r.level)) && continue
         z, zr = zero(r.level), zero(r.E)
-        table[(r.ion, r.level)] = AtomicLevel(r.rtype, r.label, z, z, z, z, r.level, r.ion, r.E, r.g, zr, zr)
+        levels[(r.ion, r.level)] = AtomicLevel(r.rtype, r.label, z, z, z, z, r.level, r.ion, r.E, r.g, zr, zr)
     end
-    table
-end
-
-"""
-    level_counts(levels)
-
-Dictionary `ion => number of levels` (the highest level index, the continuum
-level) from a `level_table`.
-"""
-function level_counts(levels)
-    n = Dict{eltype(first(keys(levels))), Int}()
+    nlev = Dict{Int, Int}()
     for (ion, level) in keys(levels)
-        n[ion] = max(get(n, ion, 0), Int(level))
+        nlev[Int(ion)] = max(get(nlev, Int(ion), 0), Int(level))
     end
-    n
+    element_mass = Dict(Int(r.Z) => Float64(r.mass) for r in records if r isa Atom)
+    mass = Dict{Int, Float64}()
+    for r in records
+        r isa Ion && haskey(element_mass, Int(r.Z)) && (mass[Int(r.ion)] = element_mass[Int(r.Z)])
+    end
+    merge!(mass, Dict(Int(k) => Float64(v) for (k, v) in masses))
+    LevelTable(levels, nlev, mass)
 end
+

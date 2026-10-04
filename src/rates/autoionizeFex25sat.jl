@@ -6,7 +6,7 @@
 
 const AutoionizeFe25SatDesc = "autoionization data for Fe XXiV satellites"
 
-struct AutoionizeFe25Sat{I, R} <: AbstractRate
+@with_levels struct AutoionizeFe25Sat{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     ion::I           # ion index (XSTAR ionN)
@@ -23,13 +23,15 @@ function AutoionizeFe25Sat(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::AutoionizeFe25Sat, cell; nlev, index=false)
+    rate(coef::AutoionizeFe25Sat, cell; index=false)
 
 Autoionization of an Fe XXIV satellite level (XSTAR ucalc type 75) with the rate of `satellite_capture` (no weight):
 `irate` is that rate times the electron density and `frate` is 0. `init` is the level (at least 1) and `final` the
 level of the parent ion counted from the continuum (`nlev` + parent level − 1, at least 1).
 """
-function rate(coef::AutoionizeFe25Sat, cell::Cell; nlev, index=false, verbose=false)
+function rate(coef::AutoionizeFe25Sat, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     init = max(Int(coef.level), 1)
     final = max(Int(coef.parent.level) + nlev - 1, 1)
     index && return (; init, final, frate=0., irate=0.)

@@ -9,7 +9,7 @@ const ElectronImpact1Desc = "tabulated collision strength, bautista"
 const min_dE = 1e-16                  # eV; degenerate levels are skipped
 const min_upsilon = 1e-48              # floor of the tabulated Υ before interpolating
 
-struct ElectronImpact1{I, R} <: AbstractRate
+@with_levels struct ElectronImpact1{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -27,18 +27,18 @@ function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::ElectronImpact1, cell; levels, index=false)
+    rate(coef::ElectronImpact1, cell; index=false)
 
-Electron-impact excitation and de-excitation (XSTAR ucalc type 56). `levels` is
-a `level_table`. The levels are ordered by energy, `init` is the lower and
+Electron-impact excitation and de-excitation (XSTAR ucalc type 56). The levels come from the
+coefficient's level table (`attach_levels`). The levels are ordered by energy, `init` is the lower and
 `final` the upper level, `frate` the excitation rate and `irate` the
 de-excitation rate (s⁻¹), related by detailed balance. Υ is interpolated
 linearly in log T; outside the table the nearest segment is extrapolated (as
 ucalc does, since its `hunt` clamps the index) and the result clamped at 0. Both
-rates are 0 if a level is missing from `levels` or the two energies coincide.
+rates are 0 if a level is missing from the level table or the two energies coincide.
 """
-function rate(coef::ElectronImpact1, cell::Cell; levels, index=false,
-    verbose=false)
+function rate(coef::ElectronImpact1, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

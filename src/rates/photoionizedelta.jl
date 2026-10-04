@@ -7,7 +7,7 @@
 
 const PhotoionizeDeltaDesc = "Delta functions to add to phot. x-sections  DR"
 
-struct PhotoionizeDelta{I, R} <: AbstractRate
+@with_levels struct PhotoionizeDelta{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I               # principal quantum number
@@ -37,7 +37,7 @@ const delta_alpha_coeff = 213.9577e-9
 const delta_rate_coeff = 4.752e-22
 
 """
-    rate(coef::PhotoionizeDelta, cell; levels, radiation, nlev)
+    rate(coef::PhotoionizeDelta, cell; nlev)
 
 Delta-function photoionization added to the cross sections to match dielectronic
 recombination rates (XSTAR ucalc type 74, `calt74`). `frate` sums the spectrum of
@@ -46,8 +46,9 @@ recombination sum at the temperature of `cell`, scaled by the statistical weight
 level and of the continuum level `nlev`. `final` is `nlev`. Both are 0 if the spectrum
 does not reach the highest line.
 """
-function rate(coef::PhotoionizeDelta, cell::Cell; levels, radiation, nlev,
-    index=false, verbose=false)
+function rate(coef::PhotoionizeDelta, cell::Cell; radiation=NO_RADIATION, index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0.)

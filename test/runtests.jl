@@ -47,33 +47,34 @@ struct UnportedRate <: Radix.AbstractRate end
         # numbers are checked against ucalc in ucalc_tests.jl; here the edge cases
         lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
             f32[E, g, 1, 13.6])
-        levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)])
-        mk(i, k; λ=1215.67, A=6.265e8, rt=4) = Radix.AtomicLine2(Int32(rt), "x", Int32[i,k,1,7], f32[λ, 0.4162, A])
+        levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 13.6, 1)]; masses=Dict(7 => 1.01))   # (3 is the continuum)
+        mk(i, k; λ=1215.67, A=6.265e8, rt=4) = Radix.attach_levels(
+            Radix.AtomicLine2(Int32(rt), "x", Int32[i,k,1,7], f32[λ, 0.4162, A]), levels)
         c = mk(2, 1)
-        r = Radix.rate(c, cell; levels=levels, mass=1.01)
+        r = Radix.rate(c, cell)
         @test (r.init, r.final) == (2, 1)                 # upper first, whatever the stored order
-        @test Radix.rate(mk(1, 2), cell; levels=levels, mass=1.01) == r
+        @test Radix.rate(mk(1, 2), cell) == r
         @test r.irate == 0 && r.ienergy == 0              # no photoexcitation without a spectrum
         # photoexcitation from the spectrum at the line energy, reduced by the covering fraction
         E = [0.1*exp(0.0015*(i - 1)) for i in 1:9999]
         rad = Radix.Radiation(E, 1e16 .* E .^ -1.0)
-        rp = Radix.rate(c, cell; levels=levels, mass=1.01, radiation=rad)
+        rp = Radix.rate(c, cell; radiation=rad)
         @test rp.irate > 0 && rp.frate == r.frate
         @test rp.ienergy ≈ rp.irate*10.2*1.602176634e-12  rtol=1e-6    # ΔE of the two levels
-        @test Radix.rate(c, cell; levels=levels, mass=1.01, radiation=rad, cfrac=0.25).irate ≈ 0.75*rp.irate
-        @test Radix.rate(mk(2, 1; λ=1e9), cell; levels=levels, mass=1.01, radiation=rad).irate == 0
+        @test Radix.rate(c, cell; radiation=rad, cfrac=0.25).irate ≈ 0.75*rp.irate
+        @test Radix.rate(mk(2, 1; λ=1e9), cell; radiation=rad).irate == 0
         @test r.frate == Float64(f32(6.265e8))            # A times the escape probability (1)
-        @test Radix.rate(c, cell; levels=levels, mass=1.01, pesc=0.5).frate ≈ r.frate/2
+        @test Radix.rate(c, cell; pesc=0.5).frate ≈ r.frate/2
         # a tiny A is floored at 1e-20 times the density
-        @test Radix.rate(mk(2, 1; A=1e-30), cell; levels=levels, mass=1.01).frate ≈ 1e-20*cell.ntot
+        @test Radix.rate(mk(2, 1; A=1e-30), cell).frate ≈ 1e-20*cell.ntot
         # lines without a wavelength give nothing; very long wavelengths have no opacity
-        @test Radix.rate(mk(2, 1; λ=0), cell; levels=levels, mass=1.01).frate == 0
-        far = Radix.rate(mk(2, 1; λ=1e9), cell; levels=levels, mass=1.01)
+        @test Radix.rate(mk(2, 1; λ=0), cell).frate == 0
+        far = Radix.rate(mk(2, 1; λ=1e9), cell)
         @test far.frate > 0 && far.opacity == 0
         # unknown levels, and the continuum level (index nlev), give nothing
-        @test Radix.rate(mk(2, 9), cell; levels=levels, mass=1.01).frate == 0
-        @test Radix.rate(c, cell; levels=levels, mass=1.01, nlev=2).frate == 0
-        @test Radix.rate(c, cell; index=true, levels=levels, mass=1.01).frate == 0
+        @test Radix.rate(mk(2, 9), cell).frate == 0
+        @test Radix.rate(Radix.attach_levels(c, Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)]; masses=Dict(7 => 1.01))), cell).frate == 0
+        @test Radix.rate(c, cell; index=true).frate == 0
     end
 
     @testset "ElectronImpact1" begin
@@ -81,14 +82,14 @@ struct UnportedRate <: Radix.AbstractRate end
             f32[E, g, 1, 13.6])
         levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)])
         Tg, Ug = [3.0, 4.0, 5.0], [0.1, 0.4, 0.2]          # log10 T (K), Υ
-        mk(i, k) = Radix.ElectronImpact1(Int8(5), "x", Radix.Transition(Int32(i), Int32(k)),
-            Int32(1), Int32(7), f32.(Tg), f32.(Ug))
+        mk(i, k) = Radix.attach_levels(Radix.ElectronImpact1(Int8(5), "x", Radix.Transition(Int32(i), Int32(k)),
+            Int32(1), Int32(7), f32.(Tg), f32.(Ug)), levels)
         # ucalc label 56 (T in 1e4 K, tfnd = log10(1e4 t)):
         #   cij = 8.626e-8 Υ exp(-ΔE/(0.861707 t))/(sqrt(t) gglo), cji = 8.626e-8 Υ/(sqrt(t) ggup)
         Tc = 0.5                                              # log10(5000 K) = 3.699
         Υi = 0.1 + (0.4 - 0.1)*(log10(Tc*1e4) - 3.0)/(4.0 - 3.0)
         c = mk(1, 2)
-        r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
+        r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4))
         Δ = Float64(f32(10.2))
         cij = 8.626e-8*Υi*exp(-Δ/(ucalc_kT*Tc))/sqrt(Tc)/2
         cji = 8.626e-8*Υi/sqrt(Tc)/8
@@ -98,14 +99,14 @@ struct UnportedRate <: Radix.AbstractRate end
         # detailed balance: cij/cji = (gup/glo) exp(-ΔE/kT)
         @test r.frate/r.irate ≈ (8/2)*exp(-Δ/(ucalc_kT*Tc))  rtol=1e-6
         # stored upper-first gives the same answer
-        @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
+        @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4)) == r
         # above the table: last segment extrapolated and clamped at 0
-        hi = Radix.rate(c, Radix.Cell(10.0, 1e3, 2e3, 1e4); levels=levels)   # log T = 5.0
+        hi = Radix.rate(c, Radix.Cell(10.0, 1e3, 2e3, 1e4))   # log T = 5.0
         @test hi.irate ≈ 8.626e-8*0.2/sqrt(10.0)/8*2e3  rtol=1e-6
-        far = Radix.rate(c, Radix.Cell(1e3, 1e3, 2e3, 1e4); levels=levels)    # log T = 7.0
+        far = Radix.rate(c, Radix.Cell(1e3, 1e3, 2e3, 1e4))    # log T = 7.0
         @test far.frate == 0 && far.irate == 0               # 0.4 + (0.2-0.4)*3 < 0
         # unknown level: nothing
-        @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+        @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
     end
 
     @testset "ElectronCollision" begin
@@ -128,37 +129,37 @@ struct UnportedRate <: Radix.AbstractRate end
         lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
             f32[E, g, 1, 13.6])
         levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 6.8, 8)])
-        mk(i, k; ΔE=0.5) = Radix.ElectronCollision(Int8(3), "x", Int32(2),
+        mk(i, k; ΔE=0.5) = Radix.attach_levels(Radix.ElectronCollision(Int8(3), "x", Int32(2),
             Radix.Transition(Int32(i), Int32(k)), Int32(1), Int32(7),
-            f32(ΔE), f32(C0), f32.(kn))
+            f32(ΔE), f32(C0), f32.(kn)), levels)
         # the numbers are checked against ucalc in ucalc_tests.jl
         Tc = 20.0
         c = mk(1, 2)
-        r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels)
+        r = Radix.rate(c, Radix.Cell(Tc, 1e3, 2e3, 1e4))
         @test (r.init, r.final) == (1, 2)
         @test r.frate/r.irate ≈ (8/2)*exp(-Float64(f32(0.5))*13.605692/(ucalc_kT*Tc))  rtol=1e-6
-        @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels) == r
+        @test Radix.rate(mk(2, 1), Radix.Cell(Tc, 1e3, 2e3, 1e4)) == r
         # the fit temperature is floored where eij/kT would exceed 50
-        cold = Radix.rate(c, Radix.Cell(0.01, 1e3, 2e3, 1e4); levels=levels)
+        cold = Radix.rate(c, Radix.Cell(0.01, 1e3, 2e3, 1e4))
         @test isfinite(cold.irate) && cold.irate > 0
         # records with other than 5 or 9 knots are skipped
         odd = Radix.ElectronCollision(Int8(3), "x", Int32(2), Radix.Transition(Int32(1), Int32(2)),
             Int32(1), Int32(7), f32(0.5), f32(C0), f32.(kn[1:4]))
-        @test Radix.rate(odd, Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+        @test Radix.rate(Radix.attach_levels(odd, levels), Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
         # a spline that dips below 0 gives zero rates, not negative ones
         neg = Radix.ElectronCollision(Int8(3), "x", Int32(1), Radix.Transition(Int32(1), Int32(2)),
             Int32(1), Int32(7), f32(20.76), f32(1.3), f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363])
         @test Radix.chianti_upsilon(1, 20.76, 1.3, f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363], 1e3) < 0
-        @test Radix.rate(neg, Radix.Cell(0.1, 1e3, 2e3, 1e4); levels=levels).irate == 0
-        @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
-        @test Radix.rate(mk(1, 2; ΔE=0), Radix.Cell(Tc, 1e3, 2e3, 1e4); levels=levels).frate == 0
+        @test Radix.rate(Radix.attach_levels(neg, levels), Radix.Cell(0.1, 1e3, 2e3, 1e4)).irate == 0
+        @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
+        @test Radix.rate(mk(1, 2; ΔE=0), Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
     end
 
     @testset "CollisionProb" begin
         # the numbers are checked against ucalc in ucalc_tests.jl
         none_lv = Radix.level_table(Radix.AtomicLevel[])
         cpx = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)), Int32(8), Int32(7))
-        @test Radix.rate(cpx, Radix.Cell(1.0, 0.0, 1e4, 1e4); levels=none_lv).frate == 0
+        @test Radix.rate(Radix.attach_levels(cpx, none_lv), Radix.Cell(1.0, 0.0, 1e4, 1e4)).frate == 0
     end
 
     @testset "functor convenience" begin
@@ -278,7 +279,7 @@ struct UnportedRate <: Radix.AbstractRate end
             for r in db
                 r isa Radix.AtomicLine2 || continue
                 nlines += 1
-                x = Radix.rate(r, cell0; levels=levels, mass=16.0)
+                x = Radix.rate(r, cell0)
                 x.init == 0 && (r.λ == 0 ? (nskip += 1) : (nbad += 1); continue)
                 levels[(r.ion, x.init)].E >= levels[(r.ion, x.final)].E || (nord += 1)
                 all(isfinite, (x.frate, x.fenergy, x.opacity)) || (nbad += 1)
@@ -294,7 +295,7 @@ struct UnportedRate <: Radix.AbstractRate end
             nbad = 0
             for r in db
                 r isa Radix.AtomicLine2 || continue
-                x = Radix.rate(r, cell0; levels=levels, mass=16.0, radiation=rad, cfrac=0.25)
+                x = Radix.rate(r, cell0; radiation=rad, cfrac=0.25)
                 x.init == 0 && continue
                 (isfinite(x.irate) && x.irate >= 0 && isfinite(x.ienergy)) || (nbad += 1)
             end
@@ -309,7 +310,7 @@ struct UnportedRate <: Radix.AbstractRate end
                 for r in db
                     r isa Radix.ElectronImpact1 || continue
                     T == 0.1 && (nrec += 1)
-                    x = Radix.rate(r, c; levels=levels)
+                    x = Radix.rate(r, c)
                     x.init == 0 && (T == 0.1 && (nnone += 1); continue)
                     ok = isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
@@ -331,7 +332,7 @@ struct UnportedRate <: Radix.AbstractRate end
                 for r in db
                     r isa Radix.ElectronCollision || continue
                     T == 0.1 && (nrec += 1)
-                    x = Radix.rate(r, c; levels=levels)
+                    x = Radix.rate(r, c)
                     x.init == 0 && (T == 0.1 && (nnone += 1); continue)
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
                     ok = isfinite(x.frate) && isfinite(x.irate)
@@ -353,7 +354,7 @@ struct UnportedRate <: Radix.AbstractRate end
                 for r in db
                     r isa Radix.ElectronImpact2 || continue
                     T == 0.1 && (nrec += 1)
-                    x = Radix.rate(r, c; levels=levels)
+                    x = Radix.rate(r, c)
                     x.init == 0 && (nbad += 1; continue)
                     lo, up = levels[(r.ion, x.init)], levels[(r.ion, x.final)]
                     ok = isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0
@@ -372,17 +373,32 @@ struct UnportedRate <: Radix.AbstractRate end
                 for r in db
                     r isa Radix.CollisionProb || continue
                     T == 1.0 && (nrec += 1)
-                    x = Radix.rate(r, c; levels=levels)
+                    x = Radix.rate(r, c)
                     (isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0) || (nbad += 1)
                 end
             end
             @test nrec == 6015
             @test nbad == 0
 
+            # every type of rate can be called with just a coefficient and a cell (the level data is in the coefficient)
+            cell1 = Radix.Cell(1.0, 1e3, 1e4, 1e4)
+            firsts = Dict{Any, Any}()
+            for r in db
+                r isa Radix.AbstractRate || continue
+                get!(firsts, typeof(r).name.wrapper, r)
+            end
+            nfail = 0
+            for (T, r) in firsts
+                T in (Radix.AtomicLine, Radix.AtomicLevelFe) && continue          # no rate method (yet)
+                x = try Radix.rate(r, cell1) catch e; @warn "rate($T, cell) failed" e; nothing end
+                (x isa NamedTuple && haskey(x, :frate)) || (nfail += 1)
+            end
+            @test nfail == 0
+            @test length(firsts) > 40
+
             # ParPhotoIonize1/2 against a power-law spectrum: all results finite and
             # photoionization rates non-negative, except for the 18 type-53 records whose
             # tables start hundreds of eV above the threshold (negative in XSTAR too)
-            counts = level_counts(levels)
             E = [0.1*exp(0.0015*(i - 1)) for i in 1:9999]
             rad = Radiation(E, 1e16 .* E .^ -1.0)
             nbad = 0; nneg = 0; nev = 0
@@ -390,7 +406,7 @@ struct UnportedRate <: Radix.AbstractRate end
                 c = Radix.Cell(T, 1e3, ne, 1e10)
                 for r in db
                     (r isa Radix.ParPhotoIonize1 || r isa Radix.ParPhotoIonize2) || continue
-                    x = Radix.rate(r, c; levels=levels, radiation=rad, nlev=counts[r.ion], lfast=3)
+                    x = Radix.rate(r, c; radiation=rad, lfast=3)
                     x.init == 0 && continue
                     nev += 1
                     all(isfinite, (x.frate, x.irate, x.fenergy, x.ienergy, x.opacity)) || (nbad += 1)
@@ -410,7 +426,7 @@ struct UnportedRate <: Radix.AbstractRate end
                 c = Radix.Cell(T, 1e3, ne, 1e10)
                 for r in db
                     typeof(r).name.wrapper in keys(kinds) || continue
-                    x = Radix.rate(r, c; levels=levels, radiation=rad, nlev=counts[r.ion])
+                    x = Radix.rate(r, c; radiation=rad)
                     x.init == 0 && continue
                     kinds[typeof(r).name.wrapper] += 1
                     all(isfinite, (x.frate, x.irate)) || (nbad += 1)
@@ -428,3 +444,4 @@ end
 Radix.set_constants!(Radix.Constants())
 include("forwarddiff_tests.jl")
 include("constants_tests.jl")
+include("leveltable_tests.jl")

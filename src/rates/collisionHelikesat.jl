@@ -6,7 +6,7 @@
 
 const CollisionHelikeSatDesc =  "Fit to coll. strengths satellite lvls Helike ion"
 
-struct CollisionHelikeSat{I, R} <: AbstractRate
+@with_levels struct CollisionHelikeSat{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -45,7 +45,7 @@ function helike_satellite_rate(Z, c, T)
 end
 
 """
-    rate(coef::CollisionHelikeSat, cell; levels, nlev=typemax(Int), index=false)
+    rate(coef::CollisionHelikeSat, cell; index=false)
 
 Collisional excitation and de-excitation involving a satellite level of a He-like ion from a fit to
 the effective collision strength (XSTAR ucalc type 73, `calt73`). The first coefficient is used both as an
@@ -54,7 +54,9 @@ factor and the energy of the rates), as `ucalc` does. `irate` is the de-excitati
 e^{-ΔE/kT}/g_l`, `fenergy` and `ienergy` the rates times that energy; `init` is the lower and `final` the
 upper level by energy, both in `1:nlev`.
 """
-function rate(coef::CollisionHelikeSat, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false)
+function rate(coef::CollisionHelikeSat, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper

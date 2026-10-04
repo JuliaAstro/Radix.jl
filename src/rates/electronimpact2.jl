@@ -9,7 +9,7 @@
 
 const ElectronImpact2Desc = "chianti2016 collisional rates"
 
-struct ElectronImpact2{I, R} <: AbstractRate
+@with_levels struct ElectronImpact2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
@@ -32,18 +32,18 @@ function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::ElectronImpact2, cell; levels, index=false)
+    rate(coef::ElectronImpact2, cell; index=false)
 
 Electron-impact excitation and de-excitation from the CHIANTI 2016 fits (XSTAR
 ucalc type 98), like `ElectronCollision` but with an n-point spline through the
-nodes of the record. `levels` is a `level_table`. `init` is the lower and `final`
+nodes of the record. The levels come from the coefficient's level table (`attach_levels`). `init` is the lower and `final`
 the upper level (ordered by energy), `frate` the excitation and `irate` the
 de-excitation rate (s⁻¹), related by detailed balance at the record's transition
 energy. The fit temperature is floored at `ΔE/50k`. Both rates are 0 if a level is
-missing from `levels` or `ΔE ≤ 0`.
+missing from the level table or `ΔE ≤ 0`.
 """
-function rate(coef::ElectronImpact2, cell::Cell; levels, index=false,
-    verbose=false)
+function rate(coef::ElectronImpact2, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

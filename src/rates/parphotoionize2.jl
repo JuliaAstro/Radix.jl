@@ -8,7 +8,7 @@
 
 const ParPhotoIonize2Desc = "op pi xsections"
 
-struct ParPhotoIonize2{I, R} <: AbstractRate
+@with_levels struct ParPhotoIonize2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I               # principal quantum number

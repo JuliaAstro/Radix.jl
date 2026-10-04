@@ -7,7 +7,7 @@
 
 const ElectronCollisionDesc = "op and chianti line coll rates"
 
-struct ElectronCollision{I, R} <: AbstractRate
+@with_levels struct ElectronCollision{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     kind::I             # transition type
@@ -26,23 +26,23 @@ function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::ElectronCollision, cell; levels, index=false)
+    rate(coef::ElectronCollision, cell; index=false)
 
 Electron-impact excitation and de-excitation from the CHIANTI fits (XSTAR ucalc
-type 51). `levels` is a `level_table`. `init` is the lower and `final` the
+type 51). The levels come from the coefficient's level table (`attach_levels`). `init` is the lower and `final` the
 upper level (ordered by energy), `frate` the excitation and `irate` the
 de-excitation rate (s⁻¹), related by detailed balance with the transition
 energy `ΔE` of the record. The fit temperature is floored at `ΔE/50k`. Records
 carry 5 knots (`splinem`) or 9 knots on x = 0, 1/8, …, 1 (`upsiln`); others are
-skipped. Both rates are 0 if a level is missing from `levels` or `ΔE ≤ 0`.
+skipped. Both rates are 0 if a level is missing from the level table or `ΔE ≤ 0`.
 
 Υ is clamped at 0, which ucalc does not do: for 4 records the 5-point spline
 dips slightly below zero (rates of about -1e-7 in XSTAR). XSTAR's matrix
 assembly decides which level is lower with a ratio test on the level energies
 that can swap them for nearly degenerate levels; that quirk is not reproduced.
 """
-function rate(coef::ElectronCollision, cell::Cell; levels, index=false,
-    verbose=false)
+function rate(coef::ElectronCollision, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

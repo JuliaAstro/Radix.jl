@@ -6,7 +6,7 @@
 
 const CollisionHlike2Desc = ""
 
-struct CollisionHlike2{I, R} <: AbstractRate
+@with_levels struct CollisionHlike2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -21,10 +21,10 @@ function CollisionHlike2(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::CollisionHlike2, cell; levels, nlev=typemax(Int), index=false)
+    rate(coef::CollisionHlike2, cell; index=false)
 
 As `rate(::CollisionHlike1, ...)` (XSTAR ucalc type 62 runs the same code) with the second form of the fit:
 the polynomial stops three coefficients before the end and `c[m-2] ln(c[m-1] τ) e^{-c[m] τ}` is added.
 """
-rate(coef::CollisionHlike2, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false) =
-    hlike_collision(coef, cell, levels, nlev, index, true)
+rate(coef::CollisionHlike2, cell::Cell; index=false, verbose=false) =
+    hlike_collision(coef, cell, index, true)

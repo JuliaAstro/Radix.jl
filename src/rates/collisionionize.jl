@@ -7,7 +7,7 @@
 
 const CollisionIonizeDesc = "Bryans CI rates"
 
-struct CollisionIonize{I, R} <: AbstractRate
+@with_levels struct CollisionIonize{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     level::I      # level index
@@ -30,7 +30,7 @@ const ci_ln2 = Float64(0.693147f0)    # ln 2 as ucalc writes it (single precisio
 const ci_units = 1e-6                 # the rate is 1e-6 E₁ ρ / √(τ E³) (cm³ s⁻¹ with E in eV)
 
 """
-    rate(coef::CollisionIonize, cell; levels, nlev, index=false)
+    rate(coef::CollisionIonize, cell; index=false)
 
 Collisional ionization of an ion and its inverse, three-body recombination (XSTAR ucalc type 95), from the
 effective collision strength ρ(x) of the record, interpolated linearly in the scaled temperature
@@ -40,7 +40,9 @@ record) and `final` the continuum, `nlev` (records of rate type 15 give level 1 
 rates times the threshold energy. For temperatures below the first point of the table ucalc interpolates
 with the first interval's left end read from `T0` and the last `x_grid`; reproduced.
 """
-function rate(coef::CollisionIonize, cell::Cell; levels, nlev, index=false, verbose=false)
+function rate(coef::CollisionIonize, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     final = coef.rtype == 5 ? nlev : 1

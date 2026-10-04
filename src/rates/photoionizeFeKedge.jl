@@ -7,7 +7,7 @@
 
 const PhotoionizeFeKedgeDesc = "Iron K Pi xsections, spectator Auger summed"
 
-struct PhotoionizeFeKedge{I, R} <: AbstractRate
+@with_levels struct PhotoionizeFeKedge{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I             # principal quantum number
@@ -80,7 +80,7 @@ function pexs(nmin, zc, eion, far, gam, scal, E)
 end
 
 """
-    rate(coef::PhotoionizeFeKedge, cell; radiation, abund=(0, 0), opacity=nothing)
+    rate(coef::PhotoionizeFeKedge, cell; abund=(0, 0), opacity=nothing)
 
 Photoionization of Fe near the K edge from a series of resonances (XSTAR ucalc type 85),
 integrated with `photoionization_integrals_fo` from 0.8 of the edge energy. Returns the
@@ -89,9 +89,7 @@ terms and the opacity are zero as in ucalc (the opacity and emissivity arrays ar
 filled). `final` is the level 1. `ucalc` computes the charge of the resonance series as
 the ion index minus 114, a leftover of an earlier ion numbering, which is reproduced.
 """
-function rate(coef::PhotoionizeFeKedge, cell::Cell; radiation, abund=(0.0, 0.0),
-    opacity=nothing, ptmp=nothing, lfast=nothing, levels=nothing, nlev=nothing,
-    index=false, verbose=false)
+function rate(coef::PhotoionizeFeKedge, cell::Cell; radiation=NO_RADIATION, abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false, verbose=false)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,

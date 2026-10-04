@@ -1,7 +1,7 @@
 module Radix
 
 export Atom, AtomicLevel, AtomicLine
-export load, level_table, level_counts, Radiation, Opacity
+export attach_levels, load, level_table, level_counts, LevelTable, nlevels, atomic_mass, Radiation, Opacity
 export Constants, ucalc_constants, constants, set_constants!, with_constants
 
 
@@ -18,6 +18,8 @@ include("radiation.jl")
 include("photoionization.jl")
 include("supertable.jl")
 include("abstractrate.jl")
+include("leveltable.jl")
+include("withlevels.jl")
 include("rates/rates.jl")
 include("ratemap.jl")
 

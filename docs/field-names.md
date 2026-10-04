@@ -27,8 +27,9 @@ level was `i`, `k`, `j`, `n` or `iN`.
    `Cell.T` is in 10⁴ K as in XSTAR.
 
    `Cell` holds the local gas state only: `T`, `nₕ` (`xh0`), `nₑ` (`xnx`) and
-   `ntot` (`xpx`, the hydrogen density). Level data and element masses live in
-   tables (`level_table`), and the radiation field will be a separate object.
+   `ntot` (`xpx`, the hydrogen density). The level data and element masses are stored in the
+   coefficients (see Level data in the coefficients), and the radiation field is a separate
+   object.
 6. **Greek only for standard, easy-to-type symbols** (`λ σ α γ ρ η Υ`). Only
    `E∞` is spelled out (`E_inf`), because a subscript is not a valid identifier
    character.
@@ -146,12 +147,33 @@ built and differs in constants and logic) and by loading `atdb.fits`:
 
 Photoionization needs the radiation field, which is not part of `Cell`:
 `Radiation(E, F)` holds XSTAR's energy grid (`epi`, eV, geometrically spaced) and the
-spectrum on it (`bremsa`). The rates take it as `radiation=`, the number of levels of
-the ion as `nlev=` (`level_counts(levels)` gives it for every ion), the escape
+spectrum on it (`bremsa`). The rates take it as `radiation=` (`NO_RADIATION` by default: no photons, on
+XSTAR's standard grid `xstar_energy_grid()`), the escape
 probabilities as `ptmp=` and the populations as `abund=`. `Opacity(n)` holds the
 continuum opacity and recombination emissivity arrays that the integrals add to when
 passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53) with
 `photoionization_integrals` (XSTAR's `phint53`) and `phextrap`.
+
+## Level data in the coefficients
+
+A rate needs more than its own coefficients: the energies, weights and quantum numbers of the levels it connects,
+the number of levels of the ion (the continuum is the last) and the atomic mass of the element. These come from a
+`LevelTable`, which `level_table(records)` builds from the `AtomicLevel` and `AtomicLevelFe` records (the Fe UTA
+levels, which hold only an energy and a weight, are added as levels with zero quantum numbers) and the `Atom` and
+`Ion` records (the mass of each ion's element). It behaves as the dictionary `(ion, level) => AtomicLevel` and also
+answers `nlevels(table, ion)`, `atomic_mass(table, ion)` and `level_counts(table)`.
+
+The rates that need it carry the table in a field `levels` (declared with `@with_levels`, which adds the field and
+keeps the constructors of the raw record). `load` attaches the table of the database to every record, so that
+`rate(coef, cell)` is all that is needed; for a coefficient made by hand, `attach_levels(coef, table)` returns a copy that
+has it, and calling `rate` without level data raises an `ArgumentError` that says so. The number of levels and the mass
+(`AtomicLine2`, `RadiativeFeDecay`, `RadiativeSuper`; `mass=` still overrides it) are derived from the table, and no keyword of
+a rate is left without a default. The photoionization rates default to `radiation=NO_RADIATION` (no photons).
+Exceptions: `ChargeExH0`, `ChargeExHe` and `ChargeExHp` keep their `nlev=0` keyword, because their records do not identify
+the ion reliably (`ChargeExHe` has no `ion`, and `ChargeExHp` has one record with a single integer).
+
+The `ucalc` tests build their table from the levels of the fixture and the atomic mass of the driver, and
+`test/leveltable_tests.jl` checks the table, the attaching, the errors and the defaults.
 
 ## Physical constants
 
@@ -363,7 +385,7 @@ ported type (except 4, which has no `rate` method). Notes:
   two, and `Ry_K_sat` and `thermal_bohr` are the constants of the fit (`ucalc`: 1.578876e5 K and 5.46538e-11).
 - `CollisionFe19` (ucalc 81): a constant Υ (negative values are 0), with the maxwellian coefficient and
   detailed balance like `ElectronImpact1`. `ucalc` orders the two levels by energy and accepts any level up to `nlev`
-  (the continuum included), so `rate` takes `nlev`; unlike type 56 it has no minimum energy difference.
+  (the continuum included); unlike type 56 it has no minimum energy difference.
 - The dielectronic recombination rates (`DielecRecomb1` 7, `DielecRecombH` 22, `TotDielecRecomb` 39) return `frate` to the
   ground level of the next ion (`init = 1`, `final = 0`), without levels. The `T0` and `T1` of type 7 are in
   units of 10⁴ K, as `ucalc` uses them with the temperature in those units (the header said K). `DielecRecombH` (Storey)

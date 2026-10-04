@@ -8,7 +8,7 @@
 
 const RadiativeSuperDesc = "Transition rates from superlevel to spect. lvls"
 
-struct RadiativeSuper{I, R} <: AbstractRate
+@with_levels struct RadiativeSuper{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -46,7 +46,7 @@ function superlevel_decay(coef::RadiativeSuper, T, den)
 end
 
 """
-    rate(coef::RadiativeSuper, cell; levels, mass, vturb=1.0, ptmp=(0.5, 0.5), nlev, index=false)
+    rate(coef::RadiativeSuper, cell; vturb=1.0, ptmp=(0.5, 0.5), index=false)
 
 Radiative decay between a superlevel and a spectroscopic level (XSTAR ucalc type 71). The Einstein
 A is interpolated in log₁₀ T and log₁₀ n from the table of the record (the temperature may exceed the
@@ -54,11 +54,12 @@ table by one dex) and multiplied by the sum `ptmp` of the escape probabilities, 
 for ions 96 and 97. As in `ucalc`, the weights come from the first level of the record (`transition.lower`,
 `init`) and the decay is returned as `irate` (`frate` is 0). `ienergy` is the decay times the energy of the
 line (from its wavelength above 0.1 Å, from the levels otherwise) and `opacity` the line-centre
-opacity for the atomic `mass` (amu) and the turbulent velocity `vturb` (km/s), both zero for lines
+opacity for the atomic `mass` (amu, from the level table by default) and the turbulent velocity `vturb` (km/s), both zero for lines
 longer than 10⁹ Å. Needs levels `init` and `final` between 1 and `nlev`.
 """
-function rate(coef::RadiativeSuper, cell::Cell; levels, mass=1.0, vturb=1.0, ptmp=(0.5, 0.5),
-    nlev=typemax(Int), index=false, verbose=false, kw...)
+function rate(coef::RadiativeSuper, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, ptmp=(0.5, 0.5), index=false, verbose=false, kw...)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0., opacity=0.)

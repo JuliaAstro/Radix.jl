@@ -5,7 +5,7 @@
 
 const EffectiveChargeDesc = "effective charge to be used in coll. ion."
 
-struct EffectiveCharge{I, R} <: AbstractRate
+@with_levels struct EffectiveCharge{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I      # principal quantum number
@@ -64,7 +64,7 @@ function effective_charge_rates(T, den, E, E_ion, n)
 end
 
 """
-    rate(coef::EffectiveCharge, cell; levels, nlev, index=false)
+    rate(coef::EffectiveCharge, cell; index=false)
 
 Collisional ionization of a level and its inverse, three-body recombination (XSTAR ucalc type
 57), from the hydrogenic fits of `irc`/`szirc` with the effective charge set by the ionization
@@ -73,7 +73,9 @@ including the electron density), `init` the level and `final` the continuum (`nl
 `ienergy` are the rates times the ionization potential, negated (ucalc's `ans6` and `ans5`). The
 ground level, and a level with a non-positive potential, give nothing. The stored `Zeff` is not used.
 """
-function rate(coef::EffectiveCharge, cell::Cell; levels, nlev, index=false, verbose=false)
+function rate(coef::EffectiveCharge, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     idest1, idest2 = Int(coef.level), nlev

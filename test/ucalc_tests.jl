@@ -54,7 +54,9 @@ function ucalc_inputs(c)
         push!(recs, Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, c.rad[5], parent_ion(c)],
             Float32[c.rad[7], c.rad[6], 1, 0]))
     end
-    (coef, cell, Radix.level_table(recs))
+    # the levels, and the atomic mass of the element (the driver's last condition), go into the coefficient
+    table = Radix.level_table(recs; masses=Dict(Int(c.ints[end]) => c.cond[13]))
+    (Radix.attach_levels(coef, table), cell, table)
 end
 
 # `expected(o)` maps the ucalc outputs onto the named fields Radix returns
@@ -73,7 +75,7 @@ function check_ucalc(name; call, expected, rtol=1e-5, atol=0)
     n
 end
 
-level_call(coef, cell, levels, c) = Radix.rate(coef, cell; levels=levels)
+level_call(coef, cell, levels, c) = Radix.rate(coef, cell)
 plain_call(coef, cell, levels, c) = Radix.rate(coef, cell)
 direct(o, c) = (; frate=o[1], irate=o[2], init=o[7], final=o[8])
 # the collision types also return the energies rate × ΔE (ans6 forward, ans5 inverse)
@@ -115,9 +117,7 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
         @test check_ucalc("type38"; call=plain_call, expected=direct) == 100
     end
     # type 50 and the APED lines of type 91 share ucalc's code, and the layout of the record
-    line_call = (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13],
-        vturb=c.cond[6], pesc=c.cond[11] + c.cond[12], nlev=c.nlev,
-        radiation=ucalc_radiation(c), cfrac=c.cond[8])
+    line_call = (co, ce, lv, c) -> Radix.rate(co, ce; vturb=c.cond[6], pesc=c.cond[11] + c.cond[12], radiation=ucalc_radiation(c), cfrac=c.cond[8])
     line_expected = (o, c) -> (; frate=o[2], irate=o[1], fenergy=-o[3], ienergy=-o[4],
         init=o[7], final=o[8], opacity=o[11])
     @testset "type 39 TotDielecRecomb" begin
@@ -144,7 +144,7 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     @testset "type 60 and 62 CollisionHlike1 and 2" begin
         # the "hot" fixtures reach 1e9 K and more, where the scaled temperature is fixed
         for (name, n) in (("type60", 240), ("type62", 240), ("type60hot", 120), ("type62hot", 120))
-            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce),
                 expected=with_energy, rtol=1e-6, atol=1e-100) == n
         end
     end
@@ -157,8 +157,7 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     # parent level 1, since ucalc reads stale memory for the energy of higher ones
     photo_call = (co, ce, lv, c; kw...) -> begin
         op = Radix.Opacity(9999)
-        r = Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c), nlev=c.nlev,
-            ptmp=(c.cond[11], c.cond[12]), abund=(c.cond[9], c.cond[10]),
+        r = Radix.rate(co, ce; radiation=ucalc_radiation(c), ptmp=(c.cond[11], c.cond[12]), abund=(c.cond[9], c.cond[10]),
             lfast=Int(c.rad[8]), opacity=op, kw...)
         merge(r, (; sum_total=sum(op.total), sum_continuum=sum(op.continuum),
             sum_em1=sum(op.emissivity[1, :]), sum_em2=sum(op.emissivity[2, :])))
@@ -166,7 +165,7 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     photo_expected = (o, c) -> merge((; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4],
             init=o[7], final=o[8], opacity=o[11], sum_total=o[12], sum_continuum=o[13],
             sum_em1=o[14], sum_em2=o[15]),
-        parent_level(c) == 1 || c.ndesc == 59 ? (; ienergy2=-o[5], fenergy2=-o[6]) : (;))
+        parent_level(c) == 1 || c.ndesc == 59 ? (; ienergy2=-o[5], fenergy2=-o[6]) : ())
     @testset "type 49 ParPhotoIonize1" begin
         @test check_ucalc("type49"; call=photo_call, expected=photo_expected, rtol=5e-6, atol=1e-100) == 96
     end
@@ -178,7 +177,7 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     end
     @testset "types 66, 68 and 69: He-like collision fits" begin
         for (name, n) in (("type66", 24), ("type68", 208), ("type69", 480))
-            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce),
                 expected=with_energy, rtol=1e-6, atol=1e-100) == n
         end
     end
@@ -195,8 +194,7 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     end
     @testset "type 74 PhotoionizeDelta" begin
         @test check_ucalc("type74";
-            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c),
-                nlev=c.nlev),
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; radiation=ucalc_radiation(c)),
             expected=(o, c) -> (; frate=o[1], irate=o[2], init=o[7], final=o[8]),
             rtol=5e-6, atol=1e-100) == 100
     end
@@ -222,69 +220,67 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     @testset "type 57 EffectiveCharge" begin
         # collisional ionization and three-body recombination; ucalc gives rates for 180 of the 1600 sampled cases
         @test check_ucalc("type57";
-            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+            call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=(o, c) -> (; frate=o[1], irate=o[2], fenergy=o[6], ienergy=o[5], init=o[7], final=o[8]),
             rtol=2e-6, atol=1e-100) == 240
     end
     @testset "type 77 CollisionSuper" begin
-        @test check_ucalc("type77"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+        @test check_ucalc("type77"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=with_energy, rtol=1e-6, atol=1e-100) == 240
     end
     @testset "type 86 IronKAuger" begin
-        @test check_ucalc("type86"; call=(co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev), expected=direct) == 160
+        @test check_ucalc("type86"; call=(co, ce, lv, c) -> Radix.rate(co, ce), expected=direct) == 160
     end
     @testset "type 71 RadiativeSuper" begin
         @test check_ucalc("type71";
-            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev, mass=c.cond[13],
-                vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
             expected=(o, c) -> (; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4], init=o[7], final=o[8],
                 opacity=o[11]),
             rtol=1e-6, atol=1e-100) == 240
         # calcium I and II (ions 96 and 97), whose decay rate is capped at 1e10
         @test check_ucalc("type71ions";
-            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev, mass=c.cond[13],
-                vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
             expected=(o, c) -> (; irate=o[2], ienergy=-o[3], opacity=o[11]),
             rtol=1e-6, atol=1e-100) == 8
     end
     @testset "type 76 TwoPhotonDecay" begin
         # ucalc returns the decay in ans2 and minus its energy in ans3
-        @test check_ucalc("type76"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+        @test check_ucalc("type76"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=(o, c) -> (; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4], init=o[7], final=o[8]),
             rtol=1e-6, atol=1e-100) == 340
     end
     @testset "types 72 and 75: autoionization of satellite levels" begin
         # ucalc returns the capture-like rate in ans1 and the rate times nₑ in ans2
-        @test check_ucalc("type72"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+        @test check_ucalc("type72"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=direct, rtol=1e-6, atol=1e-100) == 240
-        @test check_ucalc("type75"; call=(co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev),
+        @test check_ucalc("type75"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=direct, rtol=1e-6, atol=1e-100) == 64
     end
     @testset "type 73 CollisionHelikeSat" begin
-        @test check_ucalc("type73"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+        @test check_ucalc("type73"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=with_energy, rtol=1e-6, atol=1e-100) == 240
     end
     @testset "type 81 CollisionFe19" begin
-        @test check_ucalc("type81"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+        @test check_ucalc("type81"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=with_energy, rtol=1e-6, atol=1e-100) == 240
     end
     @testset "type 82 RadiativeFeDecay" begin
         # ucalc returns the photoexcitation in ans1, the decay in ans2 and the energy of the photoexcitations in ans3
         @test check_ucalc("type82";
-            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13], vturb=c.cond[6],
-                pesc=c.cond[11] + c.cond[12], nlev=c.nlev, radiation=ucalc_radiation(c)),
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; vturb=c.cond[6],
+                pesc=c.cond[11] + c.cond[12], radiation=ucalc_radiation(c)),
             expected=(o, c) -> (; frate=o[2], irate=o[1], ienergy=o[3], fenergy=o[4], init=o[7], final=o[8],
                 opacity=o[11]), rtol=1e-6) == 240
     end
     @testset "type 92 CollisionAPED" begin
         # the temperatures of the first fixture are mostly outside the table (no rates); the others are inside it
         for (name, n) in (("type92", 240), ("type92hot", 240), ("type92k116", 48))
-            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv),
+            @test check_ucalc(name; call=(co, ce, lv, c) -> Radix.rate(co, ce),
                 expected=with_energy, rtol=1e-6, atol=1e-100) == n
         end
     end
     @testset "type 95 CollisionIonize" begin
-        @test check_ucalc("type95"; call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+        @test check_ucalc("type95"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=with_energy, rtol=1e-6, atol=1e-100) == 160
     end
     @testset "type 98 ElectronImpact2" begin

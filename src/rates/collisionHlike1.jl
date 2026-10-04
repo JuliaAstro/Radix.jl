@@ -6,7 +6,7 @@
 
 const CollisionHlike1Desc = ""
 
-struct CollisionHlike1{I, R} <: AbstractRate
+@with_levels struct CollisionHlike1{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -43,8 +43,10 @@ function hlike_upsilon(c, T, second_form)
 end
 
 # the collision rates of types 60 and 62
-function hlike_collision(coef, cell::Cell, levels, nlev, index, second_form)
+function hlike_collision(coef, cell::Cell, index, second_form)
     K = constants()
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper
     (i1 <= 0 || i1 > nlev || i2 <= 0 || i2 > nlev) && return none
@@ -65,7 +67,7 @@ function hlike_collision(coef, cell::Cell, levels, nlev, index, second_form)
 end
 
 """
-    rate(coef::CollisionHlike1, cell; levels, nlev=typemax(Int), index=false)
+    rate(coef::CollisionHlike1, cell; index=false)
 
 Collisional excitation and de-excitation of an H-like ion from a polynomial fit of the effective collision
 strength in the scaled temperature kT/Ry (XSTAR ucalc type 60, `calt6062`): Υ = Σ cᵢ τ^{i-1} with the
@@ -74,5 +76,5 @@ coefficients from the third real on, τ limited to 1 and Υ extrapolated beyond 
 and `ienergy` the rates times ΔE. `init` is the lower and `final` the upper level by energy, both in `1:nlev`;
 the temperature of the fit is at least ΔE/50k. Weights have 1e-16 added.
 """
-rate(coef::CollisionHlike1, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false) =
-    hlike_collision(coef, cell, levels, nlev, index, false)
+rate(coef::CollisionHlike1, cell::Cell; index=false, verbose=false) =
+    hlike_collision(coef, cell, index, false)

@@ -9,7 +9,7 @@
 
 const PhotoionizeSuperDesc = "Coefficients for phot x-section of suplevels"
 
-struct PhotoionizeSuper{I, R} <: AbstractRate
+@with_levels struct PhotoionizeSuper{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I                # principal quantum number
@@ -112,17 +112,15 @@ function superlevel_cross_section(coef::PhotoionizeSuper, T, den, E_th)
 end
 
 """
-    rate(coef::PhotoionizeSuper, cell; levels, radiation, nlev, neutral=false, index=false)
+    rate(coef::PhotoionizeSuper, cell; neutral=false, index=false)
 
 Photoionization and recombination of a superlevel from the tabulated recombination coefficients and
-cross section (XSTAR ucalc type 70, "old type 70"), see `photoionize_superlevel`. `levels` is a
-`level_table`, `nlev` the number of levels of the ion and `radiation` the spectrum. `neutral=true` limits the density to
+cross section (XSTAR ucalc type 70, "old type 70"), see `photoionize_superlevel`. The level data comes from the coefficient (`attach_levels`) and `radiation` is the spectrum (none by default). `neutral=true` limits the density to
 10⁸ cm⁻³ in the interpolation, as ucalc does for the first ion of an element. The other keywords of the
 photoionization rates are accepted and ignored.
 """
-function rate(coef::PhotoionizeSuper, cell::Cell; levels, radiation, nlev, neutral=false,
-    index=false, ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing, verbose=false)
-
-    photoionize_superlevel(coef, cell; levels, radiation, nlev, index,
-        tabulate=(T, n, E_th) -> superlevel_cross_section(coef, T, neutral ? min(n, super_density_cap) : n, E_th))
+function rate(coef::PhotoionizeSuper, cell::Cell; radiation=NO_RADIATION, neutral=false, index=false, ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing, verbose=false)
+    photoionize_superlevel(coef, cell,
+        (T, n, E_th) -> superlevel_cross_section(coef, T, neutral ? min(n, super_density_cap) : n, E_th);
+        radiation, index)
 end
