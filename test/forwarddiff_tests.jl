@@ -13,6 +13,8 @@ const AD_RTOL = 2e-3
 # relation until it changes by less than 1%, which makes it slightly non-smooth: its finite
 # differences are noisy at the 1% level while the derivative stays within it.
 const AD_RTOLS = Dict("type70" => 3e-2)
+# the fewest derivatives a case must compare (type 22 has three records, half of them above its 6e4 K limit)
+const AD_MIN_CHECKS = Dict("type22" => 4)
 const AD_OFFSET = 1.2345              # moves T and the densities off the table nodes
 
 ad_photo(co, ce, lv, c; kw...) = Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c), nlev=c.nlev,
@@ -22,6 +24,9 @@ ad_with_opacity(co, ce, lv, c) = ad_photo(co, ce, lv, c; opacity=Radix.Opacity(t
 const AD_CASES = [
     "type01" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type02" => (co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev),
+    "type07" => (co, ce, lv, c) -> Radix.rate(co, ce),
+    "type22" => (co, ce, lv, c) -> Radix.rate(co, ce),
+    "type39" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type09" => (co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev),
     "type30" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type38" => (co, ce, lv, c) -> Radix.rate(co, ce),
@@ -86,7 +91,7 @@ end
     for (name, call) in AD_CASES, variable in (:T, :n)
         @testset "$name, d/d$variable" begin
             nchecked, nbad = ad_check(name, call, variable)
-            @test nchecked > 20
+            @test nchecked >= get(AD_MIN_CHECKS, first(split(name)), 21)
             @test nbad == 0
         end
     end
