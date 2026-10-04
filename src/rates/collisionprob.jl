@@ -8,25 +8,26 @@ const CollisionProbDesc = "h-like cij, bautista (hlike ion)"
 const max_dE_over_kT = 50.0           # no rate for transitions with ΔE/kT above this
 const proton_charge = 1.0              # colliding ions are protons
 
-@with_levels struct CollisionProb{I} <: AbstractRate
+struct CollisionProb{I, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
     Z::I      # atomic number
     ion::I    # ion index (XSTAR ionN)
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionProb(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionProb(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionProb(Int8(rate), label, Transition(ivec[2], ivec[3]), ivec[4:5]...)
+    CollisionProb(Int8(rate), label, Transition(ivec[2], ivec[3]), ivec[4:5]..., levels)
 end
 
 """
     rate(coef::CollisionProb, cell; index=false)
 
 Collisional transition rates between two levels of a hydrogenic ion (XSTAR
-ucalc type 63), for `nl → n'l'` with `|Δl| = 1`. The levels come from the coefficient's level table (`attach_levels`).
+ucalc type 63), for `nl → n'l'` with `|Δl| = 1`. The levels come from the coefficient's level table (its `levels` field).
 `init` and `final` are the two levels in stored order, `frate` is the rate
 `init → final` and `irate` the reverse (s⁻¹, including the factor `nₑ`). Both
 are 0 when the levels do not have `|Δl| = 1`, when `ΔE/kT > 50`, or if a level
@@ -40,7 +41,7 @@ comments "check if ans1 and ans2 are correct or inverted"); this is reproduced
 as is.
 """
 function rate(coef::CollisionProb, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

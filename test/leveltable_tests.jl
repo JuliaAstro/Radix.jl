@@ -20,26 +20,26 @@
         @test atomic_mass(Radix.level_table(records; masses=Dict(8 => 16.0)), 8) == 16.0
     end
 
-    @testset "attaching" begin
-        c = Radix.CollisionFe19(Int8(3), "x", Radix.Transition(Int32(1), Int32(2)), Int32(26), Int32(7), f32(0.5))
-        @test c.levels === nothing
-        a = Radix.attach_levels(c, table)
-        @test a.levels === table && typeof(a).name.wrapper === Radix.CollisionFe19
-        @test a.Υ == c.Υ && a.transition == c.transition                             # everything else is kept
-        # a rate without level data says what to do
+    @testset "construction" begin
+        # a coefficient takes the table as its last argument; the records of the database as an extra argument
+        c = Radix.CollisionFe19(Int8(3), "x", Radix.Transition(Int32(1), Int32(2)), Int32(26), Int32(7), f32(0.5), table)
+        @test c.levels === table
         cell = Radix.Cell(1.0, 1e3, 2e3, 1e4)
-        err = try Radix.rate(c, cell) catch e e end
-        @test err isa ArgumentError && occursin("attach_levels", err.msg)
-        @test Radix.rate(a, cell).frate > 0 && a(cell) == Radix.rate(a, cell)       # the functor needs only the cell
-        # rates that need no level data are unchanged by attaching
-        rr = Radix.RadRecomb(Int32(1), "rr", Int32[1], f32[1e-12, 0.7])
-        @test Radix.attach_levels(rr, table) === rr
+        @test Radix.rate(c, cell).frate > 0 && c(cell) == Radix.rate(c, cell)        # the functor needs only the cell
+        rec = Radix.construct(Radix.CollisionFe19, 3, "x", Int32[1, 2, 26, 7], f32[0.5], table)
+        @test rec.levels === table && rec.Υ == c.Υ && rec.transition == c.transition
+        # the same call builds the rates that carry no level data, which ignore the table
+        @test Radix.needs_levels(Radix.CollisionFe19) && !Radix.needs_levels(Radix.RadRecomb)
+        rr = Radix.construct(Radix.RadRecomb, 1, "rr", Int32[1], f32[1e-12, 0.7], table)
+        @test rr isa Radix.RadRecomb && rr.A == f32(1e-12)
+        # a table without the levels of the ion gives no rate
+        @test Radix.rate(Radix.CollisionFe19(Int8(3), "x", Radix.Transition(Int32(1), Int32(2)), Int32(26), Int32(99), f32(0.5), table), cell).frate == 0
         # the number of levels and the mass come from the table
-        line = Radix.attach_levels(Radix.AtomicLine2(Int32(4), "x", Int32[2, 1, 1, 7], f32[1215.67, 0.4162, 6.265e8]), table)
+        line = Radix.AtomicLine2(Int32(4), "x", Int32[2, 1, 1, 7], f32[1215.67, 0.4162, 6.265e8], table)
         @test Radix.rate(line, cell).init == 2
         @test Radix.rate(line, cell; mass=1.0).frate == Radix.rate(line, cell).frate        # (the mass only enters the opacity)
         @test Radix.rate(line, cell).opacity != Radix.rate(line, cell; mass=1.0).opacity
-        nomass = Radix.attach_levels(Radix.AtomicLine2(Int32(4), "x", Int32[2, 1, 1, 8], f32[1215.67, 0.4162, 6.265e8]), table)
+        nomass = Radix.AtomicLine2(Int32(4), "x", Int32[2, 1, 1, 8], f32[1215.67, 0.4162, 6.265e8], table)
         @test_throws ArgumentError Radix.rate(nomass, cell)
         @test Radix.rate(nomass, cell; mass=16.0).frate > 0
     end
@@ -50,7 +50,7 @@
         E = Radix.xstar_energy_grid()
         @test length(E) == 9999 && E[1] == 0.1 && 3.99e5 < E[9800] < 4.01e5 && 1.0e6 < E[end] < 1.01e6
         @test Radix.NO_RADIATION.E == E && all(iszero, Radix.NO_RADIATION.F)
-        p3 = Radix.attach_levels(Radix.ParPhotoIonize3(Int32(59), "p", Int32[1, 1, 0, 1, 7, 1, 7], f32[13.6, 10.0, 1.0e3, 1.0, 3.0, 1.0]), table)
+        p3 = Radix.ParPhotoIonize3(Int32(59), "p", Int32[1, 1, 0, 1, 7, 1, 7], f32[13.6, 10.0, 1.0e3, 1.0, 3.0, 1.0], table)
         @test Radix.rate(p3, cell).frate == 0
     end
 end

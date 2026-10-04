@@ -9,7 +9,7 @@
 
 const ElectronImpact2Desc = "chianti2016 collisional rates"
 
-@with_levels struct ElectronImpact2{I, R} <: AbstractRate
+struct ElectronImpact2{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
@@ -20,15 +20,16 @@ const ElectronImpact2Desc = "chianti2016 collisional rates"
     C::R                        # scale parameter
     x_grid::Vector{R}           # nodes of the reduced fit, in [0, 1]
     Υ::Vector{R}                # reduced effective collision strengths at the nodes
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R) where
+function ElectronImpact2(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     n = (length(rvec) - 3) ÷ 2
     ElectronImpact2(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3],
         ivec[4], rvec[1], rvec[2], rvec[3], Vector(rvec[4:3 + n]),
-        Vector(rvec[4 + n:end]))
+        Vector(rvec[4 + n:end]), levels)
 end
 
 """
@@ -36,14 +37,14 @@ end
 
 Electron-impact excitation and de-excitation from the CHIANTI 2016 fits (XSTAR
 ucalc type 98), like `ElectronCollision` but with an n-point spline through the
-nodes of the record. The levels come from the coefficient's level table (`attach_levels`). `init` is the lower and `final`
+nodes of the record. The levels come from the coefficient's level table (its `levels` field). `init` is the lower and `final`
 the upper level (ordered by energy), `frate` the excitation and `irate` the
 de-excitation rate (s⁻¹), related by detailed balance at the record's transition
 energy. The fit temperature is floored at `ΔE/50k`. Both rates are 0 if a level is
 missing from the level table or `ΔE ≤ 0`.
 """
 function rate(coef::ElectronImpact2, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

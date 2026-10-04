@@ -199,7 +199,7 @@ Photoionization of a level of an ion by integrating the cross-section table of
 `coef` (fields `level`, `ion`, `parent`, `E_grid` in Ry above the threshold and `σ`
 in Mb) over `radiation` (XSTAR ucalc types 49 and 53). The level data, with the number of levels of
 the ion (the last is the continuum, the ground state of the next ion), comes from the coefficient
-(`attach_levels`); `ptmp` is the two escape probabilities and `abund` the populations of the initial and final levels (for the
+(its `levels` field); `ptmp` is the two escape probabilities and `abund` the populations of the initial and final levels (for the
 opacity). `lfast ≥ 2` also integrates the recombination terms. If `opacity` is an
 `Opacity` the continuum opacity and recombination emissivity are added to it.
 `extrapolate` extends the table with an E⁻³ tail (types 49 and 88) and `shifted` adds the
@@ -220,7 +220,7 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     ptmp=(0.5, 0.5), abund=(0.0, 0.0), lfast=1, opacity=nothing, index=false,
     extrapolate=false, shifted=false, parent=true, rates_only=false)
     K = constants()
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
@@ -587,7 +587,7 @@ no rates but leaves the integrals `piht2` and `rrcl2` in its energy outputs; tha
 function photoionize_superlevel(coef, cell::Cell, tabulate; radiation=NO_RADIATION,
     correct_energy=false, index=false)
     K = constants()
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,

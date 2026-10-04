@@ -15,33 +15,34 @@ function load(io::IO)
     sdat = atomdb[5].data[:char][1]
 
     N = length(ptr[1,:])
+    nrec = something(findfirst(j -> ptr[2, j] == 0, 1:N), N + 1) - 1     # the records end at the first empty one
 
-    rates = Array{Union{Atom, Ion, AbstractRate, Missing, Nothing}}(missing, N)
-    for j=1:N
-        if ptr[2,j] == 0
-            break
-        end
+    # the record j, with the level data if its rate type needs it
+    function record(j, levels)
         rate = ratemap[ptr[2,j]]
-        if rate in (Missing, Nothing)
-            println("Rate $(ptr[2,j]) not implemented.")
-            continue
-        end
-        type  = ptr[3,j]
         label = String(sdat[ptr[10,j]:ptr[10,j]+ptr[7,j]-1])
         ivec  = idat[ptr[ 9,j]:ptr[ 9,j]+ptr[6,j]-1]
         rvec  = rdat[ptr[ 8,j]:ptr[ 8,j]+ptr[5,j]-1]
-        # if ptr[2,j] in (2, 9, 10, 13, 14)
-        #     println("$(ptr[2,j]) => $rate: $ivec, $rvec, $label")
-        # end
-        rates[j] = rate(type, label, ivec, rvec)
+        construct(rate, ptr[3,j], label, ivec, rvec, levels)
     end
-    # the levels of every ion and the masses of the elements go into the rates that need them
+    implemented(j) = !(ratemap[ptr[2,j]] in (Missing, Nothing))
+
+    rates = Array{Union{Atom, Ion, AbstractRate, Missing, Nothing}}(missing, N)
+    for j in 1:nrec
+        implemented(j) || println("Rate $(ptr[2,j]) not implemented.")
+    end
+    # the levels, the elements and the ions first: the other rates carry the level table built from them
+    for j in 1:nrec
+        implemented(j) && ptr[2,j] in level_data_types && (rates[j] = record(j, nothing))
+    end
     table = level_table(rates)
-    for j in eachindex(rates)
-        rates[j] isa AbstractRate && (rates[j] = attach_levels(rates[j], table))
+    for j in 1:nrec
+        implemented(j) && !(ptr[2,j] in level_data_types) && (rates[j] = record(j, table))
     end
     rates
 end
+
+const level_data_types = (6, 13, 14, 83)   # AtomicLevel, Atom, Ion and AtomicLevelFe records
 
 """
     level_table(records; masses=Dict())

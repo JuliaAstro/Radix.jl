@@ -6,18 +6,19 @@
 
 const TwoPhotonDecayDesc = "2 photon decay"
 
-@with_levels struct TwoPhotonDecay{I, R} <: AbstractRate
+struct TwoPhotonDecay{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     ion::I    # ion index (XSTAR ionN)
     A::R      # s⁻¹
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function TwoPhotonDecay(rate::Int32, label::String, ivec::I, rvec::R) where
+function TwoPhotonDecay(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    TwoPhotonDecay(Int8(rate), label::String, Transition(ivec[1], ivec[2]), ivec[4], rvec[1])
+    TwoPhotonDecay(Int8(rate), label::String, Transition(ivec[1], ivec[2]), ivec[4], rvec[1], levels)
 end
 
 """
@@ -29,7 +30,7 @@ Two-photon decay of a level (XSTAR ucalc type 76): `irate` is the stored `A` (s�
 that is not included.
 """
 function rate(coef::TwoPhotonDecay, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

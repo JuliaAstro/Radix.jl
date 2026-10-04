@@ -6,7 +6,7 @@
 
 const IronKAugerDesc = "Iron K Auger data from Patrick"
 
-@with_levels struct IronKAuger{I, R} <: AbstractRate
+struct IronKAuger{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     parent::Parent{I}           # parent ion and level
@@ -15,12 +15,13 @@ const IronKAugerDesc = "Iron K Auger data from Patrick"
     ion::I               # ion index (XSTAR ionN)
     E::R                 # energy relative to E∞ (eV)
     A_widths::Vector{R}  # [A_auto(k), A_auto(k,parent), A_rad(k)] (s⁻¹)
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R) where
+function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    IronKAuger(Int8(rate), label, Parent(ivec[4], ivec[1]), ivec[2], ivec[3], ivec[5], rvec[1], Vector(rvec[2:end]))
+    IronKAuger(Int8(rate), label, Parent(ivec[4], ivec[1]), ivec[2], ivec[3], ivec[5], rvec[1], Vector(rvec[2:end]), levels)
 end
 
 """
@@ -31,7 +32,7 @@ Auger decay of a K-vacancy level of iron (XSTAR ucalc type 86): `frate` is the A
 level of the parent ion − 1); `irate` is 0. `ucalc` does not look at the levels, so none are needed.
 """
 function rate(coef::IronKAuger, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     init, final = Int(coef.level), nlev + Int(coef.parent.level) - 1
     (; init, final, frate=index ? 0. : Float64(coef.A_widths[1]), irate=0.)

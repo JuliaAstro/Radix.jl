@@ -7,7 +7,7 @@
 
 const PhotoionizeDampDesc = "Iron inner shell resonance excitation (Patrick)"
 
-@with_levels struct PhotoionizeDamp{I, R} <: AbstractRate
+struct PhotoionizeDamp{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I               # principal quantum number
@@ -20,15 +20,16 @@ const PhotoionizeDampDesc = "Iron inner shell resonance excitation (Patrick)"
     ion::I             # ion index (XSTAR ionN)
     E_grid::Vector{R}  # energies (Ry)
     σ::Vector{R}       # cross sections (Mb)
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function PhotoionizeDamp(rate::Int32, label::String, ivec::I, rvec::R) where
+function PhotoionizeDamp(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     iv = length(ivec) < 8 ? (ivec[1:5]..., Int32(0), ivec[6:7]...) : Vector(ivec)
     PhotoionizeDamp(Int8(rate), label, iv[1:4]...,
         Parent(zero(eltype(iv)), iv[5]), iv[6:8]..., Vector(rvec[1:2:end-1]),
-        Vector(rvec[2:2:end]))
+        Vector(rvec[2:2:end]), levels)
 end
 
 """

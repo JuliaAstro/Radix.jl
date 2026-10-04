@@ -6,7 +6,7 @@
 
 const CollisionAPEDDesc = "aped collision strengths"
 
-@with_levels struct CollisionAPED{I, R} <: AbstractRate
+struct CollisionAPED{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -17,14 +17,15 @@ const CollisionAPEDDesc = "aped collision strengths"
     T_max::R            # highest temperature of the fit (K)
     T_grid::Vector{R}   # temperatures (K)
     Υ::Vector{R}        # effective collision strengths
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionAPED(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionAPED(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     n = (length(rvec) - 2) ÷ 2
     CollisionAPED(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3], ivec[4:5]..., rvec[1], rvec[2],
-        Vector(rvec[3:2 + n]), Vector(rvec[3 + n:2 + 2n]))
+        Vector(rvec[3:2 + n]), Vector(rvec[3 + n:2 + 2n]), levels)
 end
 
 const aped_interpolated_electron = 100            # kinds 100 + n: n points, electron collision strength
@@ -63,7 +64,7 @@ outside `T_min`..`T_max` or the grid) and the rates are `frate = 8.629e-6 Υ e^{
 rates times ΔE. The first level of the record is the lower one whatever the energies. Other kinds throw an error.
 """
 function rate(coef::CollisionAPED, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper

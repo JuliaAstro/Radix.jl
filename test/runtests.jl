@@ -35,10 +35,11 @@ struct UnportedRate <: Radix.AbstractRate end
     end
 
     @testset "Transition and Parent" begin
-        c = Radix.CollisionHlike1(Int32(60), "c", Int32[3,5,1,2], f32[1,2,3])
+        nolevels = Radix.level_table(Radix.AtomicLevel[])
+        c = Radix.CollisionHlike1(Int32(60), "c", Int32[3,5,1,2], f32[1,2,3], nolevels)
         @test c.transition == Radix.Transition(Int32(3), Int32(5))
         @test c.ion == 2
-        p = Radix.ParPhotoIonize1(Int32(7), "p", Int32[2,1,3,26,81,22,1,21], f32[1,2])
+        p = Radix.ParPhotoIonize1(Int32(7), "p", Int32[2,1,3,26,81,22,1,21], f32[1,2], nolevels)
         @test p.parent == Radix.Parent(Int32(22), Int32(81))   # ion, level
         @test (p.level, p.ion) == (1, 21)
     end
@@ -48,8 +49,8 @@ struct UnportedRate <: Radix.AbstractRate end
         lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
             f32[E, g, 1, 13.6])
         levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 13.6, 1)]; masses=Dict(7 => 1.01))   # (3 is the continuum)
-        mk(i, k; λ=1215.67, A=6.265e8, rt=4) = Radix.attach_levels(
-            Radix.AtomicLine2(Int32(rt), "x", Int32[i,k,1,7], f32[λ, 0.4162, A]), levels)
+        mk(i, k; λ=1215.67, A=6.265e8, rt=4) =
+            Radix.AtomicLine2(Int32(rt), "x", Int32[i,k,1,7], f32[λ, 0.4162, A], levels)
         c = mk(2, 1)
         r = Radix.rate(c, cell)
         @test (r.init, r.final) == (2, 1)                 # upper first, whatever the stored order
@@ -73,7 +74,8 @@ struct UnportedRate <: Radix.AbstractRate end
         @test far.frate > 0 && far.opacity == 0
         # unknown levels, and the continuum level (index nlev), give nothing
         @test Radix.rate(mk(2, 9), cell).frate == 0
-        @test Radix.rate(Radix.attach_levels(c, Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)]; masses=Dict(7 => 1.01))), cell).frate == 0
+        two_levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)]; masses=Dict(7 => 1.01))   # (2 is the continuum)
+        @test Radix.rate(Radix.AtomicLine2(Int32(4), "x", Int32[2,1,1,7], f32[1215.67, 0.4162, 6.265e8], two_levels), cell).frate == 0
         @test Radix.rate(c, cell; index=true).frate == 0
     end
 
@@ -82,8 +84,8 @@ struct UnportedRate <: Radix.AbstractRate end
             f32[E, g, 1, 13.6])
         levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8)])
         Tg, Ug = [3.0, 4.0, 5.0], [0.1, 0.4, 0.2]          # log10 T (K), Υ
-        mk(i, k) = Radix.attach_levels(Radix.ElectronImpact1(Int8(5), "x", Radix.Transition(Int32(i), Int32(k)),
-            Int32(1), Int32(7), f32.(Tg), f32.(Ug)), levels)
+        mk(i, k) = Radix.ElectronImpact1(Int8(5), "x", Radix.Transition(Int32(i), Int32(k)),
+            Int32(1), Int32(7), f32.(Tg), f32.(Ug), levels)
         # ucalc label 56 (T in 1e4 K, tfnd = log10(1e4 t)):
         #   cij = 8.626e-8 Υ exp(-ΔE/(0.861707 t))/(sqrt(t) gglo), cji = 8.626e-8 Υ/(sqrt(t) ggup)
         Tc = 0.5                                              # log10(5000 K) = 3.699
@@ -129,9 +131,9 @@ struct UnportedRate <: Radix.AbstractRate end
         lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1,2,0,1,level,7],
             f32[E, g, 1, 13.6])
         levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 6.8, 8)])
-        mk(i, k; ΔE=0.5) = Radix.attach_levels(Radix.ElectronCollision(Int8(3), "x", Int32(2),
+        mk(i, k; ΔE=0.5) = Radix.ElectronCollision(Int8(3), "x", Int32(2),
             Radix.Transition(Int32(i), Int32(k)), Int32(1), Int32(7),
-            f32(ΔE), f32(C0), f32.(kn)), levels)
+            f32(ΔE), f32(C0), f32.(kn), levels)
         # the numbers are checked against ucalc in ucalc_tests.jl
         Tc = 20.0
         c = mk(1, 2)
@@ -144,13 +146,13 @@ struct UnportedRate <: Radix.AbstractRate end
         @test isfinite(cold.irate) && cold.irate > 0
         # records with other than 5 or 9 knots are skipped
         odd = Radix.ElectronCollision(Int8(3), "x", Int32(2), Radix.Transition(Int32(1), Int32(2)),
-            Int32(1), Int32(7), f32(0.5), f32(C0), f32.(kn[1:4]))
-        @test Radix.rate(Radix.attach_levels(odd, levels), Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
+            Int32(1), Int32(7), f32(0.5), f32(C0), f32.(kn[1:4]), levels)
+        @test Radix.rate(odd, Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
         # a spline that dips below 0 gives zero rates, not negative ones
         neg = Radix.ElectronCollision(Int8(3), "x", Int32(1), Radix.Transition(Int32(1), Int32(2)),
-            Int32(1), Int32(7), f32(20.76), f32(1.3), f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363])
+            Int32(1), Int32(7), f32(20.76), f32(1.3), f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363], levels)
         @test Radix.chianti_upsilon(1, 20.76, 1.3, f32[0.0, 0.002592, 0.01144, 0.02149, 0.0363], 1e3) < 0
-        @test Radix.rate(Radix.attach_levels(neg, levels), Radix.Cell(0.1, 1e3, 2e3, 1e4)).irate == 0
+        @test Radix.rate(neg, Radix.Cell(0.1, 1e3, 2e3, 1e4)).irate == 0
         @test Radix.rate(mk(1, 9), Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
         @test Radix.rate(mk(1, 2; ΔE=0), Radix.Cell(Tc, 1e3, 2e3, 1e4)).frate == 0
     end
@@ -158,8 +160,8 @@ struct UnportedRate <: Radix.AbstractRate end
     @testset "CollisionProb" begin
         # the numbers are checked against ucalc in ucalc_tests.jl
         none_lv = Radix.level_table(Radix.AtomicLevel[])
-        cpx = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)), Int32(8), Int32(7))
-        @test Radix.rate(Radix.attach_levels(cpx, none_lv), Radix.Cell(1.0, 0.0, 1e4, 1e4)).frate == 0
+        cpx = Radix.CollisionProb(Int8(8), "x", Radix.Transition(Int32(1), Int32(2)), Int32(8), Int32(7), none_lv)
+        @test Radix.rate(cpx, Radix.Cell(1.0, 0.0, 1e4, 1e4)).frate == 0
     end
 
     @testset "functor convenience" begin

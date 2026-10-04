@@ -6,19 +6,20 @@
 
 const CollisionHelikeSatDesc =  "Fit to coll. strengths satellite lvls Helike ion"
 
-@with_levels struct CollisionHelikeSat{I, R} <: AbstractRate
+struct CollisionHelikeSat{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     Z::I               # atomic number
     ion::I             # ion index (XSTAR ionN)
     coeffs::Vector{R}  # fit coefficients
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionHelikeSat(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionHelikeSat(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionHelikeSat(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec))   
+    CollisionHelikeSat(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec), levels)   
 end
 
 const sat_gam_high, sat_gam_mid, sat_gam_low = -0.2, 0.0, 0.2   # shifts of the effective charge by 2s weight
@@ -55,7 +56,7 @@ e^{-ΔE/kT}/g_l`, `fenergy` and `ienergy` the rates times that energy; `init` is
 upper level by energy, both in `1:nlev`.
 """
 function rate(coef::CollisionHelikeSat, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

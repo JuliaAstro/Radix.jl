@@ -6,7 +6,7 @@
 
 const AutoionizeFe25SatDesc = "autoionization data for Fe XXiV satellites"
 
-@with_levels struct AutoionizeFe25Sat{I, R} <: AbstractRate
+struct AutoionizeFe25Sat{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     ion::I           # ion index (XSTAR ionN)
@@ -14,12 +14,13 @@ const AutoionizeFe25SatDesc = "autoionization data for Fe XXiV satellites"
     parent::Parent{I}           # parent ion and level
     A_auto::R        # autoionization rate (s⁻¹)
     E::R             # energy above ionization limit (eV)
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function AutoionizeFe25Sat(rate::Int32, label::String, ivec::I, rvec::R) where
+function AutoionizeFe25Sat(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    AutoionizeFe25Sat(Int8(rate), label, ivec[1], ivec[2], Parent(ivec[3], ivec[4]), rvec...)    
+    AutoionizeFe25Sat(Int8(rate), label, ivec[1], ivec[2], Parent(ivec[3], ivec[4]), rvec..., levels)    
 end
 
 """
@@ -30,7 +31,7 @@ Autoionization of an Fe XXIV satellite level (XSTAR ucalc type 75) with the rate
 level of the parent ion counted from the continuum (`nlev` + parent level − 1, at least 1).
 """
 function rate(coef::AutoionizeFe25Sat, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     init = max(Int(coef.level), 1)
     final = max(Int(coef.parent.level) + nlev - 1, 1)

@@ -6,7 +6,7 @@
 
 const AutoionizeSatDesc = "Autoinization rates (in s^-1) for satellite lvls"
 
-@with_levels struct AutoionizeSat{I, R} <: AbstractRate
+struct AutoionizeSat{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     spin_mult::I        # 2S+1
@@ -18,13 +18,14 @@ const AutoionizeSatDesc = "Autoinization rates (in s^-1) for satellite lvls"
     A_auto::R           # autoionization rate (s⁻¹)
     E::R                # energy above ionization limit (eV)
     g::R                # statistical weight 2J+1
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function AutoionizeSat(rate::Int32, label::String, ivec::I, rvec::R) where
+function AutoionizeSat(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     AutoionizeSat(Int8(rate), label, ivec[1:3]..., Parent(zero(eltype(ivec)), ivec[4]),
-        ivec[5:6]..., rvec...)
+        ivec[5:6]..., rvec..., levels)
 end
 
 const sat_capture_coeff = 3.3e-11      # cm³ s⁻¹ at kT = 13.6 eV
@@ -48,7 +49,7 @@ temperature in K (which is ≈ 1; the units look wrong in the source and are rep
 `final` the continuum level of the record. The level table needs the ground (1) and the continuum (`nlev`) levels.
 """
 function rate(coef::AutoionizeSat, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
     init, final = Int(coef.level), Int(coef.parent.level)

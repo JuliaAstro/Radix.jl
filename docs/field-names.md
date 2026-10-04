@@ -163,17 +163,19 @@ levels, which hold only an energy and a weight, are added as levels with zero qu
 `Ion` records (the mass of each ion's element). It behaves as the dictionary `(ion, level) => AtomicLevel` and also
 answers `nlevels(table, ion)`, `atomic_mass(table, ion)` and `level_counts(table)`.
 
-The rates that need it carry the table in a field `levels` (declared with `@with_levels`, which adds the field and
-keeps the constructors of the raw record). `load` attaches the table of the database to every record, so that
-`rate(coef, cell)` is all that is needed; for a coefficient made by hand, `attach_levels(coef, table)` returns a copy that
-has it, and calling `rate` without level data raises an `ArgumentError` that says so. The number of levels and the mass
-(`AtomicLine2`, `RadiativeFeDecay`, `RadiativeSuper`; `mass=` still overrides it) are derived from the table, and no keyword of
-a rate is left without a default. The photoionization rates default to `radiation=NO_RADIATION` (no photons).
+The rates that need it have a last field `levels` (a `LevelTable`), and the constructor of their database record takes the
+table as an extra argument. `load` builds the records of the levels, elements and ions first, makes the table from them
+and then constructs all the other records with it (`construct(T, rate, label, ivec, rvec, levels)` passes the table to the
+types for which `needs_levels(T)` is true and ignores it for the rest), so `rate(coef, cell)` is all that is needed. A coefficient
+made by hand takes the table as its last argument. The number of levels and the mass (`AtomicLine2`, `RadiativeFeDecay`,
+`RadiativeSuper`; `mass=` still overrides it) are derived from the table, a table without the levels of the ion gives no
+rate, and no keyword of a rate is left without a default. The photoionization rates default to `radiation=NO_RADIATION` (no
+photons).
 Exceptions: `ChargeExH0`, `ChargeExHe` and `ChargeExHp` keep their `nlev=0` keyword, because their records do not identify
 the ion reliably (`ChargeExHe` has no `ion`, and `ChargeExHp` has one record with a single integer).
 
 The `ucalc` tests build their table from the levels of the fixture and the atomic mass of the driver, and
-`test/leveltable_tests.jl` checks the table, the attaching, the errors and the defaults.
+`test/leveltable_tests.jl` checks the table, the construction and the defaults.
 
 ## Physical constants
 

@@ -7,7 +7,7 @@
 
 const PhotoionizeDeltaDesc = "Delta functions to add to phot. x-sections  DR"
 
-@with_levels struct PhotoionizeDelta{I, R} <: AbstractRate
+struct PhotoionizeDelta{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I               # principal quantum number
@@ -20,14 +20,15 @@ const PhotoionizeDeltaDesc = "Delta functions to add to phot. x-sections  DR"
     E_inf::R           # eV
     E_grid::Vector{R}  # energies (eV)
     f::Vector{R}       # cm²
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function PhotoionizeDelta(rate::Int32, label::String, ivec::I, rvec::R) where
+function PhotoionizeDelta(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     m = (length(rvec) - 1) ÷ 2
     PhotoionizeDelta(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]),
-        ivec[7:8]..., rvec[1], Vector(rvec[2:m + 1]), Vector(rvec[m + 2:2m + 1]))
+        ivec[7:8]..., rvec[1], Vector(rvec[2:m + 1]), Vector(rvec[m + 2:2m + 1]), levels)
 end
 
 const delta_kB = 1.38066e-16               # erg K⁻¹ (the value used in calt74)
@@ -47,7 +48,7 @@ level and of the continuum level `nlev`. `final` is `nlev`. Both are 0 if the sp
 does not reach the highest line.
 """
 function rate(coef::PhotoionizeDelta, cell::Cell; radiation=NO_RADIATION, index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
 

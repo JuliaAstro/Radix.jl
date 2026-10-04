@@ -42,7 +42,6 @@ parent_ion(c) = c.ints[c.ndesc == 59 ? 5 : c.ndesc in (70, 99) ? 9 : 6]
 parent_level(c) = c.ints[c.ndesc == 59 ? 4 : c.ndesc in (70, 99) ? 8 : 5]
 
 function ucalc_inputs(c)
-    coef = Radix.ratemap[c.ndesc](Int32(c.rtype), "", Int32.(c.ints), Float32.(c.reals))
     t, xpx, xee, xh0 = c.cond[1:4]
     cell = Radix.Cell(t, xh0, xpx*xee, xpx)
     recs = [Radix.AtomicLevel(Int32(13), "",
@@ -56,7 +55,8 @@ function ucalc_inputs(c)
     end
     # the levels, and the atomic mass of the element (the driver's last condition), go into the coefficient
     table = Radix.level_table(recs; masses=Dict(Int(c.ints[end]) => c.cond[13]))
-    (Radix.attach_levels(coef, table), cell, table)
+    coef = Radix.construct(Radix.ratemap[c.ndesc], c.rtype, "", Int32.(c.ints), Float32.(c.reals), table)
+    (coef, cell, table)
 end
 
 # `expected(o)` maps the ucalc outputs onto the named fields Radix returns

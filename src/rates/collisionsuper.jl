@@ -8,7 +8,7 @@
 
 const CollisionSuperDesc = "coll rates from 71"
 
-@with_levels struct CollisionSuper{I, R} <: AbstractRate
+struct CollisionSuper{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -18,15 +18,16 @@ const CollisionSuperDesc = "coll rates from 71"
     ne_grid::Vector{R}  # log₁₀ densities (cm⁻³)
     T_grid::Vector{R}   # log₁₀ temperatures (K)
     C::Matrix{R}        # log₁₀ collision rates (s⁻¹), size (T, ne)
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     Nd, Nt = ivec[1:2]
     CollisionSuper(Int8(rate), label, Transition(ivec[3], ivec[4]), ivec[5:6]..., rvec[Nd+Nt+Nd*Nt+1],
         Vector(rvec[1:Nd]), Vector(rvec[Nd+1:Nd+Nt]),
-        reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Int(Nt), Int(Nd)))   # ucalc reads the temperature fastest
+        reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Int(Nt), Int(Nd)), levels)   # ucalc reads the temperature fastest
 end
 
 const supercoll_min_dE = 1.0              # eV; no rates for levels closer than this
@@ -53,7 +54,7 @@ from numbering the first level of the record by shells. `fenergy` and `ienergy` 
 the energy difference of the levels. Both levels must be in `1:nlev`, differ, and be at least 1 eV apart.
 """
 function rate(coef::CollisionSuper, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

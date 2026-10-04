@@ -6,7 +6,7 @@
 The atomic data the rates need besides their own coefficients: the levels of every ion (energies, weights and
 quantum numbers, as `AtomicLevel`s keyed by `(ion, level)`), the number of levels of each ion (`nlevels`: the highest
 index, the continuum level) and the atomic mass of the element of each ion (`atomic_mass`). It behaves as the
-dictionary of levels. `load` builds one and stores it in every rate that needs it (`attach_levels`).
+dictionary of levels. `load` builds one and passes it to the constructor of every rate that needs it (the field `levels`).
 """
 struct LevelTable{K, V} <: AbstractDict{K, V}
     levels::Dict{K, V}
@@ -46,3 +46,19 @@ Dictionary `ion => number of levels` (the highest level index, the continuum
 level) from a `level_table`.
 """
 level_counts(levels::LevelTable) = copy(levels.nlev)
+
+"""
+    needs_levels(T)
+
+Whether the rate type `T` has a field `levels`, the `LevelTable` it reads its level data from.
+"""
+needs_levels(T::Type) = :levels in fieldnames(Base.unwrap_unionall(T))
+
+"""
+    construct(T, rate, label, ivec, rvec, levels)
+
+The record of rate type `T` (an entry of `ratemap`) from the integers `ivec` and reals `rvec` of the database,
+with the `LevelTable` `levels` if the type needs it (`needs_levels`).
+"""
+construct(T::Type, rate, label, ivec, rvec, levels) =
+    needs_levels(T) ? T(Int32(rate), label, ivec, rvec, levels) : T(Int32(rate), label, ivec, rvec)

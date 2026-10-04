@@ -7,7 +7,7 @@
 
 const PhotoionizeFeKedgeDesc = "Iron K Pi xsections, spectator Auger summed"
 
-@with_levels struct PhotoionizeFeKedge{I, R} <: AbstractRate
+struct PhotoionizeFeKedge{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I             # principal quantum number
@@ -22,12 +22,13 @@ const PhotoionizeFeKedgeDesc = "Iron K Pi xsections, spectator Auger summed"
     f::R
     γ::R
     scale::R         # scaling factor
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function PhotoionizeFeKedge(rate::Int32, label::String, ivec::I, rvec::R) where
+function PhotoionizeFeKedge(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    PhotoionizeFeKedge(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., rvec...)
+    PhotoionizeFeKedge(Int8(rate), label, ivec[1:4]..., Parent(ivec[6], ivec[5]), ivec[7:8]..., rvec..., levels)
 end
 
 # constants of pexs (resonance series of the Fe K edge) and of the rate

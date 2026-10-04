@@ -9,7 +9,7 @@ const ElectronImpact1Desc = "tabulated collision strength, bautista"
 const min_dE = 1e-16                  # eV; degenerate levels are skipped
 const min_upsilon = 1e-48              # floor of the tabulated Υ before interpolating
 
-@with_levels struct ElectronImpact1{I, R} <: AbstractRate
+struct ElectronImpact1{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -17,20 +17,21 @@ const min_upsilon = 1e-48              # floor of the tabulated Υ before interp
     ion::I              # ion index (XSTAR ionN)
     T_grid::Vector{R}   # log₁₀ of the temperatures (K)
     Υ::Vector{R}       # effective collision strengths
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R) where
+function ElectronImpact1(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     ElectronImpact1(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec[1:end÷2]),
-        Vector(rvec[end÷2+1:end]))
+        Vector(rvec[end÷2+1:end]), levels)
 end
 
 """
     rate(coef::ElectronImpact1, cell; index=false)
 
 Electron-impact excitation and de-excitation (XSTAR ucalc type 56). The levels come from the
-coefficient's level table (`attach_levels`). The levels are ordered by energy, `init` is the lower and
+coefficient's level table (its `levels` field). The levels are ordered by energy, `init` is the lower and
 `final` the upper level, `frate` the excitation rate and `irate` the
 de-excitation rate (s⁻¹), related by detailed balance. Υ is interpolated
 linearly in log T; outside the table the nearest segment is extrapolated (as
@@ -38,7 +39,7 @@ ucalc does, since its `hunt` clamps the index) and the result clamped at 0. Both
 rates are 0 if a level is missing from the level table or the two energies coincide.
 """
 function rate(coef::ElectronImpact1, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
