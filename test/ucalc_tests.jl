@@ -92,6 +92,10 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     @testset "type 7 DielecRecomb1" begin
         @test check_ucalc("type07"; call=plain_call, expected=direct, rtol=1e-6) == 240
     end
+    @testset "type 8 DielecRecomb2" begin
+        # no record of this type is in atdb.fits: synthetic ones (test/reference/ucalc/synthetic.jl)
+        @test check_ucalc("type08"; call=plain_call, expected=direct, rtol=1e-6, atol=1e-100) == 60
+    end
     @testset "type 22 DielecRecombH" begin
         @test check_ucalc("type22"; call=plain_call, expected=direct, rtol=1e-6) == 12   # zero above 6e4 K
     end

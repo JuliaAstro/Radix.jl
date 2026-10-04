@@ -222,7 +222,7 @@ unconfirmed.
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
-single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 10, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 66, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
+single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 8, 9, 10, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 66, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -392,8 +392,11 @@ ported type (except 4, which has no `rate` method). Notes:
   ground level of the next ion (`init = 1`, `final = 0`), without levels. The `T0` and `T1` of type 7 are in
   units of 10⁴ K, as `ucalc` uses them with the temperature in those units (the header said K). `DielecRecombH` (Storey)
   has five coefficients (`coeffs`; the header mentions a sixth) and is zero above 6×10⁴ K; `TotDielecRecomb` (Badnell)
-  holds `C` and `T` term arrays (`T` in K, divided by 10⁴ here). Type 8 (`DielecRecomb2`) has no records
-  in `atdb.fits` and no reference data: not ported.
+  holds `C` and `T` term arrays (`T` in K, divided by 10⁴ here). Type 8 (`DielecRecomb2`, Arnaud and Raymond: four terms,
+  energies in eV) has no records in `atdb.fits`: it is checked against `ucalc` with synthetic records
+  (`test/reference/ucalc/synthetic.jl`, `type08.in`). Types 4 (`AtomicLine`) and 5 (`TwoPhotonRad`) have no records
+  either and are not ported: `ucalc` reads their reals at positions (type 4: the fifth as an atomic mass; type 5: the fifth and sixth)
+  that the structs do not have, which cannot be settled without data.
 - `RadiativeFeDecay` (ucalc 82) takes the levels of the Fe UTA ions from two record types: the regular
   ones (type 6) and the UTA levels (`AtomicLevelFe`, type 83: energy and weight only, 986 records, for
   ions 327-341), so `level_table` includes both, the second as an `AtomicLevel` with zero quantum numbers.
