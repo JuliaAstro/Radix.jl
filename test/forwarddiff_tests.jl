@@ -23,6 +23,7 @@ ad_with_opacity(co, ce, lv, c) = ad_photo(co, ce, lv, c; opacity=Radix.Opacity(t
 const AD_CASES = [
     "type01" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type02" => (co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev),
+    "type08" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type07" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type22" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type39" => (co, ce, lv, c) -> Radix.rate(co, ce),
