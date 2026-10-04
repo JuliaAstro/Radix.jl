@@ -54,20 +54,70 @@ function toy_balance_tests()
         @test Radix.element_ions(vcat(reverse(ions), [Radix.Atom("he", Int32(2), Int32(2), 0.1f0, 4.0f0)]), 2) == [5, 6]
         t6(i, f, a, b; type=3) = ToyRate(Int8(type), Int32(6), (; init=i, final=f, frate=a, irate=b))
         rates = [[toy(1, 4, 2.0, 1.0; type=7), toy(1, 2, 3.0, 5.0)], [t6(1, 2, 7.0, 11.0; type=7)]]
-        A = Radix.element_matrix(rates, two, [5, 6], cell)
+        layout = Radix.ElementLayout(rates, two, [5, 6])
+        @test layout.N == 5 && layout.offset == [0, 3] && layout.nlev == [4, 2] && size(layout) == (5, 5)
+        A = Radix.element_matrix(layout, cell)
         @test size(A) == (5, 5)
         @test A[4, 1] == 2.0 && A[1, 4] == 1.0 && A[2, 1] == 3.0 && A[1, 2] == 5.0     # ionization of ion 5 goes to ion 6
         @test A[5, 4] == 7.0 && A[4, 5] == 11.0                                         # and that of ion 6 to the nucleus
         # a photoionization that leaves ion 6 in its level 1 has `final` beyond the continuum of ion 5
-        A = Radix.element_matrix([[toy(1, 5, 2.0, 1.0; type=7)], Radix.AbstractRate[]], two, [5, 6], cell)
+        A = Radix.element_matrix(Radix.ElementLayout([[toy(1, 5, 2.0, 1.0; type=7)], Radix.AbstractRate[]], two, [5, 6]), cell)
         @test A[5, 1] == 2.0 && A[1, 5] == 1.0
-        x = Radix.level_populations(Radix.element_matrix(rates, two, [5, 6], cell))
+        A0 = Radix.element_matrix(layout, cell)
+        x = Radix.level_populations(A0)
         @test sum(x) ≈ 1 && all(>=(0), x)
-        f = Radix.ion_fractions(x, two, [5, 6])
+        f = Radix.ion_fractions(x, layout)
         @test length(f) == 3 && sum(f) ≈ 1 && f[1] ≈ sum(x[1:3]) && f[2] ≈ x[4] && f[3] ≈ x[5]
+        # the layout is reused: a second cell refills the same matrix, and the matrix can be given
+        A = zeros(5, 5)
+        @test Radix.element_matrix!(A, layout, Radix.Cell(2.0, 0.0, 1e4, 1e4)) === A && A == A0
+        @test_throws DimensionMismatch Radix.element_matrix!(zeros(4, 4), layout, cell)
         # a level without any rate has no population, and the rest is still solved
         x = Radix.level_populations([-3.0 5.0 0.0; 3.0 -5.0 0.0; 0.0 0.0 0.0][[1, 3, 2], [1, 3, 2]])
         @test x ≈ [5/8, 0, 3/8]
+    end
+
+    @testset "escape probabilities and radiation" begin
+        line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
+        layout = Radix.ElementLayout([[line]], levels, [5])
+        decay(A) = A[1, 2]
+        thin = decay(Radix.element_matrix(layout, cell))
+        # `escape` as a pair for each record, or as a function of the record
+        @test decay(Radix.element_matrix(layout, cell; escape=[(0.1, 0.2)])) ≈ thin*0.3
+        @test decay(Radix.element_matrix(layout, cell; escape=coef -> (0.25, 0.25))) ≈ thin*0.5
+        @test decay(Radix.element_matrix(layout, cell; escape=[(0.5, 0.5)])) ≈ thin
+        # the radiation: the same flux as a mean intensity or as the flux of a point source
+        E = Radix.xstar_energy_grid()
+        L = 1e30 ./ E
+        r = 1e13
+        rad = Radix.point_source(E, L, r)
+        @test rad.F ≈ L ./ (4π*r^2) && Radix.mean_intensity(rad) ≈ L ./ (16π^2*r^2)
+        @test Radix.Radiation(E; J=Radix.mean_intensity(rad)).F ≈ rad.F
+        @test rad.E === E                                     # the grid is shared
+        excitation(A) = A[2, 1]
+        @test excitation(Radix.element_matrix(layout, cell)) == 0
+        @test excitation(Radix.element_matrix(layout, cell; radiation=rad)) > 0
+        @test excitation(Radix.element_matrix(layout, cell; radiation=Radix.Radiation(E, 2 .* rad.F))) ≈
+            2*excitation(Radix.element_matrix(layout, cell; radiation=rad))
+    end
+
+    @testset "a grid of cells" begin
+        # every cell has its own radiation and line trapping: the populations of the cell are those of the single-cell solve
+        E = Radix.xstar_energy_grid()
+        line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
+        layout = Radix.ElementLayout([[line, toy(1, 3, 1e-2, 5e-2), toy(3, 4, 1e-3, 2e-3)]], levels, [5])
+        cells = [Radix.Cell(T, 0.0, 1e4, 1e4) for T in (0.5, 1.0, 2.0), _ in 1:2]
+        spectra = [Radix.point_source(E, 1e30 ./ E, 1e13*k) for k in 1:length(cells)]
+        trapping = i -> [(0.5/i, 0.5/i), (0.5, 0.5), (0.5, 0.5)]
+        x = Radix.element_populations(layout, cells; radiation=i -> spectra[i], escape=trapping)
+        @test size(x) == (layout.N, 6)
+        for i in eachindex(cells)
+            xi = Radix.level_populations(Radix.element_matrix(layout, cells[i]; radiation=spectra[i], escape=trapping(i)))
+            @test x[:, i] == xi
+        end
+        # a fixed value is shared by all the cells
+        y = Radix.element_populations(layout, cells; radiation=spectra[1])
+        @test y[:, 1] == Radix.level_populations(Radix.element_matrix(layout, cells[1]; radiation=spectra[1]))
     end
 
     @testset "the populations" begin
@@ -101,6 +151,21 @@ function element_balance_tests(db)
             @test x[end] ≈ xl[end] rtol=1e-2
             @test x[2]/x[1] ≈ xl[2]/xl[1] rtol=2e-3
         end
+        @testset "the layout agrees with the rates" begin
+            # the matrix entries of a record are those of its levels at any temperature (index=true), including the records
+            # that exist only above a temperature
+            cell = Radix.Cell(100.0, 0.0, 1e4, 1e4)
+            layout = Radix.ElementLayout(db, levels, 2)
+            missing_pairs = 0
+            for (j, coef) in enumerate(layout.rates)
+                r = Radix.rate(coef, cell)
+                (r.init > 0 && r.final > 0 && r.init != r.final) || continue
+                k, offset = layout.ion[j], layout.offset[layout.ion[j]]
+                (coef.rtype in Radix.unordered_types || max(r.init, r.final) <= layout.nlev[k]) || continue
+                layout.lo[j] == 0 && (missing_pairs += 1)
+            end
+            @test missing_pairs == 0
+        end
         @testset "the ion fractions of the XSTAR reference run" begin
             # the incident spectrum of the run in 10³⁸ erg/s per erg. Its first zone is at 10¹³ cm (the second row of the
             # table; the first is not converged) and the next, of 10¹³ cm, is evaluated at its midpoint (the table
@@ -114,13 +179,12 @@ function element_balance_tests(db)
             floor = 1e-9
             cell = Radix.Cell(100.0, 0.0, 1e4, 1e4)
             for (symbol, Z) in (("h", 1), ("he", 2), ("c", 6), ("n", 7), ("o", 8), ("ne", 10))
-                ions = Radix.element_ions(db, Z)
-                rates = [Radix.ion_rates(db, ion) for ion in ions]
+                layout = Radix.ElementLayout(db, levels, Z)
                 for (r, row) in ((1e13, 2), (1.5e13, 3))
-                    radiation = Radiation(E, LE/(4π*r^2))
-                    x = Radix.level_populations(Radix.element_matrix(rates, levels, ions, cell; radiation))
-                    fractions = Radix.ion_fractions(x, levels, ions)
-                    for k in eachindex(ions)
+                    radiation = Radix.point_source(E, LE, r)
+                    x = Radix.level_populations(Radix.element_matrix(layout, cell; radiation))
+                    fractions = Radix.ion_fractions(x, layout)
+                    for k in eachindex(layout.ions)
                         ref = getproperty(abundances, Symbol(symbol, "_", roman[k]))[row]
                         ref > floor && @test fractions[k] ≈ ref rtol=3e-2
                     end

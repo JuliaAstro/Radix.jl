@@ -5,9 +5,14 @@
     Radiation(E, F)
 
 Photon energy grid `E` (eV, geometrically spaced; XSTAR's `epi`) and the incident
-spectrum `F` on it (XSTAR's `bremsa`). The photoionization rates integrate cross
+spectrum `F` on it (XSTAR's `bremsa`, erg s⁻¹ cm⁻² erg⁻¹). The photoionization rates integrate cross
 sections over it. `Fint` (XSTAR's `bremsint`) is the flux integrated from each bin to
 the top of the grid, in erg.
+
+`F` is 4π times the mean intensity `J` of the radiation field at the point (the rates depend on the
+radiation only through `J`, whatever the geometry that produced it): see `Radiation(E; J)`,
+`mean_intensity` and `point_source`. The energy grid is shared, not copied, when `E` is a `Vector`, so the
+radiation of every cell of a grid can use the same `E`.
 """
 struct Radiation{R<:AbstractFloat}
     E::Vector{R}
@@ -21,9 +26,32 @@ struct Radiation{R<:AbstractFloat}
         for k in n - 1:-1:1
             Fint[k] = Fint[k + 1] + (F[k] + F[k + 1])*(E[k + 1] - E[k])/2*ergsev
         end
-        new{R}(collect(E), collect(F), Fint)
+        new{R}(E isa Vector ? E : collect(E), collect(F), Fint)
     end
 end
+
+"""
+    Radiation(E; J)
+
+The radiation field of the mean intensity `J` (erg s⁻¹ cm⁻² erg⁻¹ sr⁻¹) on the energy grid `E`: `F = 4π J`.
+"""
+Radiation(E::AbstractVector; J::AbstractVector) = Radiation(E, 4π .* J)
+
+"""
+    mean_intensity(rad)
+
+The mean intensity `J = F/4π` of `rad`.
+"""
+mean_intensity(rad::Radiation) = rad.F ./ 4π
+
+"""
+    point_source(E, L, r)
+
+The radiation at the distance `r` (cm) from a point source of the spectrum `L` (erg s⁻¹ erg⁻¹) on the grid
+`E`, in a medium without absorption: the 1-D geometry of XSTAR, `F = L/(4π r²)`. Other geometries supply
+their own `J`.
+"""
+point_source(E::AbstractVector, L::AbstractVector, r) = Radiation(E, L ./ (4π*r^2))
 
 """
     Opacity([R=Float64,] n)

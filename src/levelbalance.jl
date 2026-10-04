@@ -13,6 +13,7 @@ const energy_order_floor = 1e-24        # added to the energy of `final` in that
 const unordered_types = (7, 41)         # rate types (photoionization) whose levels are never reordered
 const photoionization_lfast = 2         # lfpi of calc_hmc_element: photoionization and recombination, no opacities
 const unconnected_tolerance = 1e-39     # msolvelud drops the levels whose rates are all below this
+const probe_temperature = 1e6           # (10⁴ K) hot enough that no record's ΔE/kT cutoff hides its levels from `index=true`
 const first_level = 1                   # the ground level
 const photoionization_type = 1          # rate type 1 counts the photoionization of the ground level only
 const total_rate_types = (8, 15)        # rate types of the totals (recombination, ionization) that XSTAR leaves out
@@ -23,12 +24,18 @@ const level_resolved_data_type = ParPhotoIonize2   # its rate type 1 records are
 ucalc_rates(coef::AbstractRate, r) = (r.frate, r.irate)
 ucalc_rates(coef::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}, r) = (r.irate, r.frate)
 
-# the keywords of `kw` that `rate` accepts for `coef`
-accepted(coef::AbstractRate, cell, kw::NamedTuple) =
-    NamedTuple{filter(k -> hasmethod(rate, Tuple{typeof(coef), typeof(cell)}, (k,)), keys(kw))}(kw)
+# the keywords of `rate` that the level balance supplies to each type of record: the radiation field, the speed switch
+# of the photoionization integrals and the escape probabilities (the lines take their sum, `pesc`, the others the
+# pair `ptmp`). Listed by type because several rates forward their keywords (`kw...`) and would accept any.
+balance_keywords(::AbstractRate) = ()
+balance_keywords(::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}) = (:radiation, :pesc)
+balance_keywords(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoionizeDamp, PhotoionizeFeKedge,
+    PhotoRecombX, PhotoionizeSuper}) = (:radiation, :lfast, :ptmp)
+balance_keywords(::PhotoionizeDelta) = (:radiation,)
+balance_keywords(::RadiativeSuper) = (:ptmp,)
 
 # the rates of the ion that go into the level matrix
-in_level_matrix(coef::AbstractRate) = !(coef isa AtomicLevel) && !(coef.rtype in total_rate_types) &&
+in_level_matrix(coef::AbstractRate) = !(coef isa Union{AtomicLevel, AtomicLevelFe}) && !(coef.rtype in total_rate_types) &&
     !(coef.rtype == photoionization_type && coef isa level_resolved_data_type)
 
 """
@@ -47,60 +54,156 @@ The ion indices of the element of atomic number `Z`, from the neutral to the las
 """
 element_ions(records, Z) = [r.ion for r in sort!(filter(r -> r isa Ion && r.Z == Z, records); by=r -> r.stage)]
 
-"""
-    element_matrix(rates, levels, ions, cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
+const optically_thin = (0.5, 0.5)                          # ucalc's ptmp1, ptmp2 without line trapping
 
-The rate matrix `A` (s⁻¹, `dx/dt = A x`) of an element for the gas in `cell`: `ions` are its ion indices
-from the neutral up (see `element_ions`) and `rates[k]` the records of `ions[k]` (see `ion_rates`).
-The ions are stacked as in XSTAR: the last level of an ion (its continuum) is the first level of the
-next, so the unknowns are the `nlevels - 1` levels of each ion and the bare nucleus last, and a
-photoionization that leaves the next ion in an excited level has a `final` beyond the last level of its ion.
-`radiation` is the spectrum seen by the photoionization rates and the lines (none by default) and `lfast`
-the speed switch of the photoionization integrals (2: photoionization and recombination, no opacities,
-as XSTAR's `calc_hmc_element`).
 """
-function element_matrix(rates, levels::LevelTable, ions, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
-    kw = (; radiation, lfast)
+    ElementLayout(rates, levels, ions)
+    ElementLayout(records, levels, Z)
+
+The structure of the level balance of an element: what does not depend on the gas, on the radiation or on the
+position, and so is built once and shared by all cells of a grid. `ions` are the ion indices of the element from the
+neutral up and `rates[k]` the records of `ions[k]` (see `ion_rates`); the second form takes them from the
+database `records` (`element_ions`, `ion_rates`) for the element of atomic number `Z`.
+
+The ions are stacked as in XSTAR: the last level of an ion (its continuum) is the first level of the
+next, so the unknowns are the `nlevels - 1` levels of each ion and the bare nucleus last (`N` in all), and a
+photoionization that leaves the next ion in an excited level has a `final` beyond the last level of its ion.
+For each record the layout holds the matrix entries it feeds (`lo` and `up`, the global indices of its lower and
+upper level, 0 if it does not enter) and whether it keeps its forward rate (`ground_only`), found from the
+connectivity of the record (`index=true`) and the energies of the levels, and the keywords of `rate` that it takes.
+"""
+struct ElementLayout{L<:LevelTable}
+    levels::L
+    ions::Vector{Int}
+    nlev::Vector{Int}           # levels of each ion, its continuum included
+    offset::Vector{Int}         # the global index of level 1 of each ion, minus 1
+    N::Int                      # the number of unknowns
+    rates::Vector{AbstractRate} # the records of all the ions
+    ion::Vector{Int}            # position in `ions` of the ion of each record
+    lo::Vector{Int}
+    up::Vector{Int}
+    zero_forward::Vector{Bool}  # photoionization (rate type 1) from an excited level counts no forward rate
+    keywords::Vector{Tuple{Vararg{Symbol}}}
+end
+
+function ElementLayout(rates, levels::LevelTable, ions)
+    ions = collect(Int, ions)
     nlev = [nlevels(levels, ion) for ion in ions]
-    offset = cumsum([0; nlev[1:end - 1] .- 1])      # the index of level 1 of each ion, minus 1
+    offset = cumsum([0; nlev[1:end - 1] .- 1])
     N = sum(nlev .- 1) + 1
-    A = zeros(typeof(float(cell.T)), N, N)
+    probe = Cell(probe_temperature, 1.0, 1.0, 1.0)
+    records, ionpos, lo, up, zero_forward, keywords = AbstractRate[], Int[], Int[], Int[], Bool[], Tuple{Vararg{Symbol}}[]
     for (k, ion) in enumerate(ions), coef in rates[k]
-        r = rate(coef, cell; accepted(coef, cell, kw)...)
-        i1, i2 = r.init, r.final
-        (i1 > 0 && i2 > 0 && i1 != i2 && offset[k] + max(i1, i2) <= N) || continue
-        ans1, ans2 = ucalc_rates(coef, r)
-        coef.rtype == photoionization_type && i1 != first_level && (ans1 = zero(ans1))
-        lo, up = i1, i2
-        if !(coef.rtype in unordered_types)
-            max(i1, i2) <= nlev[k] || continue          # (no energies of the levels of the next ion)
-            e1, e2 = levels[(ion, i1)].E, levels[(ion, i2)].E
-            e1/(energy_order_floor + e2) - 1 < energy_order_tolerance || ((lo, up) = (i2, i1))
+        connection = rate(coef, probe; index=true)
+        i1, i2 = connection.init, connection.final
+        l, u = 0, 0
+        if i1 > 0 && i2 > 0 && i1 != i2 && offset[k] + max(i1, i2) <= N
+            l, u = i1, i2
+            if !(coef.rtype in unordered_types)
+                if max(i1, i2) <= nlev[k]            # (the energies of the next ion's levels are not at hand)
+                    e1, e2 = levels[(ion, i1)].E, levels[(ion, i2)].E
+                    e1/(energy_order_floor + e2) - 1 < energy_order_tolerance || ((l, u) = (i2, i1))
+                else
+                    l = u = 0
+                end
+            end
+            l > 0 && ((l, u) = (l + offset[k], u + offset[k]))
         end
-        lo += offset[k]; up += offset[k]
+        push!(records, coef); push!(ionpos, k); push!(lo, l); push!(up, u)
+        push!(zero_forward, coef.rtype == photoionization_type && i1 != first_level)
+        push!(keywords, balance_keywords(coef))
+    end
+    ElementLayout(levels, ions, nlev, offset, N, records, ionpos, lo, up, zero_forward, keywords)
+end
+
+ElementLayout(records, levels::LevelTable, Z::Integer) =
+    (ions = element_ions(records, Z); ElementLayout([ion_rates(records, ion) for ion in ions], levels, ions))
+
+Base.size(layout::ElementLayout) = (layout.N, layout.N)
+
+# the escape probabilities (ptmp1, ptmp2) of record j: `escape` is nothing (the rates' own default), a function of the
+# record or a vector with one pair per record of the layout
+escape_of(::Nothing, j, coef) = nothing
+escape_of(escape::Function, j, coef) = escape(coef)
+escape_of(escape::AbstractVector, j, coef) = escape[j]
+
+"""
+    element_matrix!(A, layout, cell; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
+    element_matrix(layout, cell; kw...)
+
+The rate matrix `A` (s⁻¹, `dx/dt = A x`) of the element of `layout` for the gas in `cell`, written into `A` or
+newly allocated; the unknowns are described at `ElementLayout`. Each record that enters the matrix puts the
+two rates of ucalc, `ans1` (lower to upper level) and `ans2` (upper to lower), into the four entries
+    A[up, lo] += ans1    A[up, up] -= ans2    A[lo, up] += ans2    A[lo, lo] -= ans1.
+
+- `radiation` is the radiation seen by the photoionization rates and the lines: a `Radiation` (the mean intensity
+  `J` at the cell, whatever the geometry that gave it; none by default).
+- `lfast` is the speed switch of the photoionization integrals (2: photoionization and recombination, no
+  opacities, as XSTAR's `calc_hmc_element`).
+- `escape` gives the escape probabilities `(ptmp1, ptmp2)` of the lines and the recombination
+  continua: a function of the record or a vector with a pair for each record of `layout.rates`; the rates'
+  default (no line trapping) when `nothing`. XSTAR obtains them from the optical depths along its ray; another
+  geometry supplies its own.
+"""
+function element_matrix!(A::AbstractMatrix, layout::ElementLayout, cell::Cell;
+        radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
+    size(A) == size(layout) || throw(DimensionMismatch("A must be $(layout.N) × $(layout.N)"))
+    fill!(A, 0)
+    for (j, coef) in enumerate(layout.rates)
+        lo = layout.lo[j]
+        lo == 0 && continue
+        up = layout.up[j]
+        p = escape_of(escape, j, coef)
+        given = p === nothing ? (; radiation, lfast) : (; radiation, lfast, pesc=p[1] + p[2], ptmp=p)
+        r = rate(coef, cell; NamedTuple{filter(key -> key in keys(given), layout.keywords[j])}(given)...)
+        ans1, ans2 = ucalc_rates(coef, r)
+        layout.zero_forward[j] && (ans1 = zero(ans1))
         A[up, lo] += ans1;  A[up, up] -= ans2
         A[lo, up] += ans2;  A[lo, lo] -= ans1
     end
     A
 end
 
-"""
-    rate_matrix(rates, levels, ion, cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
-
-The rate matrix of the levels `1:nlevels(levels, ion)` of a single `ion` (`element_matrix` of one ion).
-"""
-rate_matrix(rates, levels::LevelTable, ion, cell::Cell; kw...) = element_matrix([rates], levels, [ion], cell; kw...)
+element_matrix(layout::ElementLayout, cell::Cell; kw...) =
+    element_matrix!(zeros(typeof(float(cell.T)), size(layout)), layout, cell; kw...)
 
 """
-    ion_fractions(x, levels, ions)
+    rate_matrix(rates, levels, ion, cell; kw...)
 
-The fractions of the ions `ions` of an element, and of its bare nucleus last, from the level populations `x`
-of `element_matrix`.
+The rate matrix of the levels `1:nlevels(levels, ion)` of a single `ion` (`element_matrix` of its layout).
 """
-function ion_fractions(x, levels::LevelTable, ions)
-    nlev = [nlevels(levels, ion) for ion in ions]
-    stop = cumsum(nlev .- 1)
-    [sum(x[(k == 1 ? 0 : stop[k - 1]) + 1:stop[k]]) for k in eachindex(ions)] |> f -> push!(f, x[end])
+rate_matrix(rates, levels::LevelTable, ion, cell::Cell; kw...) = element_matrix(ElementLayout([rates], levels, [ion]), cell; kw...)
+
+"""
+    element_populations(layout, cells; radiation=NO_RADIATION, kw...)
+
+The level populations (see `level_populations`) of the element of `layout` in each of the `cells`, as an
+`N × length(cells)` matrix (one column per cell; the cells may be any array, the columns follow its linear
+indices). The cells do not depend on each other and are solved on the threads of Julia.
+`radiation` and `escape` (see `element_matrix!`) are fixed values for all the cells, or functions of the index
+of the cell that return that cell's value, so that each cell has its own radiation field and line trapping.
+"""
+function element_populations(layout::ElementLayout, cells::AbstractArray{<:Cell}; radiation=NO_RADIATION, escape=nothing, kw...)
+    at(value::Function, i) = value(i)
+    at(value, i) = value
+    R = typeof(float(first(cells).T))
+    x = zeros(R, layout.N, length(cells))
+    Threads.@threads for i in eachindex(cells)
+        A = element_matrix(layout, cells[i]; radiation=at(radiation, i), escape=at(escape, i), kw...)
+        x[:, i] = level_populations(A)
+    end
+    x
+end
+
+"""
+    ion_fractions(x, layout)
+
+The fractions of the ions of `layout` and of the bare nucleus last, from the level populations `x` of
+`element_matrix`.
+"""
+function ion_fractions(x, layout::ElementLayout)
+    stop = cumsum(layout.nlev .- 1)
+    [sum(x[(k == 1 ? 0 : stop[k - 1]) + 1:stop[k]]) for k in eachindex(layout.ions)] |> f -> push!(f, x[end])
 end
 
 """
