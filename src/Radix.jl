@@ -27,6 +27,7 @@ include("ratemap.jl")
 
 include("atomicdb.jl")
 include("elements.jl")
+include("mixture.jl")
 
 include("abundances.jl")
 
