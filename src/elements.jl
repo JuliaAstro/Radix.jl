@@ -71,8 +71,8 @@ The ions are stacked as in XSTAR: the last level of an ion (its continuum) is th
 next, so the unknowns are the `nlevels - 1` levels of each ion and the bare nucleus last (`N` in all), and a
 photoionization that leaves the next ion in an excited level has a `final` beyond the last level of its ion.
 For each record the layout holds the matrix entries it feeds (`lo` and `up`, the global indices of its lower and
-upper level, 0 if it does not enter) and whether it keeps its forward rate (`ground_only`), found from the
-connectivity of the record (`index=true`) and the energies of the levels, and the keywords of `rate` that it takes.
+upper level, 0 if it does not enter) and whether it keeps its forward rate (`zero_forward`), found from the
+connectivity of the record (`index=true`) and the energies of the levels.
 """
 struct Elements{L<:Levels}
     levels::L
@@ -85,7 +85,6 @@ struct Elements{L<:Levels}
     lo::Vector{Int}
     up::Vector{Int}
     zero_forward::Vector{Bool}  # photoionization (rate type 1) from an excited level counts no forward rate
-    keywords::Vector{Tuple{Vararg{Symbol}}}
     colptr::Vector{Int}         # the sparsity pattern of the rate matrix (compressed columns): the entries of all records
     rowval::Vector{Int}         # and the whole diagonal
     slots::Vector{NTuple{4, Int}}   # where each record's four entries (up,lo) (up,up) (lo,up) (lo,lo) are in the values
@@ -97,7 +96,7 @@ function Elements(rates, levels::Levels, ions)
     offset = cumsum([0; nlev[1:end - 1] .- 1])
     N = sum(nlev .- 1) + 1
     probe = Cell(probe_temperature, 1.0, 1.0, 1.0)
-    records, ionpos, lo, up, zero_forward, keywords = AbstractRate[], Int[], Int[], Int[], Bool[], Tuple{Vararg{Symbol}}[]
+    records, ionpos, lo, up, zero_forward = AbstractRate[], Int[], Int[], Int[], Bool[]
     for (k, ion) in enumerate(ions), coef in rates[k]
         connection = rate(coef, probe; index=true)
         i1, i2 = connection.init, connection.final
@@ -116,10 +115,9 @@ function Elements(rates, levels::Levels, ions)
         end
         push!(records, coef); push!(ionpos, k); push!(lo, l); push!(up, u)
         push!(zero_forward, coef.rtype == photoionization_type && i1 != first_level)
-        push!(keywords, balance_keywords(coef))
     end
     colptr, rowval, slots = sparsity_pattern(N, lo, up)
-    Elements(levels, ions, nlev, offset, N, records, ionpos, lo, up, zero_forward, keywords, colptr, rowval, slots)
+    Elements(levels, ions, nlev, offset, N, records, ionpos, lo, up, zero_forward, colptr, rowval, slots)
 end
 
 # the compressed-column pattern of the entries that the records (`lo`, `up`; 0 for none) and the diagonal give, and
@@ -196,15 +194,20 @@ function element_matrix!(A::SparseMatrixCSC, layout::Elements, cell::Cell; kw...
     A
 end
 
-# ucalc's two rates of record j in `cell`
+# ucalc's two rates of record j in `cell`. The keywords of `rate` that the record takes (`balance_keywords`) are selected from
+# the full set by its concrete type, so that the call is type-stable: building them from a list kept for each record
+# would allocate and dispatch at run time, which took two thirds of the time of the matrix of iron.
 function record_rates(layout::Elements, j, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
     coef = layout.rates[j]
-    p = escape_of(escape, j, coef)
-    given = p === nothing ? (; radiation, lfast) : (; radiation, lfast, pesc=p[1] + p[2], ptmp=p)
-    r = rate(coef, cell; NamedTuple{filter(key -> key in keys(given), layout.keywords[j])}(given)...)
-    ans1, ans2 = ucalc_rates(coef, r)
+    ptmp = something(escape_of(escape, j, coef), optically_thin)
+    ans1, ans2 = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))
     layout.zero_forward[j] && (ans1 = zero(ans1))
     ans1, ans2
+end
+
+function rates_of(coef::AbstractRate, cell::Cell, given::NamedTuple)
+    r = rate(coef, cell; NamedTuple{balance_keywords(coef)}(given)...)
+    ucalc_rates(coef, r)
 end
 
 """
