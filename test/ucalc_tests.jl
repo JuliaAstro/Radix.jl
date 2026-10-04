@@ -97,15 +97,19 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     @testset "type 38 TotRadRecomb" begin
         @test check_ucalc("type38"; call=plain_call, expected=direct) == 100
     end
+    # type 50 and the APED lines of type 91 share ucalc's code, and the layout of the record
+    line_call = (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13],
+        vturb=c.cond[6], pesc=c.cond[11] + c.cond[12], nlev=c.nlev,
+        radiation=ucalc_radiation(c), cfrac=c.cond[8])
+    line_expected = (o, c) -> (; frate=o[2], irate=o[1], fenergy=-o[3], ienergy=-o[4],
+        init=o[7], final=o[8], opacity=o[11])
     @testset "type 50 AtomicLine2" begin
         # ucalc returns the photoexcitation in ans1, the decay in ans2, minus the energy of
         # the decays in ans3 and of the photoexcitations in ans4, and the opacity last
-        @test check_ucalc("type50";
-            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13],
-                vturb=c.cond[6], pesc=c.cond[11] + c.cond[12], nlev=c.nlev,
-                radiation=ucalc_radiation(c), cfrac=c.cond[8]),
-            expected=(o, c) -> (; frate=o[2], irate=o[1], fenergy=-o[3], ienergy=-o[4],
-                init=o[7], final=o[8], opacity=o[11]), rtol=1e-6) == 100
+        @test check_ucalc("type50"; call=line_call, expected=line_expected, rtol=1e-6) == 100
+    end
+    @testset "type 91 RadiativeAPED" begin
+        @test check_ucalc("type91"; call=line_call, expected=line_expected, rtol=1e-6) == 240
     end
     # ElectronCollision returns the lower level first and clamps Υ at 0; ucalc does not
     clamp0(o, c) = (; frate=max(0, o[1]), irate=max(0, o[2]), init=o[8], final=o[7],

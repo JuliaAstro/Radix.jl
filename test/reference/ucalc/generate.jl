@@ -7,7 +7,7 @@
 # then:  drvu < OUTDIR/typeNN.in > OUTDIR/typeNN.out
 using FITSFiles, Random
 
-const RADIATION_TYPES = (49, 50, 53, 59, 70, 74, 85, 88, 99) # types that need a spectrum
+const RADIATION_TYPES = (49, 50, 53, 59, 70, 74, 85, 88, 91, 99) # types that need a spectrum
 const PARENT_TYPES = (49, 53, 59, 70, 99)    # types that leave a level of the next ion
 # positions of the parent level and the parent ion among the integers
 parent_positions(type) = type == 59 ? (4, 5) : type in (70, 99) ? (8, 9) : (5, 6)
@@ -78,8 +78,8 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 println(io, type, " ", ptr[3, j], " ", length(rv), " ", length(iv))
                 println(io, join(iv, " "))
                 println(io, join(rv, " "))
-                amass = type == 50 ? get(mass, iv[3], 1.0) : type == 71 ? get(mass, iv[5], 1.0) : 1.0   # Z is the third integer of type 50, the fifth of type 71
-                cfrac = type == 50 ? CFRAC[mod1(ci, length(CFRAC))] : 0.0
+                amass = type in (50, 91) ? get(mass, iv[3], 1.0) : type == 71 ? get(mass, iv[5], 1.0) : 1.0   # Z is the third integer of types 50 and 91, the fifth of type 71
+                cfrac = type in (50, 91) ? CFRAC[mod1(ci, length(CFRAC))] : 0.0
                 println(io, join((t, xpx, xee, xpx*f0, xpx*f1, 1.0, -1.0, cfrac, 1e-3, 1e-3, 0.5, 0.5, amass), " "))
                 # radiation (only the photoionization types need one) and the level of the
                 # next ion that a photoionization record leaves
