@@ -1,7 +1,7 @@
 module Radix
 
 export Atom, AtomicLevel, AtomicLine
-export load, level_table, level_counts, Levels, nlevels, atomic_mass, Radiation, Opacity
+export load, levels, level_counts, Levels, nlevels, atomic_mass, Radiation, Opacity
 export Constants, ucalc_constants, constants, set_constants!, with_constants
 
 
@@ -23,7 +23,7 @@ include("rates/rates.jl")
 include("ratemap.jl")
 
 include("atomicdb.jl")
-include("levelbalance.jl")
+include("elements.jl")
 
 include("abundances.jl")
 

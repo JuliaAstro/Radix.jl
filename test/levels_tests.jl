@@ -7,7 +7,7 @@
     atom = Radix.Atom(Int32(13), "iron", Int32[26, 26], f32[2.5e-5, 55.85])
     ionrec = Radix.Ion(Int32(14), "fe_i", Int32[1, 26, 7], f32[7.9])
     records = [lv(7, 1, 0.0, 2), lv(7, 2, 10.2, 8), lv(7, 3, 13.6, 1), lv(8, 1, 0.0, 1), lv(8, 2, 5.0, 3), lv(8, 3, 9.0, 1), atom, ionrec]
-    table = Radix.level_table(records)
+    table = Radix.levels(records)
 
     @testset "the table" begin
         @test table isa Levels
@@ -17,7 +17,7 @@
         @test level_counts(table) == Dict(7 => 3, 8 => 3)
         @test atomic_mass(table, 7) == Float64(f32(55.85))                          # from the Atom and Ion records
         @test_throws ArgumentError atomic_mass(table, 8)                            # ion 8 has no element record
-        @test atomic_mass(Radix.level_table(records; masses=Dict(8 => 16.0)), 8) == 16.0
+        @test atomic_mass(Radix.levels(records; masses=Dict(8 => 16.0)), 8) == 16.0
     end
 
     @testset "construction" begin

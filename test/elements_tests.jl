@@ -14,7 +14,7 @@ function toy_balance_tests()
   @testset "Level balance" begin
     f32 = Float32
     lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, level, 5], f32[E, g, 1, 13.6])
-    levels = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 12.0, 8), lv(4, 13.6, 1)]; masses=Dict(5 => 1.0))
+    levels = Radix.levels([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 12.0, 8), lv(4, 13.6, 1)]; masses=Dict(5 => 1.0))
     cell = Radix.Cell(1.0, 0.0, 1e4, 1e4)
     toy(i, f, a, b; type=3) = ToyRate(Int8(type), Int32(5), (; init=i, final=f, frate=a, irate=b))
 
@@ -48,7 +48,7 @@ function toy_balance_tests()
         # ion 5 has the levels 1-3 and its continuum (4), ion 6 the level 1 and its continuum (2): the unknowns are
         # 5.1-5.3 (1-3), 6.1 (4, the continuum of ion 5) and the bare nucleus (5)
         lv6(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, level, 6], f32[E, g, 1, 54.4])
-        two = Radix.level_table([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 12.0, 8), lv(4, 13.6, 1), lv6(1, 0.0, 1), lv6(2, 54.4, 1)];
+        two = Radix.levels([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 12.0, 8), lv(4, 13.6, 1), lv6(1, 0.0, 1), lv6(2, 54.4, 1)];
             masses=Dict(5 => 4.0, 6 => 4.0))
         ions = [Radix.Ion("he_i", Int32(1), Int32(2), Int32(5), 24.6f0), Radix.Ion("he_ii", Int32(2), Int32(2), Int32(6), 54.4f0)]
         @test Radix.element_ions(vcat(reverse(ions), [Radix.Atom("he", Int32(2), Int32(2), 0.1f0, 4.0f0)]), 2) == [5, 6]
@@ -140,7 +140,7 @@ end
 # fraction of the XSTAR reference run (test/reference/xstar_pow_xi2)
 function element_balance_tests(db)
     @testset "Element level balance" begin
-        levels = Radix.level_table(db)
+        levels = Radix.levels(db)
         rates = Radix.ion_rates(db, 1)
         @test length(rates) == 550     # (the 33 levels of the ion are not rates)
         @testset "LTE at a high density" begin

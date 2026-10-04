@@ -158,7 +158,7 @@ passed as `opacity=`. The shared engine is `photoionize_level` (types 49 and 53)
 
 A rate needs more than its own coefficients: the energies, weights and quantum numbers of the levels it connects,
 the number of levels of the ion (the continuum is the last) and the atomic mass of the element. These come from a
-`Levels`, which `level_table(records)` builds from the `AtomicLevel` and `AtomicLevelFe` records (the Fe UTA
+`Levels`, which `levels(records)` builds from the `AtomicLevel` and `AtomicLevelFe` records (the Fe UTA
 levels, which hold only an energy and a weight, are added as levels with zero quantum numbers) and the `Atom` and
 `Ion` records (the mass of each ion's element). It behaves as the dictionary `(ion, level) => AtomicLevel` and also
 answers `nlevels(table, ion)`, `atomic_mass(table, ion)` and `level_counts(table)`.
@@ -399,7 +399,7 @@ ported type (except 4, which has no `rate` method). Notes:
   that the structs do not have, which cannot be settled without data.
 - `RadiativeFeDecay` (ucalc 82) takes the levels of the Fe UTA ions from two record types: the regular
   ones (type 6) and the UTA levels (`AtomicLevelFe`, type 83: energy and weight only, 986 records, for
-  ions 327-341), so `level_table` includes both, the second as an `AtomicLevel` with zero quantum numbers.
+  ions 327-341), so `levels` includes both, the second as an `AtomicLevel` with zero quantum numbers.
   The rate is that of `AtomicLine2` with these differences: the decay is `A_rad · pesc` (no floor, `A_auto` is not
   used), the oscillator strength is the stored `gf`, the line energy comes from the wavelength, there is no
   covering fraction and the energy of the decays is not returned (`ucalc` has only the photoexcitation's).

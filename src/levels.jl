@@ -43,7 +43,7 @@ end
     level_counts(levels)
 
 Dictionary `ion => number of levels` (the highest level index, the continuum
-level) from a `level_table`.
+level) from a `levels`.
 """
 level_counts(levels::Levels) = copy(levels.nlev)
 

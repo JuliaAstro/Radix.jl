@@ -54,7 +54,7 @@ function ucalc_inputs(c)
             Float32[c.rad[7], c.rad[6], 1, 0]))
     end
     # the levels, and the atomic mass of the element (the driver's last condition), go into the coefficient
-    table = Radix.level_table(recs; masses=Dict(Int(c.ints[end]) => c.cond[13]))
+    table = Radix.levels(recs; masses=Dict(Int(c.ints[end]) => c.cond[13]))
     coef = Radix.construct(Radix.ratemap[c.ndesc], c.rtype, "", Int32.(c.ints), Float32.(c.reals), table)
     (coef, cell, table)
 end
