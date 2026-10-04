@@ -95,17 +95,25 @@ electron density `nₑ` (XSTAR's `freef`; the opacity is not added to an array).
 function free_free_heating(rad::Radiation, T, nₑ)
     K = constants()
     E, F = rad.E, rad.F
-    ekt = T*K.kT_eV
-    enz2 = ion_density_factor*nₑ
-    opacity(e) = ff_absorption_coeff*nₑ*enz2/sqrt(T)/e^3*(1 - exp(-e/ekt))
+    opaff = free_free_opacity(E, T, nₑ)
     heating = 0.0
-    opaffo = opacity(E[1])
     for k in 2:length(E)
-        opaff = opacity(E[k])
-        heating += (F[k]*opaff + F[k - 1]*opaffo)*K.ergsev*(E[k] - E[k - 1])/2
-        opaffo = opaff
+        heating += (F[k]*opaff[k] + F[k - 1]*opaff[k - 1])*K.ergsev*(E[k] - E[k - 1])/2
     end
     heating
+end
+
+"""
+    free_free_opacity(E, T, nₑ)
+
+The free-free opacity (cm⁻¹) on the energy grid `E` (eV) at the temperature `T` (10⁴ K) and electron density `nₑ`: XSTAR's `freef`
+adds it to the continuum opacity.
+"""
+function free_free_opacity(E::AbstractVector, T, nₑ)
+    K = constants()
+    ekt = T*K.kT_eV
+    enz2 = ion_density_factor*nₑ
+    [ff_absorption_coeff*nₑ*enz2/sqrt(T)/e^3*(1 - exp(-e/ekt)) for e in E]
 end
 
 """

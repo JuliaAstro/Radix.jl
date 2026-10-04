@@ -58,6 +58,24 @@ function toy_transfer_tests()
             @test Radix.escape_probabilities(mixture, Radix.OpticalDepths(mixture))[1][1] == (0.5, 0.5)    # a thin slab
         end
 
+        @testset "the continuum opacity" begin
+            # without photoionization records: Thomson scattering (everywhere) and free-free (in the total only)
+            E = Radix.xstar_energy_grid(999)
+            rad = Radix.Radiation(E, 1e10 ./ E)
+            K = Radix.constants()
+            T = 1.0
+            op = Radix.continuum_opacity(mixture, balance, T, ntot, rad, [[0.0, 0.0]])
+            thomson = balance.nₑ*K.sigma_thomson
+            @test all(op.continuum .== thomson)
+            @test op.total ≈ thomson .+ Radix.free_free_opacity(E, T, balance.nₑ)
+            @test op.edges == 0
+            @test Radix.continuum_opacity(mixture, balance, T, ntot, rad, [[0.0, 0.0]]; cfrac=0.25).continuum ≈ fill(0.75*thomson, length(E))
+            # the free-free opacity is that of the heating
+            ff = Radix.free_free_opacity(E, T, 1e4)
+            @test Radix.free_free_heating(rad, T, 1e4) ≈ K.ergsev*sum((rad.F[k]*ff[k] + rad.F[k - 1]*ff[k - 1])*(E[k] - E[k - 1])/2 for k in 2:length(E))
+            @test all(>=(0), ff) && ff[end] > ff[1]*1e-30
+        end
+
         @testset "the escape of one element" begin
             per_element = [[(0.1, 0.2), (0.3, 0.4)]]
             @test Radix.element_escape(per_element, 1) == [(0.1, 0.2), (0.3, 0.4)]
@@ -84,6 +102,14 @@ function toy_transfer_tests()
             @test run.zones[2].radiation.F[10] ≈ run.zones[1].radiation.F[10]/4                  # 1/r²
             @test all(z -> z.T == 1.0 && z.xee == 1.0, run.zones)
             @test run.depths.inward == [[0.0]] && run.zones[1].escape == [[(0.5, 0.5)]]
+            # the continuum is attenuated by the depth of the zones before (here Thomson scattering): exp(-Σ opacity Δr)
+            thick = Radix.march_zones(hmixture, 1e4, compton, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false)
+            thomson = thick.zones[1].nₑ*Radix.constants().sigma_thomson
+            @test thick.zones[1].opacity.total[10] ≈ thomson + Radix.free_free_opacity(E, 1.0, thick.zones[1].nₑ)[10]
+            @test thick.zones[2].radiation.F[10] ≈ thick.zones[1].radiation.F[10]*exp(-thick.zones[1].opacity.total[10]*1e17) rtol=1e-12
+            @test thick.dpthc[10] ≈ 2*thick.zones[1].opacity.total[10]*1e17
+            flat = Radix.march_zones(hmixture, 1e4, compton, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
+            @test flat.zones[2].radiation.F == flat.zones[1].radiation.F
             @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
         end
     end
@@ -140,6 +166,30 @@ function transfer_balance_tests(db)
             @test length(ratios) > 400
             @test all(r -> abs(r - 1) < 2e-2, ratios)
             @test abs(sort(ratios)[length(ratios) ÷ 2] - 1) < 2e-3                           # the median
+        end
+
+        @testset "the continuum depth of a thick slab" begin
+            # test/reference/xstar_thick_slab: 10²¹ cm⁻² at log ξ = 1, T = 10⁵ K, without the vturb of XSTAR (see its README)
+            dir = joinpath(@__DIR__, "reference", "xstar_thick_slab")
+            slab = fits(joinpath(dir, "xout_cont1.fits"))[3].data
+            Es, Is, Ts = Float64.(slab.energy), Float64.(slab.incident), Float64.(slab.transmitted)
+            r0 = 3.16228e20
+            zones = [(r0 + k*1e17/6, 1e17/6) for k in 0:5]
+            thickrun = Radix.march_zones(mixture, 1e4, compton, Es, Is*1e38, zones; T=10.0, iterate=false)
+            τx = -log.(Ts ./ Is)
+            ratio = thickrun.dpthc ./ τx
+            @test all(τx .> 6e-4)
+            @test abs(sort(ratio)[length(ratio) ÷ 2] - 1) < 5e-3                 # the median of the 999 bins
+            @test all(r -> abs(r - 1) < 6e-2, ratio)
+            i = argmin(abs.(Es .- 13.6)); @test thickrun.dpthc[i] ≈ τx[i] rtol=2e-3           # Thomson scattering
+            i = argmin(abs.(Es .- 54.7)); @test thickrun.dpthc[i] ≈ τx[i] rtol=4e-2           # the edge of He II
+            # the state of the first zone is that of the table
+            slabab = fits(joinpath(dir, "xout_abund1.fits"))[2].data
+            @test thickrun.zones[1].fractions[2][2] ≈ slabab.he_ii[2] rtol=1e-4
+            @test thickrun.zones[1].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[2] rtol=1e-4
+            # the XSTAR of the reference does not absorb the continuum at all when vturb > 0 (gsmooth2)
+            smoothed = fits(joinpath(dir, "xout_cont1_vturb1.fits"))[3].data
+            @test count(==(1), Float64.(smoothed.transmitted) ./ Float64.(smoothed.incident)) > 700
         end
 
         @testset "optical depths of the recombination edges" begin
