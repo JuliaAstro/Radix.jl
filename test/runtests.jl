@@ -438,7 +438,7 @@ struct UnportedRate <: Radix.AbstractRate end
             @test nbad == 0
             @test all(>(0), values(kinds))
             @test kinds[Radix.PhotoionizeSuper] > 0 && kinds[Radix.PhotoRecombX] > 0
-            hydrogen_balance_tests(db)
+            element_balance_tests(db)
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"

@@ -12,6 +12,7 @@ const energy_order_tolerance = 1e-8     # calc_hmc_ion keeps (init, final) as (l
 const energy_order_floor = 1e-24        # added to the energy of `final` in that ratio
 const unordered_types = (7, 41)         # rate types (photoionization) whose levels are never reordered
 const photoionization_lfast = 2         # lfpi of calc_hmc_element: photoionization and recombination, no opacities
+const unconnected_tolerance = 1e-39     # msolvelud drops the levels whose rates are all below this
 const first_level = 1                   # the ground level
 const photoionization_type = 1          # rate type 1 counts the photoionization of the ground level only
 const total_rate_types = (8, 15)        # rate types of the totals (recombination, ionization) that XSTAR leaves out
@@ -27,8 +28,8 @@ accepted(coef::AbstractRate, cell, kw::NamedTuple) =
     NamedTuple{filter(k -> hasmethod(rate, Tuple{typeof(coef), typeof(cell)}, (k,)), keys(kw))}(kw)
 
 # the rates of the ion that go into the level matrix
-in_level_matrix(coef::AbstractRate) =
-    !(coef.rtype in total_rate_types) && !(coef.rtype == photoionization_type && coef isa level_resolved_data_type)
+in_level_matrix(coef::AbstractRate) = !(coef isa AtomicLevel) && !(coef.rtype in total_rate_types) &&
+    !(coef.rtype == photoionization_type && coef isa level_resolved_data_type)
 
 """
     ion_rates(records, ion)
@@ -39,28 +40,44 @@ ion_rates(records, ion) = [r for r in records
     if r isa AbstractRate && hasproperty(r, :ion) && r.ion == ion && in_level_matrix(r)]
 
 """
-    rate_matrix(rates, levels, ion, cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
+    element_ions(records, Z)
 
-The rate matrix `A` (s⁻¹, `dx/dt = A x`) of the levels `1:nlevels(levels, ion)` of `ion` for the
-gas in `cell`, from the records `rates` (see `ion_rates`). `radiation` is the spectrum seen by the
-photoionization rates and the lines (none by default) and `lfast` the speed switch of the photoionization
-integrals (2: photoionization and recombination, no opacities, as XSTAR's `calc_hmc_element`).
+The ion indices of the element of atomic number `Z`, from the neutral to the last bound stage (its
+`Ion` records, in order of ionization stage).
 """
-function rate_matrix(rates, levels::LevelTable, ion, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
+element_ions(records, Z) = [r.ion for r in sort!(filter(r -> r isa Ion && r.Z == Z, records); by=r -> r.stage)]
+
+"""
+    element_matrix(rates, levels, ions, cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
+
+The rate matrix `A` (s⁻¹, `dx/dt = A x`) of an element for the gas in `cell`: `ions` are its ion indices
+from the neutral up (see `element_ions`) and `rates[k]` the records of `ions[k]` (see `ion_rates`).
+The ions are stacked as in XSTAR: the last level of an ion (its continuum) is the first level of the
+next, so the unknowns are the `nlevels - 1` levels of each ion and the bare nucleus last, and a
+photoionization that leaves the next ion in an excited level has a `final` beyond the last level of its ion.
+`radiation` is the spectrum seen by the photoionization rates and the lines (none by default) and `lfast`
+the speed switch of the photoionization integrals (2: photoionization and recombination, no opacities,
+as XSTAR's `calc_hmc_element`).
+"""
+function element_matrix(rates, levels::LevelTable, ions, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
     kw = (; radiation, lfast)
-    n = nlevels(levels, ion)
-    A = zeros(typeof(float(cell.T)), n, n)
-    for coef in rates
+    nlev = [nlevels(levels, ion) for ion in ions]
+    offset = cumsum([0; nlev[1:end - 1] .- 1])      # the index of level 1 of each ion, minus 1
+    N = sum(nlev .- 1) + 1
+    A = zeros(typeof(float(cell.T)), N, N)
+    for (k, ion) in enumerate(ions), coef in rates[k]
         r = rate(coef, cell; accepted(coef, cell, kw)...)
         i1, i2 = r.init, r.final
-        (i1 > 0 && i2 > 0 && i1 <= n && i2 <= n && i1 != i2) || continue
+        (i1 > 0 && i2 > 0 && i1 != i2 && offset[k] + max(i1, i2) <= N) || continue
         ans1, ans2 = ucalc_rates(coef, r)
         coef.rtype == photoionization_type && i1 != first_level && (ans1 = zero(ans1))
         lo, up = i1, i2
         if !(coef.rtype in unordered_types)
+            max(i1, i2) <= nlev[k] || continue          # (no energies of the levels of the next ion)
             e1, e2 = levels[(ion, i1)].E, levels[(ion, i2)].E
             e1/(energy_order_floor + e2) - 1 < energy_order_tolerance || ((lo, up) = (i2, i1))
         end
+        lo += offset[k]; up += offset[k]
         A[up, lo] += ans1;  A[up, up] -= ans2
         A[lo, up] += ans2;  A[lo, lo] -= ans1
     end
@@ -68,18 +85,43 @@ function rate_matrix(rates, levels::LevelTable, ion, cell::Cell; radiation=NO_RA
 end
 
 """
+    rate_matrix(rates, levels, ion, cell; radiation=NO_RADIATION, lfast=photoionization_lfast)
+
+The rate matrix of the levels `1:nlevels(levels, ion)` of a single `ion` (`element_matrix` of one ion).
+"""
+rate_matrix(rates, levels::LevelTable, ion, cell::Cell; kw...) = element_matrix([rates], levels, [ion], cell; kw...)
+
+"""
+    ion_fractions(x, levels, ions)
+
+The fractions of the ions `ions` of an element, and of its bare nucleus last, from the level populations `x`
+of `element_matrix`.
+"""
+function ion_fractions(x, levels::LevelTable, ions)
+    nlev = [nlevels(levels, ion) for ion in ions]
+    stop = cumsum(nlev .- 1)
+    [sum(x[(k == 1 ? 0 : stop[k - 1]) + 1:stop[k]]) for k in eachindex(ions)] |> f -> push!(f, x[end])
+end
+
+"""
     level_populations(A)
 
-The populations `x` (fractions of the ion, Σ x = 1) that solve `A x = 0`: the last equation is replaced by
-the normalisation, as in XSTAR.
+The populations `x` (fractions of the element, Σ x = 1) that solve `A x = 0`: the last equation is replaced by
+the normalisation, as in XSTAR. Levels that no rate connects (`|A|` below `unconnected_tolerance` in their
+row and column) are dropped, as XSTAR's `msolvelud` does, and have population 0.
 """
 function level_populations(A::AbstractMatrix)
     n = size(A, 1)
-    M = copy(A)
-    M[n, :] .= 1
-    b = zeros(eltype(A), n)
-    b[n] = 1
-    M \ b
+    connected(i) = i == n || any(>(unconnected_tolerance), abs.(A[i, :])) || any(>(unconnected_tolerance), abs.(A[:, i]))
+    use = filter(connected, 1:n)
+    M = A[use, use]
+    m = length(use)
+    M[m, :] .= 1
+    b = zeros(eltype(A), m)
+    b[m] = 1
+    x = zeros(eltype(A), n)
+    x[use] = M \ b
+    x
 end
 
 """
