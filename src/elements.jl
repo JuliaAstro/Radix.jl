@@ -88,6 +88,7 @@ struct Elements{L<:Levels}
     colptr::Vector{Int}         # the sparsity pattern of the rate matrix (compressed columns): the entries of all records
     rowval::Vector{Int}         # and the whole diagonal
     slots::Vector{NTuple{4, Int}}   # where each record's four entries (up,lo) (up,up) (lo,up) (lo,lo) are in the values
+    groups::Vector{Any}         # the records that enter the matrix by concrete type: (indices in `rates`, a Vector of that type)
 end
 
 function Elements(rates, levels::Levels, ions)
@@ -117,7 +118,20 @@ function Elements(rates, levels::Levels, ions)
         push!(zero_forward, coef.rtype == photoionization_type && i1 != first_level)
     end
     colptr, rowval, slots = sparsity_pattern(N, lo, up)
-    Elements(levels, ions, nlev, offset, N, records, ionpos, lo, up, zero_forward, colptr, rowval, slots)
+    Elements(levels, ions, nlev, offset, N, records, ionpos, lo, up, zero_forward, colptr, rowval, slots,
+        type_groups(records, findall(!iszero, lo)))
+end
+
+# the records `active` by concrete type: (their indices, a Vector of the records). Calling `rate` on an element of a
+# `Vector{AbstractRate}` is a dynamic dispatch that boxes its arguments and results (370 B per record, 85% of the time of
+# the matrix of iron); a loop over a `Vector{T}` is type-stable and allocates nothing.
+function type_groups(records, active)
+    groups = Any[]
+    for T in unique(typeof(records[j]) for j in active)
+        idx = [j for j in active if typeof(records[j]) === T]
+        push!(groups, (idx, T[records[j] for j in idx]))
+    end
+    groups
 end
 
 # the compressed-column pattern of the entries that the records (`lo`, `up`; 0 for none) and the diagonal give, and
@@ -169,10 +183,11 @@ two rates of ucalc, `ans1` (lower to upper level) and `ans2` (upper to lower), i
 function element_matrix!(A::AbstractMatrix, layout::Elements, cell::Cell; kw...)
     size(A) == size(layout) || throw(DimensionMismatch("A must be $(layout.N) × $(layout.N)"))
     fill!(A, 0)
+    rates = element_rates(layout, cell, eltype(A); kw...)
     for j in eachindex(layout.rates)
         layout.lo[j] == 0 && continue
         lo, up = layout.lo[j], layout.up[j]
-        ans1, ans2 = record_rates(layout, j, cell; kw...)
+        ans1, ans2 = forward_rate(layout, rates, j), rates.ans2[j]
         A[up, lo] += ans1;  A[up, up] -= ans2
         A[lo, up] += ans2;  A[lo, lo] -= ans1
     end
@@ -184,17 +199,53 @@ function element_matrix!(A::SparseMatrixCSC, layout::Elements, cell::Cell; kw...
         throw(DimensionMismatch("A must be the sparse matrix of the layout (see `sparse_matrix`)"))
     values = nonzeros(A)
     fill!(values, 0)
+    rates = element_rates(layout, cell, eltype(A); kw...)
     for j in eachindex(layout.rates)
         layout.lo[j] == 0 && continue
         s1, s2, s3, s4 = layout.slots[j]
-        ans1, ans2 = record_rates(layout, j, cell; kw...)
+        ans1, ans2 = forward_rate(layout, rates, j), rates.ans2[j]
         values[s1] += ans1;  values[s2] -= ans2
         values[s3] += ans2;  values[s4] -= ans1
     end
     A
 end
 
-# ucalc's two rates of record j in `cell`. The keywords of `rate` that the record takes (`balance_keywords`) are selected from
+# the two rates of ucalc of every record that enters the matrix, in two arrays kept for the next call of the task of Julia.
+# They are computed type group by type group and then added to the matrix in the order of the records, so that the matrix does
+# not depend on the grouping (the sum of the rounded rates does).
+struct RateBuffers{T}
+    ans1::Vector{T}
+    ans2::Vector{T}
+end
+
+function rate_buffers(::Type{T}, n) where T
+    cache = get!(Dict{DataType, Any}, task_local_storage(), :RadixRateBuffers)::Dict{DataType, Any}
+    buffers = get!(() -> RateBuffers(T[], T[]), cache, T)::RateBuffers{T}
+    length(buffers.ans1) < n && (resize!(buffers.ans1, n); resize!(buffers.ans2, n))
+    buffers
+end
+
+function element_rates(layout::Elements, cell::Cell, ::Type{T}; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing) where T
+    buffers = rate_buffers(T, length(layout.rates))
+    for (indices, records) in layout.groups
+        group_rates!(buffers, indices, records, cell, radiation, lfast, escape)     # one dynamic dispatch for each type
+    end
+    buffers
+end
+
+function group_rates!(buffers::RateBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape)
+    for k in eachindex(records)
+        j, coef = indices[k], records[k]
+        ptmp = something(escape_of(escape, j, coef), optically_thin)
+        buffers.ans1[j], buffers.ans2[j] = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))
+    end
+end
+
+# the forward rate of record j: photoionization from an excited level counts none
+forward_rate(layout::Elements, buffers::RateBuffers, j) = layout.zero_forward[j] ? zero(eltype(buffers.ans1)) : buffers.ans1[j]
+
+# ucalc's two rates of the single record j in `cell` (the matrix takes those of all its records by type group, `element_rates`).
+# The keywords of `rate` that the record takes (`balance_keywords`) are selected from
 # the full set by its concrete type, so that the call is type-stable: building them from a list kept for each record
 # would allocate and dispatch at run time, which took two thirds of the time of the matrix of iron.
 function record_rates(layout::Elements, j, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
