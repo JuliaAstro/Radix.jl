@@ -198,7 +198,7 @@ unconfirmed.
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
-single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 66, 68, 69, 70, 71, 72, 73, 74, 75, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
+single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 66, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -319,6 +319,10 @@ ported type (except 4, which has no `rate` method). Notes:
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `RadiativeAPED` (ucalc 91) is `ucalc`'s type 50 (it jumps to that code): `rate` builds the equivalent
   `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
+- `TwoPhotonDecay` (ucalc 76) returns the stored `A` as `irate` (independent of the cell), from the higher to the lower
+  level by energy, with `ienergy = A ΔE`. `ucalc` also adds the two-photon continuum (`E²(E_max − E)` normalized to `A`)
+  to its emissivity array; that is not included, as for the line opacity of types 50 and 82. `ChargeExHp` (ucalc 10,
+  four records) is not ported: its rate multiplies the H⁺ density, which `Cell` does not carry.
 - `AutoionizeSat` (ucalc 72) and `AutoionizeFe25Sat` (75) use `calt72`, `3.3e-11 (13.6 eV/kT)^{3/2} e^{-E/kT} (A/10¹³) g`
   (`g` is 1 for type 75, whose records have two reals), a capture-like rate built from the stored autoionization rate.
   `ucalc` multiplies it by the electron density and calls the result the rate of the transition (`irate`); type 72 also
