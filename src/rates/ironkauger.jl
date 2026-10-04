@@ -6,7 +6,7 @@
 
 const IronKAugerDesc = "Iron K Auger data from Patrick"
 
-struct IronKAuger{I, R} <: AbstractRate
+@with_levels struct IronKAuger{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     parent::Parent{I}           # parent ion and level
@@ -24,13 +24,15 @@ function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::IronKAuger, cell; nlev, index=false)
+    rate(coef::IronKAuger, cell; index=false)
 
 Auger decay of a K-vacancy level of iron (XSTAR ucalc type 86): `frate` is the Auger width
 `A_widths[1]` (s⁻¹), independent of the cell, from `init` (the vacancy level) to `final` (`nlev` + the
 level of the parent ion − 1); `irate` is 0. `ucalc` does not look at the levels, so none are needed.
 """
-function rate(coef::IronKAuger, cell::Cell; nlev, index=false, verbose=false)
+function rate(coef::IronKAuger, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     init, final = Int(coef.level), nlev + Int(coef.parent.level) - 1
     (; init, final, frate=index ? 0. : Float64(coef.A_widths[1]), irate=0.)
 end

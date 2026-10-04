@@ -120,8 +120,8 @@
         ndiff = 0
         for (c, _) in Iterators.take(ucalc_cases("type98"), 60)
             coef, cell, lv = ucalc_inputs(c)
-            r = Radix.rate(coef, cell; levels=lv)
-            u = Radix.with_constants(() -> Radix.rate(coef, cell; levels=lv), U)
+            r = Radix.rate(coef, cell)
+            u = Radix.with_constants(() -> Radix.rate(coef, cell), U)
             r.frate == 0 && continue
             # (the Boltzmann factor amplifies the 3e-5 difference in k by ΔE/kT)
             @test r.frate ≈ u.frate rtol=1e-2
@@ -134,7 +134,7 @@
         nrec = 0
         for (c, _) in Iterators.take(ucalc_cases("type59"), 80)
             coef, cell, lv = ucalc_inputs(c)
-            call() = Radix.rate(coef, cell; levels=lv, radiation=ucalc_radiation(c), nlev=c.nlev, abund=(c.cond[9], c.cond[10]))
+            call() = Radix.rate(coef, cell; radiation=ucalc_radiation(c), abund=(c.cond[9], c.cond[10]))
             r = call()
             u = Radix.with_constants(call, Radix.Constants(Radix.constants(); fourpi=U.fourpi, eightpi=U.eightpi))
             r.frate == 0 && continue
@@ -146,7 +146,7 @@
         # detailed balance holds with either set
         for (c, _) in Iterators.take(ucalc_cases("type56"), 40)
             coef, cell, lv = ucalc_inputs(c)
-            r = Radix.rate(coef, cell; levels=lv)
+            r = Radix.rate(coef, cell)
             r.init == 0 && continue
             lo, up = lv[(coef.ion, r.init)], lv[(coef.ion, r.final)]
             expected = Float64(up.g)/Float64(lo.g)*Radix.expo(-abs(Float64(up.E) - Float64(lo.E))/(Radix.constants().kT_eV*cell.T))

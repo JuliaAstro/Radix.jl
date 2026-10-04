@@ -6,7 +6,7 @@
 
 const CollisionHelikeDesc = ""
 
-struct CollisionHelike{I, R} <: AbstractRate
+@with_levels struct CollisionHelike{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -22,11 +22,11 @@ function CollisionHelike(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::CollisionHelike, cell; levels, nlev=typemax(Int), index=false)
+    rate(coef::CollisionHelike, cell; index=false)
 
 Collisional excitation and de-excitation of a He-like ion from a quadratic fit of the effective collision
 strength in log₁₀(T/Z³) (XSTAR ucalc type 68, `calt68`), clamped at 0, with a temperature of at least
 ΔE/50k; otherwise like `rate(::CollisionLS, ...)`.
 """
-rate(coef::CollisionHelike, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false) =
-    helike_fit_collision(coef, cell, levels, nlev, index, :helike)
+rate(coef::CollisionHelike, cell::Cell; index=false, verbose=false) =
+    helike_fit_collision(coef, cell, index, :helike)

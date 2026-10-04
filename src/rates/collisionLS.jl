@@ -5,7 +5,7 @@
 
 const CollisionLSDesc = "Kato & Nakazaki (1996) fit to Helike coll. strgt"
 
-struct CollisionLS{I, R} <: AbstractRate
+@with_levels struct CollisionLS{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -61,8 +61,10 @@ function ls_fine_gamma(r, T)
 end
 
 # the collision rates of types 66, 68 and 69; `kind` is :fine, :helike or :ls
-function helike_fit_collision(coef, cell::Cell, levels, nlev, index, kind)
+function helike_fit_collision(coef, cell::Cell, index, kind)
     K = constants()
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper
     (i1 <= 0 || i1 > nlev || i2 <= 0 || i2 > nlev) && return none
@@ -95,7 +97,7 @@ function helike_fit_collision(coef, cell::Cell, levels, nlev, index, kind)
 end
 
 """
-    rate(coef::CollisionLS, cell; levels, nlev=typemax(Int), index=false)
+    rate(coef::CollisionLS, cell; index=false)
 
 Collisional excitation and de-excitation of a He-like ion from the fit of Kato and Nakazaki to the
 effective collision strength (XSTAR ucalc type 69, `calt69`). The first coefficient is the energy (eV) of the
@@ -104,5 +106,5 @@ clamped at 0 and the temperature is not floored. `irate` is the de-excitation ra
 `frate = irate g_u e^{-ΔE/kT}/g_l` (T in 10⁴ K) and `fenergy`, `ienergy` the rates times the energy difference of the
 levels; `init` is the lower and `final` the upper level by energy, both in `1:nlev`.
 """
-rate(coef::CollisionLS, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false) =
-    helike_fit_collision(coef, cell, levels, nlev, index, :ls)
+rate(coef::CollisionLS, cell::Cell; index=false, verbose=false) =
+    helike_fit_collision(coef, cell, index, :ls)

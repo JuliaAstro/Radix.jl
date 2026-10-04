@@ -8,7 +8,7 @@
 
 const ParPhotoIonize3Desc = "verner pi x!"
 
-struct ParPhotoIonize3{I, R} <: AbstractRate
+@with_levels struct ParPhotoIonize3{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n_electrons::I   # electrons in the ion
@@ -37,21 +37,21 @@ const ph3_floor = 1e-48
 const ph3_flux_min = 1e-20            # no rate if the integrated spectrum above the threshold is below this
 
 """
-    rate(coef::ParPhotoIonize3, cell; levels, radiation, nlev, abund=(0, 0), opacity=nothing)
+    rate(coef::ParPhotoIonize3, cell; abund=(0, 0), opacity=nothing)
 
 Photoionization from the analytic fit of Verner et al. (XSTAR ucalc type 59),
 evaluated on the energy grid of `radiation` and integrated with `photoionization_integrals_fo`
 (the recombination terms are zero for rate type 1 and for excited levels, as in ucalc).
-`levels` is a `level_table` and `nlev` the number of levels of the ion. Returns `init` and
+The levels and their number come from the coefficient's level table (`attach_levels`). Returns `init` and
 `final` (`nlev` + parent level − 1), `frate` and `irate`, the energies `fenergy`, `ienergy`,
 `fenergy2`, `ienergy2` and the `opacity`. Nothing is returned if the parent ion is more
 than one step away, the threshold is outside the grid, or the integrated spectrum above it
 is negligible. Only the 6-real form of the record is supported. `ptmp` and `lfast` are
 accepted for uniformity with the other photoionization rates but not used.
 """
-function rate(coef::ParPhotoIonize3, cell::Cell; levels, radiation, nlev,
-    abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false,
-    verbose=false)
+function rate(coef::ParPhotoIonize3, cell::Cell; radiation=NO_RADIATION, abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         fenergy2=0., ienergy2=0., opacity=0.)

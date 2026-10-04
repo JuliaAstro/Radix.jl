@@ -8,7 +8,7 @@ const CollisionProbDesc = "h-like cij, bautista (hlike ion)"
 const max_dE_over_kT = 50.0           # no rate for transitions with ΔE/kT above this
 const proton_charge = 1.0              # colliding ions are protons
 
-struct CollisionProb{I} <: AbstractRate
+@with_levels struct CollisionProb{I} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
@@ -23,14 +23,14 @@ function CollisionProb(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::CollisionProb, cell; levels, index=false)
+    rate(coef::CollisionProb, cell; index=false)
 
 Collisional transition rates between two levels of a hydrogenic ion (XSTAR
-ucalc type 63), for `nl → n'l'` with `|Δl| = 1`. `levels` is a `level_table`.
+ucalc type 63), for `nl → n'l'` with `|Δl| = 1`. The levels come from the coefficient's level table (`attach_levels`).
 `init` and `final` are the two levels in stored order, `frate` is the rate
 `init → final` and `irate` the reverse (s⁻¹, including the factor `nₑ`). Both
 are 0 when the levels do not have `|Δl| = 1`, when `ΔE/kT > 50`, or if a level
-is missing from `levels`.
+is missing from the level table.
 
 For `n = n'` the rate is the l-changing rate of Pengelly & Seaton (`velimp`) with
 the detailed-balance partner. For `n ≠ n'` it is the electron-impact rate `erc`
@@ -39,8 +39,8 @@ large (de-excitation) rate of this branch to the *upward* direction (the source
 comments "check if ans1 and ans2 are correct or inverted"); this is reproduced
 as is.
 """
-function rate(coef::CollisionProb, cell::Cell; levels, index=false,
-    verbose=false)
+function rate(coef::CollisionProb, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

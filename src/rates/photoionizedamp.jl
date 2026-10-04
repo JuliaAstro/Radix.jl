@@ -7,7 +7,7 @@
 
 const PhotoionizeDampDesc = "Iron inner shell resonance excitation (Patrick)"
 
-struct PhotoionizeDamp{I, R} <: AbstractRate
+@with_levels struct PhotoionizeDamp{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I               # principal quantum number

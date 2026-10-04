@@ -9,7 +9,7 @@
 
 const PhotoRecombXDesc = "Recombination and photoionization of superlevels"
 
-struct PhotoRecombX{I, R} <: AbstractRate
+@with_levels struct PhotoRecombX{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I                # principal quantum number
@@ -87,16 +87,14 @@ function superlevel_cross_section(coef::PhotoRecombX, T, den, E_th)
 end
 
 """
-    rate(coef::PhotoRecombX, cell; levels, radiation, nlev, index=false)
+    rate(coef::PhotoRecombX, cell; index=false)
 
 Photoionization and recombination of a superlevel from the tabulated recombination coefficients and
 cross section (XSTAR ucalc type 99), see `photoionize_superlevel`. The energies measured from the levels
 are corrected with the energy of the levels. The other keywords of the photoionization rates are
 accepted and ignored.
 """
-function rate(coef::PhotoRecombX, cell::Cell; levels, radiation, nlev, index=false,
-    ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing, verbose=false)
-
-    photoionize_superlevel(coef, cell; levels, radiation, nlev, index, correct_energy=true,
-        tabulate=(T, n, E_th) -> superlevel_cross_section(coef, T, n, E_th))
+function rate(coef::PhotoRecombX, cell::Cell; radiation=NO_RADIATION, index=false, ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing, verbose=false)
+    photoionize_superlevel(coef, cell, (T, n, E_th) -> superlevel_cross_section(coef, T, n, E_th);
+        radiation, index, correct_energy=true)
 end

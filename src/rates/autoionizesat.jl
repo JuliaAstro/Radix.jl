@@ -6,7 +6,7 @@
 
 const AutoionizeSatDesc = "Autoinization rates (in s^-1) for satellite lvls"
 
-struct AutoionizeSat{I, R} <: AbstractRate
+@with_levels struct AutoionizeSat{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     spin_mult::I        # 2S+1
@@ -39,15 +39,17 @@ function satellite_capture(A, E, g, T)
 end
 
 """
-    rate(coef::AutoionizeSat, cell; levels, nlev, index=false)
+    rate(coef::AutoionizeSat, cell; index=false)
 
 Autoionization of a satellite level (XSTAR ucalc type 72) from the rate `3.3e-11 (13.6 eV/kT)^{3/2} e^{-E/kT} (A/10¹³) g`
 (`calc_72`). As `ucalc` has it, `irate` is that rate times the electron density and `frate` is `irate nₑ` times the
 Saha factor of the ground to the continuum level weights and `e^{E/T}` with the energy in eV divided by the
 temperature in K (which is ≈ 1; the units look wrong in the source and are reproduced). `init` is the level and
-`final` the continuum level of the record. `levels` needs the ground (1) and the continuum (`nlev`) levels.
+`final` the continuum level of the record. The level table needs the ground (1) and the continuum (`nlev`) levels.
 """
-function rate(coef::AutoionizeSat, cell::Cell; levels, nlev, index=false, verbose=false)
+function rate(coef::AutoionizeSat, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
     init, final = Int(coef.level), Int(coef.parent.level)
     index && return (; init, final, frate=0., irate=0.)

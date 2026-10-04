@@ -64,3 +64,35 @@ function nbin(rad::Radiation, e)
     end
     clamp(jlo, 1, n)
 end
+
+"""
+    xstar_energy_grid(ncn2=9999)
+
+XSTAR's photon energy grid (its `ener`), in eV: `ncn2 - max(2, ncn2/50)` points spaced geometrically from 0.1 to
+4×10⁵ eV, then `max(2, ncn2/50)` more from there to 10⁶ eV.
+"""
+function xstar_energy_grid(ncn2=9999)
+    numcon2 = max(grid_min_bins, ncn2 ÷ grid_guard_fraction)
+    numcon3 = ncn2 - numcon2
+    E = zeros(ncn2)
+    E[1] = 0.1
+    dele = (4e5/0.1)^(1/(numcon3 - 1))
+    for l in 2:numcon3
+        E[l] = E[l - 1]*dele
+    end
+    dele = (1e6/4e5)^(1/(numcon2 - 1))
+    for l in numcon3 + 1:ncn2
+        E[l] = E[l - 1]*dele
+    end
+    E
+end
+
+"""
+    NO_RADIATION
+
+A radiation field without photons on XSTAR's energy grid: the default of the photoionization rates, for which the
+photoionization rates are 0 and the recombination rates are those of the gas alone.
+"""
+const NO_RADIATION = let E = xstar_energy_grid()
+    Radiation(E, zeros(length(E)))
+end

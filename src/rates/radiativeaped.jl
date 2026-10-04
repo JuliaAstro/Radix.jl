@@ -5,7 +5,7 @@
 
 const RadiativeAPEDDesc = "aped line wavelengths same as 50"
 
-struct RadiativeAPED{I, R} <: AbstractRate
+@with_levels struct RadiativeAPED{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -29,6 +29,6 @@ Radiative decay and photoexcitation of an APED line (XSTAR ucalc type 91). `ucal
 result and the keywords are those of `rate(::AtomicLine2, ...)`.
 """
 function rate(coef::RadiativeAPED, cell::Cell; kw...)
-    line = AtomicLine2(coef.rtype, "", coef.transition, coef.Z, coef.ion, coef.λ, zero(coef.λ), coef.A)
+    line = AtomicLine2(coef.rtype, "", coef.transition, coef.Z, coef.ion, coef.λ, zero(coef.λ), coef.A, coef.levels)
     rate(line, cell; kw...)
 end

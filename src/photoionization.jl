@@ -193,14 +193,13 @@ const heat_floor = 1e-43
 
 
 """
-    photoionize_level(coef, cell; levels, radiation, nlev, ptmp=(0.5, 0.5), abund=(0, 0), lfast=1, opacity=nothing, extrapolate, shifted, parent=true, rates_only=false)
+    photoionize_level(coef, cell; radiation=NO_RADIATION, ptmp=(0.5, 0.5), abund=(0, 0), lfast=1, opacity=nothing, extrapolate=false, shifted=false, parent=true, rates_only=false)
 
 Photoionization of a level of an ion by integrating the cross-section table of
 `coef` (fields `level`, `ion`, `parent`, `E_grid` in Ry above the threshold and `σ`
-in Mb) over `radiation` (XSTAR ucalc types 49 and 53). `levels` is a
-`level_table`, `nlev` the number of levels of the ion (the last is the
-continuum, the ground state of the next ion), `ptmp` the two escape
-probabilities and `abund` the populations of the initial and final levels (for the
+in Mb) over `radiation` (XSTAR ucalc types 49 and 53). The level data, with the number of levels of
+the ion (the last is the continuum, the ground state of the next ion), comes from the coefficient
+(`attach_levels`); `ptmp` is the two escape probabilities and `abund` the populations of the initial and final levels (for the
 opacity). `lfast ≥ 2` also integrates the recombination terms. If `opacity` is an
 `Opacity` the continuum opacity and recombination emissivity are added to it.
 `extrapolate` extends the table with an E⁻³ tail (types 49 and 88) and `shifted` adds the
@@ -217,10 +216,12 @@ and `ienergy2` the same measured from the energies of the two levels, and
 above the ground state, `ucalc` reads the energy of the final level from stale
 memory; here it is the continuum energy plus the energy of the parent level.
 """
-function photoionize_level(coef, cell::Cell; levels, radiation, nlev,
+function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     ptmp=(0.5, 0.5), abund=(0.0, 0.0), lfast=1, opacity=nothing, index=false,
-    extrapolate, shifted, parent=true, rates_only=false)
+    extrapolate=false, shifted=false, parent=true, rates_only=false)
     K = constants()
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         fenergy2=0., ienergy2=0., opacity=0.)
@@ -566,7 +567,7 @@ const super_xs_trim = Float64(1f-6)   # ... and drops the tail below this fracti
 const rrrt_floor = 1e-48              # no rates if the recombination integral is below this
 
 """
-    photoionize_superlevel(coef, cell; levels, radiation, nlev, tabulate, correct_energy=false, index=false)
+    photoionize_superlevel(coef, cell, tabulate; radiation=NO_RADIATION, correct_energy=false, index=false)
 
 Photoionization and recombination of a superlevel (XSTAR ucalc types 70 and 99). The cross section
 `σ(ε)` is the table of the record scaled so that the Milne relation reproduces the tabulated
@@ -583,9 +584,11 @@ level − 1), `frate` and `irate` (s⁻¹), `fenergy`, `ienergy`, `fenergy2`, `i
 `opacity` (zero, the arrays are not filled). When the recombination integral is negligible ucalc returns
 no rates but leaves the integrals `piht2` and `rrcl2` in its energy outputs; that is kept.
 """
-function photoionize_superlevel(coef, cell::Cell; levels, radiation, nlev, tabulate,
+function photoionize_superlevel(coef, cell::Cell, tabulate; radiation=NO_RADIATION,
     correct_energy=false, index=false)
     K = constants()
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
         fenergy2=0., ienergy2=0., opacity=0.)

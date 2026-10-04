@@ -8,7 +8,7 @@
 
 const CollisionSuperDesc = "coll rates from 71"
 
-struct CollisionSuper{I, R} <: AbstractRate
+@with_levels struct CollisionSuper{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -43,7 +43,7 @@ function supercoll_weight(level)
 end
 
 """
-    rate(coef::CollisionSuper, cell; levels, nlev, index=false)
+    rate(coef::CollisionSuper, cell; index=false)
 
 Collisional transitions between a superlevel and a spectroscopic level (XSTAR ucalc type 77).
 `irate` is the de-excitation rate `10^C` interpolated in log₁₀ T and log₁₀ n from the table (the
@@ -52,7 +52,9 @@ Boltzmann factor at the wavelength `λ` of the record and the weight `2(2l + 1)`
 from numbering the first level of the record by shells. `fenergy` and `ienergy` are the rates times
 the energy difference of the levels. Both levels must be in `1:nlev`, differ, and be at least 1 eV apart.
 """
-function rate(coef::CollisionSuper, cell::Cell; levels, nlev, index=false, verbose=false)
+function rate(coef::CollisionSuper, cell::Cell; index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper

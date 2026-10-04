@@ -15,7 +15,7 @@ const decay_floor = 1e-20              # floor of the decay rate, per unit ntot
 const cm_per_Å = 1e-8
 const cm_per_km = 1e5
 
-struct AtomicLine2{I, R} <: AbstractRate
+@with_levels struct AtomicLine2{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
@@ -33,13 +33,13 @@ function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 """
-    rate(coef::AtomicLine2, cell; levels, mass, vturb=1.0, pesc=1.0, nlev=typemax(Int), radiation=nothing, cfrac=0.0, index=false)
+    rate(coef::AtomicLine2, cell; mass=atomic_mass(coef.levels, coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
 
 Radiative decay and photoexcitation of an atomic line (XSTAR ucalc type 50).
-`levels` is a `level_table`, `mass` the atomic mass (amu) of the element, `vturb`
+The level data and the number of levels of the ion (the continuum level is excluded) come from the
+coefficient (`attach_levels`), and so by default does the atomic `mass` (amu) of the element. `vturb` is
 the turbulent velocity (km/s), `pesc` the sum of the two escape probabilities (1
-when optically thin), `nlev` the number of levels of the ion (the continuum level
-`nlev` is excluded), `radiation` the incident spectrum and `cfrac` the covering
+when optically thin), `radiation` the incident spectrum (none by default) and `cfrac` the covering
 fraction.
 
 Returns `init` (upper) and `final` (lower) levels in energy order, the decay rate
@@ -48,12 +48,13 @@ from `radiation` at the line energy (zero without `radiation`, for lines without
 wavelength, and reduced by `1 - cfrac`), the energies `fenergy` and `ienergy` they
 carry (erg s⁻¹ per ion, from the energy difference of the two levels) and the
 line-centre `opacity` (zero for lines without a wavelength). Records with no
-wavelength (λ = 0) and records with a level missing from `levels` give no rates.
+wavelength (λ = 0) and records with a level missing from the level table give no rates.
 The line opacity that XSTAR adds to its continuum arrays (`linopac`) is not
 included.
 """
-function rate(coef::AtomicLine2, cell::Cell; levels, mass, vturb=1.0, pesc=1.0,
-    nlev=typemax(Int), radiation=nothing, cfrac=0.0, index=false, verbose=false)
+function rate(coef::AtomicLine2, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false, verbose=false)
+    levels = levels_of(coef)
+    nlev = nlevels(levels, coef.ion)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,
