@@ -1,5 +1,8 @@
 module Radix
 
+using LinearAlgebra: lu
+using SparseArrays
+
 export Atom, AtomicLevel, AtomicLine
 export load, levels, level_counts, Levels, nlevels, atomic_mass, Radiation, Opacity
 export Constants, ucalc_constants, constants, set_constants!, with_constants
