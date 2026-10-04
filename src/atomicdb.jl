@@ -42,10 +42,20 @@ end
     level_table(records)
 
 Dictionary `(ion, level) => AtomicLevel` over the `AtomicLevel` records of a
-loaded database, for the rates that need level energies and weights.
+loaded database, for the rates that need level energies and weights. The Fe UTA levels
+(`AtomicLevelFe`, which hold only the energy and the weight) are added as `AtomicLevel`s
+with zero quantum numbers, unless the level is already there.
 """
-level_table(records) =
-    Dict((r.ion, r.level) => r for r in records if r isa AtomicLevel)
+function level_table(records)
+    table = Dict((r.ion, r.level) => r for r in records if r isa AtomicLevel)
+    for r in records
+        r isa AtomicLevelFe || continue
+        haskey(table, (r.ion, r.level)) && continue
+        z, zr = zero(r.level), zero(r.E)
+        table[(r.ion, r.level)] = AtomicLevel(r.rtype, r.label, z, z, z, z, r.level, r.ion, r.E, r.g, zr, zr)
+    end
+    table
+end
 
 """
     level_counts(levels)

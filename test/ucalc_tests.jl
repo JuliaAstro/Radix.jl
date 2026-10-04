@@ -214,6 +214,14 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
             expected=(o, c) -> (; irate=o[2], ienergy=-o[3], opacity=o[11]),
             rtol=1e-6, atol=1e-100) == 8
     end
+    @testset "type 82 RadiativeFeDecay" begin
+        # ucalc returns the photoexcitation in ans1, the decay in ans2 and the energy of the photoexcitations in ans3
+        @test check_ucalc("type82";
+            call=(co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13], vturb=c.cond[6],
+                pesc=c.cond[11] + c.cond[12], nlev=c.nlev, radiation=ucalc_radiation(c)),
+            expected=(o, c) -> (; frate=o[2], irate=o[1], ienergy=o[3], fenergy=o[4], init=o[7], final=o[8],
+                opacity=o[11]), rtol=1e-6) == 240
+    end
     @testset "type 92 CollisionAPED" begin
         # the temperatures of the first fixture are mostly outside the table (no rates); the others are inside it
         for (name, n) in (("type92", 240), ("type92hot", 240), ("type92k116", 48))

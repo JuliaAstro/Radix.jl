@@ -7,7 +7,7 @@
 # then:  drvu < OUTDIR/typeNN.in > OUTDIR/typeNN.out
 using FITSFiles, Random
 
-const RADIATION_TYPES = (49, 50, 53, 59, 70, 74, 85, 88, 91, 99) # types that need a spectrum
+const RADIATION_TYPES = (49, 50, 53, 59, 70, 74, 82, 85, 88, 91, 99) # types that need a spectrum
 const PARENT_TYPES = (49, 53, 59, 70, 99)    # types that leave a level of the next ion
 # positions of the parent level and the parent ion among the integers
 parent_positions(type) = type == 59 ? (4, 5) : type in (70, 99) ? (8, 9) : (5, 6)
@@ -48,6 +48,12 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
         push!(get!(levels, i[6], NTuple{7, Float64}[]),
               (i[5], r[1], r[2], r[4], i[1], i[2], i[3]))
     end
+    # the Fe UTA levels (type 83: ints 1, level, ionN; reals E, g) complete the levels of their ions
+    for j in 1:N
+        ptr[2, j] == 83 || continue
+        i, r = ints(j), reals(j)
+        push!(get!(levels, i[3], NTuple{7, Float64}[]), (i[2], r[1], r[2], 0.0, 0, 0, 0))
+    end
     foreach(v -> sort!(v, by = first), values(levels))
 
     # atomic masses: element records are [n_ions, Z], reals [abundance, mass]
@@ -87,7 +93,7 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                 println(io, type, " ", ptr[3, j], " ", length(rv), " ", length(iv))
                 println(io, join(iv, " "))
                 println(io, join(rv, " "))
-                amass = type in (50, 91) ? get(mass, iv[3], 1.0) : type == 71 ? get(mass, iv[5], 1.0) : 1.0   # Z is the third integer of types 50 and 91, the fifth of type 71
+                amass = type in (50, 91) ? get(mass, iv[3], 1.0) : type == 82 ? get(mass, 26, 1.0) : type == 71 ? get(mass, iv[5], 1.0) : 1.0   # Z is the third integer of types 50 and 91, the fifth of type 71
                 cfrac = type in (50, 91) ? CFRAC[mod1(ci, length(CFRAC))] : 0.0
                 println(io, join((t, xpx, xee, xpx*f0, xpx*f1, 1.0, -1.0, cfrac, 1e-3, 1e-3, 0.5, 0.5, amass), " "))
                 # radiation (only the photoionization types need one) and the level of the

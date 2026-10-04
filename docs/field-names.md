@@ -199,7 +199,7 @@ unconfirmed.
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 91, 92, 95, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -320,6 +320,13 @@ ported type (except 4, which has no `rate` method). Notes:
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `RadiativeAPED` (ucalc 91) is `ucalc`'s type 50 (it jumps to that code): `rate` builds the equivalent
   `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
+- `RadiativeFeDecay` (ucalc 82) takes the levels of the Fe UTA ions from two record types: the regular
+  ones (type 6) and the UTA levels (`AtomicLevelFe`, type 83: energy and weight only, 986 records, for
+  ions 327-341), so `level_table` includes both, the second as an `AtomicLevel` with zero quantum numbers.
+  The rate is that of `AtomicLine2` with these differences: the decay is `A_rad · pesc` (no floor, `A_auto` is not
+  used), the oscillator strength is the stored `gf`, the line energy comes from the wavelength, there is no
+  covering fraction and the energy of the decays is not returned (`ucalc` has only the photoexcitation's).
+  Type 83 has no rate of its own.
 - `CollisionAPED` (ucalc 92) had its integers in the wrong places (`[lower, upper, kind, Z, ionN]`, not
   `[1, lower, upper, Z, ionN]`) and its temperature limits in the grid; the record is now `transition`,
   `kind`, `T_min`, `T_max`, `T_grid` and `Υ`. `calc_maxwell_rates` has some thirty kinds of fit; the
