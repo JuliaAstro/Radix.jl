@@ -14,6 +14,8 @@ const unordered_types = (7, 41)         # rate types (photoionization) whose lev
 const photoionization_lfast = 2         # lfpi of calc_hmc_element: photoionization and recombination, no opacities
 const unconnected_tolerance = 1e-39     # msolvelud drops the levels whose rates are all below this
 const probe_temperature = 1e6           # (10⁴ K) hot enough that no record's ΔE/kT cutoff hides its levels from `index=true`
+const sparse_from = 300                 # elements with this many unknowns or more are solved with sparse matrices
+const refinement_steps = 2              # of the sparse solution
 const first_level = 1                   # the ground level
 const photoionization_type = 1          # rate type 1 counts the photoionization of the ground level only
 const total_rate_types = (8, 15)        # rate types of the totals (recombination, ionization) that XSTAR leaves out
@@ -84,6 +86,9 @@ struct Elements{L<:Levels}
     up::Vector{Int}
     zero_forward::Vector{Bool}  # photoionization (rate type 1) from an excited level counts no forward rate
     keywords::Vector{Tuple{Vararg{Symbol}}}
+    colptr::Vector{Int}         # the sparsity pattern of the rate matrix (compressed columns): the entries of all records
+    rowval::Vector{Int}         # and the whole diagonal
+    slots::Vector{NTuple{4, Int}}   # where each record's four entries (up,lo) (up,up) (lo,up) (lo,lo) are in the values
 end
 
 function Elements(rates, levels::Levels, ions)
@@ -113,7 +118,24 @@ function Elements(rates, levels::Levels, ions)
         push!(zero_forward, coef.rtype == photoionization_type && i1 != first_level)
         push!(keywords, balance_keywords(coef))
     end
-    Elements(levels, ions, nlev, offset, N, records, ionpos, lo, up, zero_forward, keywords)
+    colptr, rowval, slots = sparsity_pattern(N, lo, up)
+    Elements(levels, ions, nlev, offset, N, records, ionpos, lo, up, zero_forward, keywords, colptr, rowval, slots)
+end
+
+# the compressed-column pattern of the entries that the records (`lo`, `up`; 0 for none) and the diagonal give, and
+# the position of the four entries of each record in it
+function sparsity_pattern(N, lo, up)
+    active = findall(!iszero, lo)
+    I = [up[active]; up[active]; lo[active]; lo[active]; 1:N]
+    J = [lo[active]; up[active]; up[active]; lo[active]; 1:N]
+    pattern = sparse(I, J, trues(length(I)), N, N, |)
+    colptr, rowval = pattern.colptr, pattern.rowval
+    position(i, j) = findfirst(==(i), @view rowval[colptr[j]:colptr[j + 1] - 1]) + colptr[j] - 1
+    slots = fill((0, 0, 0, 0), length(lo))
+    for j in active
+        slots[j] = (position(up[j], lo[j]), position(up[j], up[j]), position(lo[j], up[j]), position(lo[j], lo[j]))
+    end
+    colptr, rowval, slots
 end
 
 Elements(records, levels::Levels, Z::Integer) =
@@ -129,10 +151,11 @@ escape_of(escape::AbstractVector, j, coef) = escape[j]
 
 """
     element_matrix!(A, layout, cell; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
-    element_matrix(layout, cell; kw...)
+    element_matrix(layout, cell; sparse=false, kw...)
 
 The rate matrix `A` (s⁻¹, `dx/dt = A x`) of the element of `layout` for the gas in `cell`, written into `A` or
-newly allocated; the unknowns are described at `Elements`. Each record that enters the matrix puts the
+newly allocated (`sparse=true`: a sparse matrix, see `sparse_matrix`; the dense matrix of a large element, such as iron's
+5718 unknowns, takes 260 MB); the unknowns are described at `Elements`. Each record that enters the matrix puts the
 two rates of ucalc, `ans1` (lower to upper level) and `ans2` (upper to lower), into the four entries
     A[up, lo] += ans1    A[up, up] -= ans2    A[lo, up] += ans2    A[lo, lo] -= ans1.
 
@@ -145,27 +168,58 @@ two rates of ucalc, `ans1` (lower to upper level) and `ans2` (upper to lower), i
   default (no line trapping) when `nothing`. XSTAR obtains them from the optical depths along its ray; another
   geometry supplies its own.
 """
-function element_matrix!(A::AbstractMatrix, layout::Elements, cell::Cell;
-        radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
+function element_matrix!(A::AbstractMatrix, layout::Elements, cell::Cell; kw...)
     size(A) == size(layout) || throw(DimensionMismatch("A must be $(layout.N) × $(layout.N)"))
     fill!(A, 0)
-    for (j, coef) in enumerate(layout.rates)
-        lo = layout.lo[j]
-        lo == 0 && continue
-        up = layout.up[j]
-        p = escape_of(escape, j, coef)
-        given = p === nothing ? (; radiation, lfast) : (; radiation, lfast, pesc=p[1] + p[2], ptmp=p)
-        r = rate(coef, cell; NamedTuple{filter(key -> key in keys(given), layout.keywords[j])}(given)...)
-        ans1, ans2 = ucalc_rates(coef, r)
-        layout.zero_forward[j] && (ans1 = zero(ans1))
+    for j in eachindex(layout.rates)
+        layout.lo[j] == 0 && continue
+        lo, up = layout.lo[j], layout.up[j]
+        ans1, ans2 = record_rates(layout, j, cell; kw...)
         A[up, lo] += ans1;  A[up, up] -= ans2
         A[lo, up] += ans2;  A[lo, lo] -= ans1
     end
     A
 end
 
-element_matrix(layout::Elements, cell::Cell; kw...) =
-    element_matrix!(zeros(typeof(float(cell.T)), size(layout)), layout, cell; kw...)
+function element_matrix!(A::SparseMatrixCSC, layout::Elements, cell::Cell; kw...)
+    size(A) == size(layout) && length(nonzeros(A)) == length(layout.rowval) ||
+        throw(DimensionMismatch("A must be the sparse matrix of the layout (see `sparse_matrix`)"))
+    values = nonzeros(A)
+    fill!(values, 0)
+    for j in eachindex(layout.rates)
+        layout.lo[j] == 0 && continue
+        s1, s2, s3, s4 = layout.slots[j]
+        ans1, ans2 = record_rates(layout, j, cell; kw...)
+        values[s1] += ans1;  values[s2] -= ans2
+        values[s3] += ans2;  values[s4] -= ans1
+    end
+    A
+end
+
+# ucalc's two rates of record j in `cell`
+function record_rates(layout::Elements, j, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
+    coef = layout.rates[j]
+    p = escape_of(escape, j, coef)
+    given = p === nothing ? (; radiation, lfast) : (; radiation, lfast, pesc=p[1] + p[2], ptmp=p)
+    r = rate(coef, cell; NamedTuple{filter(key -> key in keys(given), layout.keywords[j])}(given)...)
+    ans1, ans2 = ucalc_rates(coef, r)
+    layout.zero_forward[j] && (ans1 = zero(ans1))
+    ans1, ans2
+end
+
+"""
+    sparse_matrix(layout, [T=Float64])
+
+A sparse matrix with the pattern of the rate matrix of `layout` (the entries of its records and the diagonal) and zero
+values, for `element_matrix!`.
+"""
+sparse_matrix(layout::Elements, T::Type=Float64) =
+    SparseMatrixCSC(layout.N, layout.N, copy(layout.colptr), copy(layout.rowval), zeros(T, length(layout.rowval)))
+
+function element_matrix(layout::Elements, cell::Cell; sparse=false, kw...)
+    T = typeof(float(cell.T))
+    element_matrix!(sparse ? sparse_matrix(layout, T) : zeros(T, size(layout)), layout, cell; kw...)
+end
 
 """
     rate_matrix(rates, levels, ion, cell; kw...)
@@ -180,16 +234,18 @@ rate_matrix(rates, levels::Levels, ion, cell::Cell; kw...) = element_matrix(Elem
 The level populations (see `level_populations`) of the element of `layout` in each of the `cells`, as an
 `N × length(cells)` matrix (one column per cell; the cells may be any array, the columns follow its linear
 indices). The cells do not depend on each other and are solved on the threads of Julia.
+The matrices are sparse (`sparse=true`) for the elements of `sparse_from` unknowns or more.
 `radiation` and `escape` (see `element_matrix!`) are fixed values for all the cells, or functions of the index
 of the cell that return that cell's value, so that each cell has its own radiation field and line trapping.
 """
-function element_populations(layout::Elements, cells::AbstractArray{<:Cell}; radiation=NO_RADIATION, escape=nothing, kw...)
+function element_populations(layout::Elements, cells::AbstractArray{<:Cell}; radiation=NO_RADIATION, escape=nothing,
+        sparse=layout.N >= sparse_from, kw...)
     at(value::Function, i) = value(i)
     at(value, i) = value
     R = typeof(float(first(cells).T))
     x = zeros(R, layout.N, length(cells))
     Threads.@threads for i in eachindex(cells)
-        A = element_matrix(layout, cells[i]; radiation=at(radiation, i), escape=at(escape, i), kw...)
+        A = element_matrix(layout, cells[i]; sparse, radiation=at(radiation, i), escape=at(escape, i), kw...)
         x[:, i] = level_populations(A)
     end
     x
@@ -215,16 +271,53 @@ row and column) are dropped, as XSTAR's `msolvelud` does, and have population 0.
 """
 function level_populations(A::AbstractMatrix)
     n = size(A, 1)
-    connected(i) = i == n || any(>(unconnected_tolerance), abs.(A[i, :])) || any(>(unconnected_tolerance), abs.(A[:, i]))
-    use = filter(connected, 1:n)
+    use = findall(connected_levels(A))
     M = A[use, use]
     m = length(use)
     M[m, :] .= 1
-    b = zeros(eltype(A), m)
-    b[m] = 1
     x = zeros(eltype(A), n)
-    x[use] = M \ b
+    x[use] = refined_solve(M, normalisation(eltype(A), m))
     x
+end
+
+function level_populations(A::SparseMatrixCSC)
+    n = size(A, 1)
+    use = findall(connected_levels(A))
+    m = length(use)
+    M = vcat(A[use[1:m - 1], use], sparse(ones(eltype(A), 1, m)))
+    x = zeros(eltype(A), n)
+    b = normalisation(eltype(A), m)
+    # (the sparse LU of SparseArrays is for floating-point numbers of the BLAS types only)
+    x[use] = eltype(A) <: Union{Float32, Float64} ? refined_solve(M, b) : refined_solve(Matrix(M), b)
+    x
+end
+
+# the solution of M x = b by an LU factorization and `refinement_steps` steps of iterative refinement, which restore
+# the digits that the pivoting loses on these badly scaled matrices (the small ion fractions)
+function refined_solve(M, b)
+    F = lu(M)
+    x = F \ b
+    for _ in 1:refinement_steps
+        x += F \ (b - M*x)
+    end
+    x
+end
+
+# the right-hand side of the normalisation row: Σ x = 1 in the last equation
+normalisation(T, m) = (b = zeros(T, m); b[m] = 1; b)
+
+# the levels that a rate connects (the last, the bare nucleus, always), found from the rows and columns of A
+connected_levels(A::AbstractMatrix) = [i == size(A, 1) || any(>(unconnected_tolerance), abs.(A[i, :])) ||
+    any(>(unconnected_tolerance), abs.(A[:, i])) for i in axes(A, 1)]
+
+function connected_levels(A::SparseMatrixCSC)
+    connected = falses(size(A, 1))
+    rows, values = rowvals(A), nonzeros(A)
+    for j in axes(A, 2), k in nzrange(A, j)
+        abs(values[k]) > unconnected_tolerance && (connected[j] = connected[rows[k]] = true)
+    end
+    connected[end] = true
+    connected
 end
 
 """
