@@ -7,30 +7,46 @@ const phextrap_Emax = 2e5            # ... or above this energy (eV)
 
 """
     phextrap(ε, σ, E_th, ncn2)
+    phextrap!(ε, σ, E_th, ncn2)
 
 Extends a cross-section table (`ε` in Ry above the threshold `E_th` eV, `σ` in
 cm²) with points falling as E⁻³ up to 2e5 eV, as XSTAR does. The last tabulated
 point is replaced by the first extrapolated one (or dropped if there is none).
+`phextrap!` does it in the two vectors, which must be `Float64`, and `phextrap` returns new ones.
 """
-function phextrap(ε::AbstractVector, σ::AbstractVector, E_th, ncn2)
+function phextrap!(ε::Vector{Float64}, σ::Vector{Float64}, E_th, ncn2)
     n = length(ε)
-    n <= 0 && return (Float64.(ε), Float64.(σ))
-    eout = Float64.(ε[1:n-1]); sout = Float64.(σ[1:n-1])
-    n < 2 && return (eout, sout)
+    n <= 0 && return (ε, σ)
+    n < 2 && return (resize!(ε, n - 1), resize!(σ, n - 1))
     s1 = σ[n-1]
     Ry = constants().Ry_eV_coarse
     e1 = ε[n-1]*Ry + E_th
+    resize!(ε, n - 1); resize!(σ, n - 1)
     nadd = 0
     while s1 > phextrap_floor && nadd + n < ncn2 && e1 < phextrap_Emax
         e2 = e1*phextrap_step
         s2 = s1/phextrap_step^3
         nadd += 1
-        push!(sout, s2)
-        push!(eout, (e2 - E_th)/Ry)
+        push!(σ, s2)
+        push!(ε, (e2 - E_th)/Ry)
         e1, s1 = e2, s2
     end
-    (eout, sout)
+    (ε, σ)
 end
+
+phextrap(ε::AbstractVector, σ::AbstractVector, E_th, ncn2) = phextrap!(Float64.(ε), Float64.(σ), E_th, ncn2)
+
+# The arrays of one photoionization integral, kept for the next one: the cross-section table of the record in Ry and cm²
+# (converted and extrapolated) and the cross section averaged over the bins of the radiation, which is as long as the
+# energy grid (80 kB for XSTAR's 9999 bins). A grid of cells calls the rates many times, so each task of Julia keeps one set.
+struct PhotoBuffers
+    ε::Vector{Float64}
+    σ::Vector{Float64}
+    sgbar::Vector{Float64}
+end
+PhotoBuffers() = PhotoBuffers(Float64[], Float64[], Float64[])
+
+photo_buffers() = get!(PhotoBuffers, task_local_storage(), :RadixPhotoBuffers)::PhotoBuffers
 
 # constants of phint53
 const ph_min_dE = 1e-8               # eV; flat segments below this width
@@ -40,19 +56,20 @@ const bb_energy_cap = 2e4            # eV; the Planck-like factor stops growing 
 const ph_exp_limit = 200.0           # recombination terms only while (E - E_th)/kT is below this
 
 """
-    photoionization_integrals(rad, E_th, ε, σ, T, rnist, ptmp; abund=(0, 0), ntot=0, lfast=1, opacity=nothing)
+    photoionization_integrals(rad, E_th, ε, σ, T, rnist, ptmp; abund=(0, 0), ntot=0, lfast=1, opacity=nothing, buffer=nothing)
 
 Photoionization rate `pirt`, recombination rate `rrrt`, and the energy-weighted
 `piht`, `rrcl` (erg s⁻¹, measured from zero) and `piht2`, `rrcl2` (measured from
 the threshold), by integrating the cross section table (`ε` in Ry above the
 threshold `E_th` in eV, `σ` in cm²) over the radiation field (XSTAR's `phint53`).
 `T` is in 10⁴ K, `rnist` the Saha factor and `ptmp` the two escape
-probabilities (in the reverse and forward direction). The recombination terms need `lfast ≥ 2`. If `opacity` is given,
+probabilities (in the reverse and forward direction). The recombination terms need `lfast ≥ 2`. `buffer`, a `Vector{Float64}`,
+is used for the work array of the integral when the cross sections are `Float64`s (it grows as needed), instead of a new one. If `opacity` is given,
 the continuum opacity and recombination emissivity are added to it. Also returns
 `opakab`, the opacity of the first bins above the threshold.
 """
 function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
-    abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing)
+    abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing, buffer=nothing)
     K = constants()
 
     epi, bremsa = rad.E, rad.F
@@ -76,7 +93,14 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
 
     enermx = eth + ε[ntmp]*K.Ry_eV
     nbn = max(nbin(rad, enermx), min(nb1 + 1, ncn2 - 1))
-    sgbar = zeros(promote_type(eltype(ε), eltype(σ), typeof(eth)), ncn2 + 1)
+    R = promote_type(eltype(ε), eltype(σ), typeof(eth))
+    if buffer isa Vector{R}
+        length(buffer) > ncn2 || resize!(buffer, ncn2 + 1)
+        sgbar = buffer
+        fill!(view(sgbar, nb1:ncn2 + 1), zero(R))      # (the first bins are never read)
+    else
+        sgbar = zeros(R, ncn2 + 1)
+    end
     kl = nb1
     jk = 1
     e1 = epi[kl]
@@ -236,8 +260,12 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     eth = Float64(lo.E_inf) - Float64(lo.E)
     eth <= 0 && return none
 
-    ε = Float64.(coef.E_grid)
-    σ = max.(Float64.(coef.σ)*Mb, 0.0)
+    buffers = photo_buffers()
+    ε = copyto!(resize!(buffers.ε, length(coef.E_grid)), coef.E_grid)
+    σ = resize!(buffers.σ, length(coef.σ))
+    for k in eachindex(σ)
+        σ[k] = max(Float64(coef.σ[k])*Mb, 0.0)
+    end
     ggup = Float64(cont.g)
     e2 = Float64(cont.E)
     if idest2 > nlev
@@ -250,7 +278,7 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     ggup <= min_g && return none
     ε0 = ε[1]
     if extrapolate
-        ε, σ = phextrap(ε, σ, eth, length(radiation.E))
+        ε, σ = phextrap!(ε, σ, eth, length(radiation.E))
         isempty(ε) && return none
     end
 
@@ -260,7 +288,7 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     ethtmp = shifted ? max(0.0, eth - Float64(cont.E)) : 0.0
     rnist = rnissel*exp(-max(0.0, ethtmp + K.Ry_eV*ε0)/K.kT_eV/T)/(rnisseu_floor + 1)
     r = photoionization_integrals(radiation, eth, ε, σ, T, rnist, ptmp;
-        abund=abund, ntot=cell.ntot, lfast=lfast, opacity=opacity)
+        abund=abund, ntot=cell.ntot, lfast=lfast, opacity=opacity, buffer=buffers.sgbar)
 
     rates_only && return (; none..., init=idest1, final=idest2, frate=r.pirt,
         opacity=r.opakab)
