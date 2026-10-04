@@ -19,3 +19,12 @@ function CollisionHlike2(rate::Int32, label::String, ivec::I, rvec::R) where
 
     CollisionHlike2(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[4], Vector(rvec))
 end
+
+"""
+    rate(coef::CollisionHlike2, cell; levels, nlev=typemax(Int), index=false)
+
+As `rate(::CollisionHlike1, ...)` (XSTAR ucalc type 62 runs the same code) with the second form of the fit:
+the polynomial stops three coefficients before the end and `c[m-2] ln(c[m-1] τ) e^{-c[m] τ}` is added.
+"""
+rate(coef::CollisionHlike2, cell::Cell; levels, nlev=typemax(Int), index=false, verbose=false) =
+    hlike_collision(coef, cell, levels, nlev, index, true)

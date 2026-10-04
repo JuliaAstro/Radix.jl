@@ -32,7 +32,7 @@ are equal for CODATA. Fields:
   `gordon_A` (the hydrogenic dipole rate, (2π/3) α³ c R∞ s⁻¹ with the reduced mass of hydrogen), `ps_alfa` (m_e/2k), `ps_pd` (the
   Debye length coefficient (k/(4π α ħ c))^{1/2}), `Ry_K_sz` (Ry/k in the Simpson-Zhang excitation)
   `sz_rate_coeff` and `ups_coeff` (the Maxwellian rate coefficient with T in K, in two uses), `Ry_K_sat` (Ry/k in
-  the satellite fit of type 73) and `thermal_bohr` (π a₀² (8k/(π mₑ))^{1/2}, cm³ s⁻¹ K^{-1/2}).
+  the satellite fit of type 73), `Ry_per_K` (k in Rydberg per K, the scaled temperature of types 60 and 62) and `thermal_bohr` (π a₀² (8k/(π mₑ))^{1/2}, cm³ s⁻¹ K^{-1/2}).
 - `proton_mass` in electron masses, `light_speed` (cm s⁻¹), `line_xsec` (π e²/(m_e c), cm² Hz),
   `thermal_speed` (cm s⁻¹ of an atom of 1 amu at 10⁴ K),
   `collision_rate_coeff` (Maxwellian Υ rate coefficient for T in 10⁴ K, cm³ s⁻¹) and `saha_coeff` (cm³ K^{3/2}).
@@ -78,6 +78,7 @@ struct Constants
     ups_coeff::Float64
     Ry_K_sat::Float64
     thermal_bohr::Float64
+    Ry_per_K::Float64
     proton_mass::Float64
     light_speed::Float64
     line_xsec::Float64
@@ -127,6 +128,7 @@ function Constants(codata::Module=CODATA2022)
         ps_pd=value(u"cm^(-1/2)*K^(-1/2)", sqrt(k/(4π*α*ħ*c))),
         Ry_K_sz=value(u"K", h*c*R∞/k), sz_rate_coeff=collision, ups_coeff=collision,
         Ry_K_sat=value(u"K", h*c*R∞/k), thermal_bohr=value(u"cm^3/s*K^(-1/2)", π*a₀^2*sqrt(8k/(π*mₑ))),
+        Ry_per_K=value(u"K^-1", k/(h*c*R∞)),
         proton_mass=value(Unitful.NoUnits, mₚ/mₑ), light_speed=value(u"cm/s", c),
         line_xsec=value(u"cm^2/s", π*rₑ*c),
         thermal_speed=value(u"cm/s", sqrt(2*k*T_unit*u"K"/mᵤ)),
@@ -152,7 +154,7 @@ ucalc_constants() = Constants((;
     bb_coeff=1.571e22, fo_saha=5.216e-21, saha_coeff_cb=Float64(2.0779f-16), saha_ci=2.08e-22, A_to_f=1e-16/0.667274,
     milne_coeff=Float64(0.79788f0*40.4153f0), gordon_A=2.6761e9, ps_alfa=3.297e-12, ps_pd=6.90,
     Ry_K_sz=1.578203e5, sz_rate_coeff=8.63e-6, ups_coeff=Float64(8.629f-6),
-    Ry_K_sat=Float64(1.578876f5), thermal_bohr=Float64(5.46538f-11),
+    Ry_K_sat=Float64(1.578876f5), thermal_bohr=Float64(5.46538f-11), Ry_per_K=Float64(6.33652f-6),
     proton_mass=1800.0, light_speed=3e10, line_xsec=0.02655, thermal_speed=1.29e6,
     collision_rate_coeff=8.626e-8, saha_coeff=2.07e-16))
 

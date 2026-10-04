@@ -38,6 +38,8 @@ const AD_CASES = [
     "type54" => level_call,
     "type56" => level_call,
     "type57" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+    "type60" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
+    "type62" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev),
     "type63" => level_call,
     "type71" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, nlev=c.nlev, mass=c.cond[13],
         vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
