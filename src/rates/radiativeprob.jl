@@ -6,19 +6,20 @@
 
 const RadiativeProbDesc = "h-like cij, bautista (hlike ion)"
 
-@with_levels struct RadiativeProb{I, R} <: AbstractRate
+struct RadiativeProb{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     Z::I      # atomic number
     ion::I    # ion index (XSTAR ionN)
     A::R      # s⁻¹
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function RadiativeProb(rate::Int32, label::String, ivec::I, rvec::R) where
+function RadiativeProb(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    RadiativeProb(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec[1])
+    RadiativeProb(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec[1], levels)
 end
 
 const radiativeprob_min_dE = 1e-24     # added to the level energy difference before inverting it
@@ -34,7 +35,7 @@ which is what `ucalc` puts in its energy output (it multiplies by the dimensionl
 `fenergy` is 0.
 """
 function rate(coef::RadiativeProb, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)

@@ -6,18 +6,19 @@
 
 const CollisionHlike1Desc = ""
 
-@with_levels struct CollisionHlike1{I, R} <: AbstractRate
+struct CollisionHlike1{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     ion::I             # ion index (XSTAR ionN)
     coeffs::Vector{R}  # fit coefficients
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionHlike1(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionHlike1(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionHlike1(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[4], Vector(rvec))
+    CollisionHlike1(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[4], Vector(rvec), levels)
 end
 
 const hlike_T_high = 1e9          # K; above this the scaled temperature is fixed
@@ -45,7 +46,7 @@ end
 # the collision rates of types 60 and 62
 function hlike_collision(coef, cell::Cell, index, second_form)
     K = constants()
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper

@@ -5,7 +5,7 @@
 
 const EffectiveChargeDesc = "effective charge to be used in coll. ion."
 
-@with_levels struct EffectiveCharge{I, R} <: AbstractRate
+struct EffectiveCharge{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I      # principal quantum number
@@ -15,14 +15,15 @@ const EffectiveChargeDesc = "effective charge to be used in coll. ion."
     level::I  # level index
     ion::I    # ion index (XSTAR ionN)
     Zeff::R   # effective charge
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R) where
+function EffectiveCharge(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     # records of five integers leave out the atomic number
     iv = length(ivec) < 6 ? (ivec[1:3]..., Int32(0), ivec[4:5]...) : ivec
-    EffectiveCharge(Int8(rate), label, iv..., rvec[1])
+    EffectiveCharge(Int8(rate), label, iv..., rvec[1], levels)
 end
 
 const effcharge_n_max_density = 1e18             # cm⁻³
@@ -74,7 +75,7 @@ including the electron density), `init` the level and `final` the continuum (`nl
 ground level, and a level with a non-positive potential, give nothing. The stored `Zeff` is not used.
 """
 function rate(coef::EffectiveCharge, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

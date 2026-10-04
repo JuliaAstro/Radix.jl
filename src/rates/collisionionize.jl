@@ -7,7 +7,7 @@
 
 const CollisionIonizeDesc = "Bryans CI rates"
 
-@with_levels struct CollisionIonize{I, R} <: AbstractRate
+struct CollisionIonize{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     level::I      # level index
@@ -16,14 +16,15 @@ const CollisionIonizeDesc = "Bryans CI rates"
     T0::R         # K
     x_grid::Vector{R}  # scaled temperature of the fit
     ρ::Vector{R}  # effective collision strengths
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionIonize(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionIonize(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     n = (length(rvec) - 2) ÷ 2
     CollisionIonize(Int8(rate), label, ivec..., rvec[1], rvec[2],
-        Vector(rvec[3:2 + n]), Vector(rvec[3 + n:2 + 2n]))
+        Vector(rvec[3:2 + n]), Vector(rvec[3 + n:2 + 2n]), levels)
 end
 
 const ci_ln2 = Float64(0.693147f0)    # ln 2 as ucalc writes it (single precision)
@@ -41,7 +42,7 @@ rates times the threshold energy. For temperatures below the first point of the 
 with the first interval's left end read from `T0` and the last `x_grid`; reproduced.
 """
 function rate(coef::CollisionIonize, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

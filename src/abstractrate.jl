@@ -9,8 +9,8 @@ Every rate implements the same interface:
 
 Every keyword has a default: the rates that need atomic data besides their own coefficients (level
 energies and weights, the number of levels of the ion, the atomic mass of its element) read it from
-the `levels` field of the coefficient, a `LevelTable` that `load` fills (`attach_levels` for a coefficient
-made by hand), and the photoionization rates see no radiation (`NO_RADIATION`) unless given a
+the `levels` field of the coefficient, a `LevelTable` that `load` passes to the constructor of each record (a coefficient
+made by hand takes it as its last argument), and the photoionization rates see no radiation (`NO_RADIATION`) unless given a
 `radiation=` field.
 
 and returns a NamedTuple `(; init, final, frate, irate)`, where `init` and

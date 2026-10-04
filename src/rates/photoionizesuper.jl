@@ -9,7 +9,7 @@
 
 const PhotoionizeSuperDesc = "Coefficients for phot x-section of suplevels"
 
-@with_levels struct PhotoionizeSuper{I, R} <: AbstractRate
+struct PhotoionizeSuper{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I                # principal quantum number
@@ -24,16 +24,17 @@ const PhotoionizeSuperDesc = "Coefficients for phot x-section of suplevels"
     logα::Matrix{R}     # log₁₀ α (cm³ s⁻¹), size (T, ne)
     E_grid::Vector{R}   # energies
     σ::Vector{R}        # cross sections
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function PhotoionizeSuper(rate::Int32, label::String, ivec::I, rvec::R) where
+function PhotoionizeSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     Nd, Nt, Nx = ivec[1:3]
     # ucalc reads the table with the temperature running fastest
     PhotoionizeSuper(Int8(rate), label, ivec[4:7]..., Parent(ivec[9], ivec[8]), ivec[10:11]..., Vector(rvec[1:Nd]),
         Vector(rvec[Nd+1:Nd+Nt]), reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Int(Nt), Int(Nd)),
-        Vector(rvec[Nd+Nt+Nd*Nt+1:2:end-1]), Vector(rvec[Nd+Nt+Nd*Nt+2:2:end]))
+        Vector(rvec[Nd+Nt+Nd*Nt+1:2:end-1]), Vector(rvec[Nd+Nt+Nd*Nt+2:2:end]), levels)
 end
 
 """
@@ -115,7 +116,7 @@ end
     rate(coef::PhotoionizeSuper, cell; neutral=false, index=false)
 
 Photoionization and recombination of a superlevel from the tabulated recombination coefficients and
-cross section (XSTAR ucalc type 70, "old type 70"), see `photoionize_superlevel`. The level data comes from the coefficient (`attach_levels`) and `radiation` is the spectrum (none by default). `neutral=true` limits the density to
+cross section (XSTAR ucalc type 70, "old type 70"), see `photoionize_superlevel`. The level data comes from the coefficient (its `levels` field) and `radiation` is the spectrum (none by default). `neutral=true` limits the density to
 10⁸ cm⁻³ in the interpolation, as ucalc does for the first ion of an element. The other keywords of the
 photoionization rates are accepted and ignored.
 """

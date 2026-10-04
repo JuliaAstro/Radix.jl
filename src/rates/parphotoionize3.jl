@@ -8,7 +8,7 @@
 
 const ParPhotoIonize3Desc = "verner pi x!"
 
-@with_levels struct ParPhotoIonize3{I, R} <: AbstractRate
+struct ParPhotoIonize3{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n_electrons::I   # electrons in the ion
@@ -23,12 +23,13 @@ const ParPhotoIonize3Desc = "verner pi x!"
     ya::R
     P::R
     yw::R
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function ParPhotoIonize3(rate::Int32, label::String, ivec::I, rvec::R) where
+function ParPhotoIonize3(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ParPhotoIonize3(Int8(rate), label, ivec[1:3]..., Parent(ivec[5], ivec[4]), ivec[6:7]..., rvec...)
+    ParPhotoIonize3(Int8(rate), label, ivec[1:3]..., Parent(ivec[5], ivec[4]), ivec[6:7]..., rvec..., levels)
 end
 
 const ph3_qq_base = 5.5               # exponent of the fit: 5.5 + l - P/2
@@ -42,7 +43,7 @@ const ph3_flux_min = 1e-20            # no rate if the integrated spectrum above
 Photoionization from the analytic fit of Verner et al. (XSTAR ucalc type 59),
 evaluated on the energy grid of `radiation` and integrated with `photoionization_integrals_fo`
 (the recombination terms are zero for rate type 1 and for excited levels, as in ucalc).
-The levels and their number come from the coefficient's level table (`attach_levels`). Returns `init` and
+The levels and their number come from the coefficient's level table (its `levels` field). Returns `init` and
 `final` (`nlev` + parent level − 1), `frate` and `irate`, the energies `fenergy`, `ienergy`,
 `fenergy2`, `ienergy2` and the `opacity`. Nothing is returned if the parent ion is more
 than one step away, the threshold is outside the grid, or the integrated spectrum above it
@@ -50,7 +51,7 @@ is negligible. Only the 6-real form of the record is supported. `ptmp` and `lfas
 accepted for uniformity with the other photoionization rates but not used.
 """
 function rate(coef::ParPhotoIonize3, cell::Cell; radiation=NO_RADIATION, abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,

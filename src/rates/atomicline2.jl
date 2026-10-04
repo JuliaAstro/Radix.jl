@@ -15,7 +15,7 @@ const decay_floor = 1e-20              # floor of the decay rate, per unit ntot
 const cm_per_Å = 1e-8
 const cm_per_km = 1e5
 
-@with_levels struct AtomicLine2{I, R} <: AbstractRate
+struct AtomicLine2{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
@@ -24,12 +24,13 @@ const cm_per_km = 1e5
     λ::R      # wavelength (Å)
     gf::R     # weighted oscillator strength
     A::R      # Einstein A (s⁻¹)
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R) where
+function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    AtomicLine2(Int8(rate), label::String, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec...)
+    AtomicLine2(Int8(rate), label::String, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec..., levels)
 end
 
 """
@@ -37,7 +38,7 @@ end
 
 Radiative decay and photoexcitation of an atomic line (XSTAR ucalc type 50).
 The level data and the number of levels of the ion (the continuum level is excluded) come from the
-coefficient (`attach_levels`), and so by default does the atomic `mass` (amu) of the element. `vturb` is
+coefficient (its `levels` field), and so by default does the atomic `mass` (amu) of the element. `vturb` is
 the turbulent velocity (km/s), `pesc` the sum of the two escape probabilities (1
 when optically thin), `radiation` the incident spectrum (none by default) and `cfrac` the covering
 fraction.
@@ -52,8 +53,8 @@ wavelength (λ = 0) and records with a level missing from the level table give n
 The line opacity that XSTAR adds to its continuum arrays (`linopac`) is not
 included.
 """
-function rate(coef::AtomicLine2, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
-    levels = levels_of(coef)
+function rate(coef::AtomicLine2, cell::Cell; mass=atomic_mass(coef.levels, coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
 

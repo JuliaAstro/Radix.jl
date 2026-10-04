@@ -8,7 +8,7 @@
 
 const RadiativeSuperDesc = "Transition rates from superlevel to spect. lvls"
 
-@with_levels struct RadiativeSuper{I, R} <: AbstractRate
+struct RadiativeSuper{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -18,15 +18,16 @@ const RadiativeSuperDesc = "Transition rates from superlevel to spect. lvls"
     ne_grid::Vector{R}  # log₁₀ densities (cm⁻³)
     T_grid::Vector{R}   # log₁₀ temperatures (K)
     A::Matrix{R}        # log₁₀ Einstein A (s⁻¹; a single entry above 30 is A itself), size (T, ne)
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function RadiativeSuper(rate::Int32, label::String, ivec::I, rvec::R) where
+function RadiativeSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     Nd, Nt = ivec[1:2]
     RadiativeSuper(Int8(rate), label, Transition(ivec[3], ivec[4]), ivec[5:6]..., rvec[Nd+Nt+Nd*Nt+1],
         Vector(rvec[1:Nd]), Vector(rvec[Nd+1:Nd+Nt]),
-        reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Int(Nt), Int(Nd)))   # ucalc reads the temperature fastest
+        reshape(rvec[Nd+Nt+1:Nd+Nt+Nd*Nt], Int(Nt), Int(Nd)), levels)   # ucalc reads the temperature fastest
 end
 
 const superdecay_cap = 1e10               # decay rate cap for ions 96 and 97 (calcium I and II)
@@ -57,8 +58,8 @@ line (from its wavelength above 0.1 Å, from the levels otherwise) and `opacity`
 opacity for the atomic `mass` (amu, from the level table by default) and the turbulent velocity `vturb` (km/s), both zero for lines
 longer than 10⁹ Å. Needs levels `init` and `final` between 1 and `nlev`.
 """
-function rate(coef::RadiativeSuper, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, ptmp=(0.5, 0.5), index=false, kw...)
-    levels = levels_of(coef)
+function rate(coef::RadiativeSuper, cell::Cell; mass=atomic_mass(coef.levels, coef.ion), vturb=1.0, ptmp=(0.5, 0.5), index=false, kw...)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
 

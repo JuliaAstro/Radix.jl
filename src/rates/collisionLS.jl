@@ -5,19 +5,20 @@
 
 const CollisionLSDesc = "Kato & Nakazaki (1996) fit to Helike coll. strgt"
 
-@with_levels struct CollisionLS{I, R} <: AbstractRate
+struct CollisionLS{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     Z::I               # atomic number
     ion::I             # ion index (XSTAR ionN)
     coeffs::Vector{R}  # fit coefficients
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionLS(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionLS(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionLS(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec))
+    CollisionLS(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec), levels)
 end
 
 const ls_y_max = 77.0           # the argument of the exponential integral is limited to this
@@ -63,7 +64,7 @@ end
 # the collision rates of types 66, 68 and 69; `kind` is :fine, :helike or :ls
 function helike_fit_collision(coef, cell::Cell, index, kind)
     K = constants()
-    levels = levels_of(coef)
+    levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper

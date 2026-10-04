@@ -5,19 +5,20 @@
 
 const CollisionHeFineDesc = "Like type 69 but, data in fine structure"
 
-@with_levels struct CollisionHeFine{I, R} <: AbstractRate
+struct CollisionHeFine{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
     Z::I               # atomic number
     ion::I             # ion index (XSTAR ionN)
     coeffs::Vector{R}  # fit coefficients
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function CollisionHeFine(rate::Int32, label::String, ivec::I, rvec::R) where
+function CollisionHeFine(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    CollisionHeFine(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec))
+    CollisionHeFine(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., Vector(rvec), levels)
 end
 
 """

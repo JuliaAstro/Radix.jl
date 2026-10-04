@@ -7,7 +7,7 @@
 
 const ElectronCollisionDesc = "op and chianti line coll rates"
 
-@with_levels struct ElectronCollision{I, R} <: AbstractRate
+struct ElectronCollision{I, R, L<:LevelTable} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     kind::I             # transition type
@@ -17,19 +17,20 @@ const ElectronCollisionDesc = "op and chianti line coll rates"
     ΔE::R               # Ry
     C::R
     Υ::Vector{R}  # reduced effective collision strengths
+    levels::L              # the level data of the database (a LevelTable)
 end
 
-function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R) where
+function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
-    ElectronCollision(Int8(rate), label, ivec[1], Transition(ivec[2], ivec[3]), ivec[4:5]..., rvec[1:2]..., Vector(rvec[3:end]))
+    ElectronCollision(Int8(rate), label, ivec[1], Transition(ivec[2], ivec[3]), ivec[4:5]..., rvec[1:2]..., Vector(rvec[3:end]), levels)
 end
 
 """
     rate(coef::ElectronCollision, cell; index=false)
 
 Electron-impact excitation and de-excitation from the CHIANTI fits (XSTAR ucalc
-type 51). The levels come from the coefficient's level table (`attach_levels`). `init` is the lower and `final` the
+type 51). The levels come from the coefficient's level table (its `levels` field). `init` is the lower and `final` the
 upper level (ordered by energy), `frate` the excitation and `irate` the
 de-excitation rate (s⁻¹), related by detailed balance with the transition
 energy `ΔE` of the record. The fit temperature is floored at `ΔE/50k`. Records
@@ -42,7 +43,7 @@ assembly decides which level is lower with a ratio test on the level energies
 that can swap them for nearly degenerate levels; that quirk is not reproduced.
 """
 function rate(coef::ElectronCollision, cell::Cell; index=false)
-    levels = levels_of(coef)
+    levels = coef.levels
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
