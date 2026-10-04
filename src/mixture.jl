@@ -7,6 +7,12 @@ const electron_factor = 1.2             # dsec: step of the electron fraction wh
 const electron_tolerance = 1e-4         # dsec's crite: |xee - electrons|/xee at convergence
 const electron_iterations = 100         # at most this many evaluations of the elements in the iteration
 const hydrogen_Z = 1
+const temperature_factor = 1.2          # dsec: step of the temperature while the solution is not bracketed
+const imbalance_tolerance = 1e-4        # dsec's crith: |hmctot| at convergence (the relative heating - cooling)
+const temperature_tolerance = 2e-9      # dsec's critt: the iteration stops if the temperature changes by less than this
+const large_imbalance = 0.9             # dsec: a second step of the temperature if |hmctot| is larger than this
+const temperature_iterations = 99       # at most this many evaluations of the temperature (XSTAR's niter)
+const default_T_min = 1e-3              # the lowest temperature of the iteration (10⁴ K)
 
 """
     Mixture(records, levels; multiplier=Dict())
@@ -124,4 +130,119 @@ function bracket_electron_fraction(evaluate, xee, elcter; tolerance)
         abs(elcter)/max(1e-48, xee) < tolerance && return (xee, elcter, iterations, true)
     end
     (xee, elcter, iterations, false)
+end
+
+"""
+    heating_cooling(mixture, balance, T, ntot, compton; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+
+The heating and cooling (erg cm⁻³ s⁻¹) of the gas of `mixture` at the temperature `T` (10⁴ K) and hydrogen density `ntot`
+whose populations are those of `balance` (from `ionization_balance`, at the same `T`, `ntot` and `radiation`); `compton` is
+the `ComptonTable`. The totals of XSTAR's `calc_hmc_all` and `heatf`: the elements (`element_heating`, weighted by their
+abundances) plus the Compton heating and cooling, the free-free heating and the bremsstrahlung cooling.
+
+Returns a named tuple with `heating` and `cooling` (the radiative energy that the gas absorbs and emits: `httot`,
+`cltot`), `imbalance` = `2 (heating - cooling)/(heating + cooling)` (`hmctot`, what the temperature is iterated to zero),
+`heating2` and `cooling2` (the same for the energy of the electrons), the terms `compton_heating`, `compton_cooling`,
+`free_free_heating` and `bremsstrahlung_cooling`, and the `heating` and `cooling` of each element, weighted by its
+abundance, in the order of `mixture.Z` (as `elements`).
+"""
+function heating_cooling(mixture::Mixture, balance, T, ntot, compton::ComptonTable; radiation=NO_RADIATION, escape=nothing,
+        lfast=photoionization_lfast)
+    cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
+    elements = Vector{NTuple{4, Float64}}(undef, length(mixture.elements))
+    Threads.@threads for k in eachindex(mixture.elements)
+        elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape, lfast)
+    end
+    weighted = [mixture.abundance[k] .* elements[k] for k in eachindex(elements)]
+    K = constants()
+    cmp1, cmp2 = compton_integrals(compton, radiation, T)
+    nₑ = balance.nₑ
+    compton_heating = cmp1*nₑ*K.ergsev
+    compton_cooling = T*K.kT_eV*cmp2*nₑ*K.ergsev
+    free_free = free_free_heating(radiation, T, nₑ)
+    bremsstrahlung = bremsstrahlung_cooling(radiation, T, nₑ)
+    heating = sum(w[1] for w in weighted) + compton_heating + free_free
+    cooling = sum(w[2] for w in weighted) + compton_cooling + bremsstrahlung
+    heating2 = sum(w[3] for w in weighted) + compton_heating + free_free
+    cooling2 = sum(w[4] for w in weighted) + compton_cooling + bremsstrahlung
+    (; heating, cooling, imbalance=2*(heating - cooling)/(heating_floor + heating + cooling), heating2, cooling2,
+       compton_heating, compton_cooling, free_free_heating=free_free, bremsstrahlung_cooling=bremsstrahlung,
+       elements=[(; heating=w[1], cooling=w[2], heating2=w[3], cooling2=w[4]) for w in weighted])
+end
+
+"""
+    thermal_equilibrium(mixture, ntot, compton; radiation=NO_RADIATION, escape=nothing, T=1.0, xee=1.0, T_min=default_T_min,
+                        tolerance=imbalance_tolerance, iterations=temperature_iterations)
+
+The temperature at which the heating and cooling of the gas balance, and the ionization balance there, for the hydrogen
+density `ntot` and the radiation field `radiation`, starting from the temperature `T` (10⁴ K) and the electron fraction `xee`
+and iterating as XSTAR's `dsec` does: at each temperature the electron fraction is iterated (`ionization_balance`) and the
+heating and cooling summed (`heating_cooling`); the temperature is changed by factors of 1.2 (of 1.44 when the relative
+imbalance exceeds 0.9) until it brackets the solution, then found by false position, with the stale end halved, until the
+relative imbalance `|2 (heating - cooling)/(heating + cooling)|` is below `tolerance` (or the temperature stops changing,
+or `iterations` temperatures were tried). `T_min` (10⁴ K) is the lowest temperature.
+
+Returns the named tuple of `heating_cooling` for the last temperature with the added fields `T`, `xee`, `nₑ`, `nₕ`,
+`populations`, `fractions` (those of `ionization_balance`), `evaluations` (the temperatures tried), `converged`,
+and `trace`, the temperatures tried with their imbalance.
+"""
+function thermal_equilibrium(mixture::Mixture, ntot, compton::ComptonTable; radiation=NO_RADIATION, escape=nothing, T=1.0,
+        xee=1.0, T_min=default_T_min, lfast=photoionization_lfast, tolerance=imbalance_tolerance, iterations=temperature_iterations)
+    xee = Float64(xee)
+    neutral = 0.0
+    local balance, energy
+    function evaluate(t)
+        balance = ionization_balance(mixture, t, ntot; radiation, escape, xee, neutral, lfast)
+        energy = heating_cooling(mixture, balance, t, ntot, compton; radiation, escape, lfast)
+        xee, neutral = balance.xee, balance.nₕ
+        energy.imbalance
+    end
+    t, converged, evaluations, trace = bracket_temperature(evaluate, Float64(T); tolerance, iterations, T_min)
+    (; energy..., T=t, xee=balance.xee, nₑ=balance.nₑ, nₕ=balance.nₕ, populations=balance.populations, fractions=balance.fractions,
+       evaluations, converged, trace)
+end
+
+# dsec's iteration of the temperature: `evaluate(t)` is the relative imbalance of the heating and cooling at the temperature t,
+# negative when the cooling exceeds the heating (t too high). The solution is bracketed by steps of `temperature_factor` (twice
+# that if the imbalance exceeds `large_imbalance`) and then found by false position, with the end of the bracket that has not
+# changed halved, as XSTAR does. Returns the last temperature, whether `|imbalance| <= tolerance` there, the number of
+# evaluations and the trace of (temperature, imbalance).
+function bracket_temperature(evaluate, t; tolerance=imbalance_tolerance, iterations=temperature_iterations, T_min=default_T_min)
+    t = max(t, T_min)
+    tl = th = hmcttl = hmctth = 0.0
+    to = 1e30
+    iht = ilt = iuht = iult = false
+    trace = Tuple{Float64, Float64}[]
+    nnt = 0
+    while true
+        hmctot = evaluate(t)
+        nnt += 1
+        push!(trace, (t, hmctot))
+        abs(hmctot) <= tolerance && break
+        nnt < iterations || break
+        if hmctot < 0                                       # the cooling exceeds the heating: the temperature is too high
+            iht, th, hmctth, iuht = true, t, hmctot, true
+            iult || (hmcttl /= 2)
+            iult = false
+            if !ilt
+                t /= temperature_factor
+                abs(hmctot) > large_imbalance && (t /= temperature_factor)
+                t = max(t, T_min)
+                continue
+            end
+        else
+            ilt, tl, hmcttl, iult = true, t, hmctot, true
+            iuht || (hmctth /= 2)
+            iuht = false
+            if !iht
+                t *= temperature_factor
+                abs(hmctot) > large_imbalance && (t *= temperature_factor)
+                continue
+            end
+        end
+        abs(1 - t/to) < temperature_tolerance && break      # (not converging)
+        to = t
+        t = (tl*hmctth - th*hmcttl)/(hmctth - hmcttl)
+    end
+    (t, abs(trace[end][2]) <= tolerance, nnt, trace)
 end

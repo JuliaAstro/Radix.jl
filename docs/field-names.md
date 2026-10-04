@@ -217,6 +217,43 @@ Simpson-Zhang tables, `ps_rho_coeff`, `ps_b_coeff`, `impactn_psi_coeff`, `impact
 1.095e-10 is within 1.8e-3 of 2 (8k/πm)^{1/2} π a₀² per √K, which is probably its origin, but this is
 unconfirmed.
 
+## Heating, cooling and thermal equilibrium
+
+`src/heating.jl` and `src/mixture.jl` (`element_heating`, `heating_cooling`, `thermal_equilibrium`) port XSTAR's `msolvelud`/
+`msolvelucy` (the sums over the populations), `calc_hmc_all`, `comp2`/`cmpfnc`, `freef`, `bremem` and `heatf`, and the
+iteration of `dsec`. What the code does and what was found:
+
+- **Two channels.** ucalc returns two pairs of energies: `ans3`, `ans4` (the energy of the photons, "photon pov": the heating
+  is what the radiation field deposits and the cooling what the gas radiates, so that its imbalance is what the temperature is
+  iterated on) and `ans5`, `ans6` (the energy of the electrons). Each record puts `ans4` at its lower level and `-ans3` at its upper
+  one (`ans6` and `-ans5` in the second channel); a positive entry times the population of its level is a cooling, a negative one
+  a heating. `ucalc_energies` gives the four from the energies of the result of `rate`, by type, and the signs are those of ucalc:
+  the lines and `PhotoionizeSuper`/photoionization negate them (`ans3 = -ienergy`, `ans4 = -fenergy`, `fenergy2`, `ienergy2` in the
+  second channel), `RadiativeFeDecay` (type 82) does not (`ans3 = ienergy`, `ans4 = fenergy`), the radiative decays 54, 71 and 76
+  have only `ans3`, and the collisions only `ans5` and `ans6`. Collisional excitation cools through the line that radiates it.
+- **`hmctot = 2 (ht - cl)/(1e-37 + ht + cl)`** and the temperature is iterated until `|hmctot| < 1e-4` (steps of 1.2, twice that if
+  `|hmctot| > 0.9`, then false position with the unmoved end halved). The imbalance changes by only 0.0035 per 10⁴ K near
+  the equilibrium of the reference run, so a relative error of 0.1% of heating or cooling is a 2% error of the temperature.
+- **`bremsmap` and the flat tail** (`map_spectrum`). XSTAR does not use the spectrum on its grid but `bremsam(m) = bremsa(nbinc(epim(m), epi))`,
+  and `nbinc` never returns a bin above `n - max(2, n/50)`. With the same grid every bin above it takes the flux of that bin: a flat
+  tail where a power law falls. The Compton heating, which the high energies dominate, is 50% larger than for the unmapped spectrum for an E⁻¹
+  spectrum on the grid of 999 bins. Radix does not map the spectrum itself: pass `map_spectrum(radiation)` to reproduce XSTAR.
+- **Compton.** `coheat.dat` (a table of 101 × 101 values, read by `load_compton`) is in the data directory of XSTAR, next to `atdb.fits`.
+  `compton_integrals` is checked against the real F90 `comp2` (`test/reference/ucalc/drvcomp.f90`) to 10⁻⁶. Free-free heating and
+  bremsstrahlung cooling use XSTAR's fitted coefficients (Gaunt factor 1, ion density 1.4 nₑ).
+- **Photoionization that leaves an excited level of the next ion**: ucalc reads the energy of the final level from stale memory, and
+  the energy measured from the threshold is a difference of nearly equal terms (it reached 10⁵ times the cooling). These records are left
+  out of the second channel (the first, from zero, is verified for every parent). XSTAR keeps finite values for them, so the second channel
+  of the heavy elements (S, Ar, Fe, ...) is 10–90% low.
+- **Which database.** The reference outputs were made with XSTAR 2.59j, whose database (`$HEADAS/refdata/atdb.fits`, 874.7 MB) is not the
+  one in the source tree (`ftools/xstar/data/atdb.fits`, 871.1 MB). For hydrogen the older one has records of type 60 (the 2s-3s record has
+  the levels 1 and 7, which makes 3s 7.5 times too populated and the cooling of hydrogen 6-10% too large) and the newer has none. With the
+  database of the package every element agrees with XSTAR's table of the first zone to 0.0-0.2% in both channels (the same bias in heating and cooling,
+  which comes from XSTAR's Lucy iteration, converged to 1% only) and the electron fraction and the temperature of the equilibrium
+  to 10⁻⁵ and 2×10⁻⁴; with the database of the tree the temperature is 4-5% low. The Compton and bremsstrahlung terms agree to 5×10⁻⁴.
+- **Not included**: the escape probabilities from the optical depths (the second zone of the reference run has line trapping:
+  its equilibrium temperature is 0.5% low), `linopac` and the opacity arrays, and the transfer.
+
 ## Reference tests
 
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records

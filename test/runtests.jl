@@ -7,6 +7,7 @@ Radix.set_constants!(Radix.ucalc_constants())
 include("ucalc_tests.jl")
 include("elements_tests.jl")
 include("mixture_tests.jl")
+include("heating_tests.jl")
 
 # Rate formulas below are transcribed independently from XSTAR's ucalc()
 # (ftools/xstar/utils/xstarsub.f) so Radix is checked against the Fortran,
@@ -441,6 +442,7 @@ struct UnportedRate <: Radix.AbstractRate end
             @test kinds[Radix.PhotoionizeSuper] > 0 && kinds[Radix.PhotoRecombX] > 0
             element_balance_tests(db)
             mixture_balance_tests(db)
+            heating_balance_tests(db)
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"
@@ -453,3 +455,4 @@ include("constants_tests.jl")
 include("levels_tests.jl")
 toy_balance_tests()
 toy_mixture_tests()
+toy_heating_tests()

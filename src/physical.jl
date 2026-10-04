@@ -39,7 +39,8 @@ are equal for CODATA. Fields:
   but the fits of types 66 and 69 amplify it by y²/2, up to 1e-4. `false` for CODATA. and `thermal_bohr` (π a₀² (8k/(π mₑ))^{1/2}, cm³ s⁻¹ K^{-1/2}).
 - `proton_mass` in electron masses, `light_speed` (cm s⁻¹), `line_xsec` (π e²/(m_e c), cm² Hz),
   `thermal_speed` (cm s⁻¹ of an atom of 1 amu at 10⁴ K),
-  `collision_rate_coeff` (Maxwellian Υ rate coefficient for T in 10⁴ K, cm³ s⁻¹) and `saha_coeff` (cm³ K^{3/2}).
+  `collision_rate_coeff` (Maxwellian Υ rate coefficient for T in 10⁴ K, cm³ s⁻¹), `saha_coeff` (cm³ K^{3/2}),
+  `sigma_thomson` (cm², the Compton heating and cooling) and `electron_rest_eV` (m_e c², eV).
 """
 struct Constants
     ergsev::Float64
@@ -92,6 +93,8 @@ struct Constants
     thermal_speed::Float64
     collision_rate_coeff::Float64
     saha_coeff::Float64
+    sigma_thomson::Float64
+    electron_rest_eV::Float64
 end
 
 const T_floor_dE_over_kT = 50.0       # the fit temperature of the collision rates is at least ΔE/(50 k)
@@ -139,7 +142,8 @@ function Constants(codata::Module=CODATA2022)
         proton_mass=value(Unitful.NoUnits, mₚ/mₑ), light_speed=value(u"cm/s", c),
         line_xsec=value(u"cm^2/s", π*rₑ*c),
         thermal_speed=value(u"cm/s", sqrt(2*k*T_unit*u"K"/mᵤ)),
-        collision_rate_coeff=collision/sqrt(T_unit), saha_coeff=saha))
+        collision_rate_coeff=collision/sqrt(T_unit), saha_coeff=saha,
+        sigma_thomson=value(u"cm^2", codata.ThomsonCrossSection), electron_rest_eV=value(u"eV", mₑ*c^2)))
 end
 
 """
@@ -163,7 +167,7 @@ ucalc_constants() = Constants((;
     Ry_K_sz=1.578203e5, sz_rate_coeff=8.63e-6, ups_coeff=Float64(8.629f-6),
     Ry_K_sat=Float64(1.578876f5), thermal_bohr=Float64(5.46538f-11), Ry_per_K=Float64(6.33652f-6), eV_K_ls=Float64(1.160443f4), single_expint=true,
     proton_mass=1800.0, light_speed=3e10, line_xsec=0.02655, thermal_speed=1.29e6,
-    collision_rate_coeff=8.626e-8, saha_coeff=2.07e-16))
+    collision_rate_coeff=8.626e-8, saha_coeff=2.07e-16, sigma_thomson=6.6524587321e-25, electron_rest_eV=5.11e5))
 
 const CURRENT_CONSTANTS = Ref(Constants())
 
