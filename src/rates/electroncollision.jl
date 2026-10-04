@@ -41,7 +41,7 @@ dips slightly below zero (rates of about -1e-7 in XSTAR). XSTAR's matrix
 assembly decides which level is lower with a ratio test on the level energies
 that can swap them for nearly degenerate levels; that quirk is not reproduced.
 """
-function rate(coef::ElectronCollision, cell::Cell; index=false, verbose=false)
+function rate(coef::ElectronCollision, cell::Cell; index=false)
     levels = levels_of(coef)
     K = constants()
 

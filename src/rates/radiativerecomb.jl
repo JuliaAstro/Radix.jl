@@ -18,8 +18,6 @@ function RadRecomb(rate::Int32, label::String, ivec::I, rvec::R) where
     RadRecomb(Int8(rate), label, rvec[1], rvec[2])
 end
 
-function rate(coef::RadRecomb, cell::Cell; index=false, verbose=false)
-    if verbose println() end
-
+function rate(coef::RadRecomb, cell::Cell; index=false)
     (; init=1, final=0, frate=(index ? 0. : cell.nₑ*coef.A/cell.T^coef.η), irate=0.)
 end

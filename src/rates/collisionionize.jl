@@ -40,7 +40,7 @@ record) and `final` the continuum, `nlev` (records of rate type 15 give level 1 
 rates times the threshold energy. For temperatures below the first point of the table ucalc interpolates
 with the first interval's left end read from `T0` and the last `x_grid`; reproduced.
 """
-function rate(coef::CollisionIonize, cell::Cell; index=false, verbose=false)
+function rate(coef::CollisionIonize, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

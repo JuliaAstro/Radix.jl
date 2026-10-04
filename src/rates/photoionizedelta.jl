@@ -46,7 +46,7 @@ recombination sum at the temperature of `cell`, scaled by the statistical weight
 level and of the continuum level `nlev`. `final` is `nlev`. Both are 0 if the spectrum
 does not reach the highest line.
 """
-function rate(coef::PhotoionizeDelta, cell::Cell; radiation=NO_RADIATION, index=false, verbose=false)
+function rate(coef::PhotoionizeDelta, cell::Cell; radiation=NO_RADIATION, index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

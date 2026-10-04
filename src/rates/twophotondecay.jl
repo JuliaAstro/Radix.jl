@@ -28,7 +28,7 @@ Two-photon decay of a level (XSTAR ucalc type 76): `irate` is the stored `A` (s�
 `ucalc` also adds the two-photon continuum, a spectrum `E²(E_max − E)` normalized to `A`, to its emissivity array;
 that is not included.
 """
-function rate(coef::TwoPhotonDecay, cell::Cell; index=false, verbose=false)
+function rate(coef::TwoPhotonDecay, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

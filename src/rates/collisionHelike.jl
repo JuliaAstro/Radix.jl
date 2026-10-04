@@ -28,5 +28,5 @@ Collisional excitation and de-excitation of a He-like ion from a quadratic fit o
 strength in log₁₀(T/Z³) (XSTAR ucalc type 68, `calt68`), clamped at 0, with a temperature of at least
 ΔE/50k; otherwise like `rate(::CollisionLS, ...)`.
 """
-rate(coef::CollisionHelike, cell::Cell; index=false, verbose=false) =
+rate(coef::CollisionHelike, cell::Cell; index=false) =
     helike_fit_collision(coef, cell, index, :helike)

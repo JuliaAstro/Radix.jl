@@ -89,7 +89,7 @@ terms and the opacity are zero as in ucalc (the opacity and emissivity arrays ar
 filled). `final` is the level 1. `ucalc` computes the charge of the resonance series as
 the ion index minus 114, a leftover of an earlier ion numbering, which is reproduced.
 """
-function rate(coef::PhotoionizeFeKedge, cell::Cell; radiation=NO_RADIATION, abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false, verbose=false)
+function rate(coef::PhotoionizeFeKedge, cell::Cell; radiation=NO_RADIATION, abund=(0.0, 0.0), opacity=nothing, ptmp=nothing, lfast=nothing, index=false)
     K = constants()
 
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.,

@@ -39,7 +39,7 @@ large (de-excitation) rate of this branch to the *upward* direction (the source
 comments "check if ans1 and ans2 are correct or inverted"); this is reproduced
 as is.
 """
-function rate(coef::CollisionProb, cell::Cell; index=false, verbose=false)
+function rate(coef::CollisionProb, cell::Cell; index=false)
     levels = levels_of(coef)
     K = constants()
 

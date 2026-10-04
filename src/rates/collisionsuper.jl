@@ -52,7 +52,7 @@ Boltzmann factor at the wavelength `λ` of the record and the weight `2(2l + 1)`
 from numbering the first level of the record by shells. `fenergy` and `ienergy` are the rates times
 the energy difference of the levels. Both levels must be in `1:nlev`, differ, and be at least 1 eV apart.
 """
-function rate(coef::CollisionSuper, cell::Cell; index=false, verbose=false)
+function rate(coef::CollisionSuper, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

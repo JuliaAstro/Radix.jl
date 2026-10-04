@@ -28,7 +28,7 @@ function TotRadRecombH(rate::Int32, label::String, ivec::I, rvec::R) where
     TotRadRecombH(Int8(rate), label, ivec...)
 end
 
-function rate(coef::TotRadRecombH, cell::Cell; index=false, verbose=false)
+function rate(coef::TotRadRecombH, cell::Cell; index=false)
     if index
         res = (; init=1, final=0, frate=0., irate=0.)
     else

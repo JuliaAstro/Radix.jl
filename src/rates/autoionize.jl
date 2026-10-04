@@ -17,7 +17,7 @@ function Autoionize(rate::Int32, label::String, ivec::I, rvec::R) where
     Autoionize(Int8(rate), label, rvec[1], rvec[2])
 end
 
-function rate(coef::Autoionize, cell::Cell; index=false, verbose=false)
+function rate(coef::Autoionize, cell::Cell; index=false)
     K = constants()
 
     frate = index ? 0. : cell.nₑ*coef.C*expo(-coef.E/K.kT_eV/cell.T)/sqrt(cell.T)

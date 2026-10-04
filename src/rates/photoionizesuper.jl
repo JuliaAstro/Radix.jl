@@ -119,7 +119,7 @@ cross section (XSTAR ucalc type 70, "old type 70"), see `photoionize_superlevel`
 10⁸ cm⁻³ in the interpolation, as ucalc does for the first ion of an element. The other keywords of the
 photoionization rates are accepted and ignored.
 """
-function rate(coef::PhotoionizeSuper, cell::Cell; radiation=NO_RADIATION, neutral=false, index=false, ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing, verbose=false)
+function rate(coef::PhotoionizeSuper, cell::Cell; radiation=NO_RADIATION, neutral=false, index=false, ptmp=nothing, abund=nothing, lfast=nothing, opacity=nothing)
     photoionize_superlevel(coef, cell,
         (T, n, E_th) -> superlevel_cross_section(coef, T, neutral ? min(n, super_density_cap) : n, E_th);
         radiation, index)

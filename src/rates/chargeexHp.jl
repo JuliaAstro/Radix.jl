@@ -35,7 +35,7 @@ with T in 10⁴ K and `nHp = cell.ntot - cell.nₕ` the density of H⁺ (XSTAR's
 `irate` is 0. `init` is the level of the record and `final` the continuum level `nlev`. The range of the fit is not
 applied, nor is the sum `1 + c e^{dT}` limited at 0 (unlike type 2).
 """
-function rate(coef::ChargeExHp, cell::Cell; nlev=0, index=false, verbose=false)
+function rate(coef::ChargeExHp, cell::Cell; nlev=0, index=false)
     init, final = Int(coef.level), nlev
     index && return (; init, final, frate=0., irate=0.)
     T = cell.T

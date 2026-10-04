@@ -5,7 +5,7 @@ All specific rates are subtypes of AbstractRate.
 
 Every rate implements the same interface:
 
-    rate(coef::AbstractRate, cell::Cell; index=false, verbose=false)
+    rate(coef::AbstractRate, cell::Cell; index=false)
 
 Every keyword has a default: the rates that need atomic data besides their own coefficients (level
 energies and weights, the number of levels of the ion, the atomic mass of its element) read it from

@@ -29,7 +29,7 @@ function AtomicLevel(rate::Int32, label::String, ivec::I, rvec::R) where
 end
 
 function rate(coef::AtomicLevel, cell::Cell;
-    index=false, verbose=false)
+    index=false)
 
     (; init=coef.level, final=0, frate=0., irate=0.)
 end

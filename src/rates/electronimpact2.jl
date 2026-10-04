@@ -42,7 +42,7 @@ de-excitation rate (s⁻¹), related by detailed balance at the record's transit
 energy. The fit temperature is floored at `ΔE/50k`. Both rates are 0 if a level is
 missing from the level table or `ΔE ≤ 0`.
 """
-function rate(coef::ElectronImpact2, cell::Cell; index=false, verbose=false)
+function rate(coef::ElectronImpact2, cell::Cell; index=false)
     levels = levels_of(coef)
     K = constants()
 

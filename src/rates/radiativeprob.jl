@@ -33,7 +33,7 @@ Nothing is returned if the two levels have the same `n`. `ienergy` is the rate t
 which is what `ucalc` puts in its energy output (it multiplies by the dimensionless ΔE/kT, not by ΔE);
 `fenergy` is 0.
 """
-function rate(coef::RadiativeProb, cell::Cell; index=false, verbose=false)
+function rate(coef::RadiativeProb, cell::Cell; index=false)
     levels = levels_of(coef)
     K = constants()
     none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)

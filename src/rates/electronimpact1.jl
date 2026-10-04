@@ -37,7 +37,7 @@ linearly in log T; outside the table the nearest segment is extrapolated (as
 ucalc does, since its `hunt` clamps the index) and the result clamped at 0. Both
 rates are 0 if a level is missing from the level table or the two energies coincide.
 """
-function rate(coef::ElectronImpact1, cell::Cell; index=false, verbose=false)
+function rate(coef::ElectronImpact1, cell::Cell; index=false)
     levels = levels_of(coef)
     K = constants()
 

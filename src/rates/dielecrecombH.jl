@@ -28,7 +28,7 @@ Dielectronic recombination to the ground level of the next ion from the fit of S
 22): `frate = nₑ 10⁻¹² (a/T + b + T(c + T d)) T^{-3/2} e^{-e/T}` with T in 10⁴ K, floored at 0 and zero
 above 6×10⁴ K.
 """
-function rate(coef::DielecRecombH, cell::Cell; index=false, verbose=false)
+function rate(coef::DielecRecombH, cell::Cell; index=false)
     none = (; init=1, final=0, frate=0., irate=0.)
     (index || cell.T > storey_T_max) && return none
     a, b, c, d, e = Float64.(coef.coeffs[1:5])

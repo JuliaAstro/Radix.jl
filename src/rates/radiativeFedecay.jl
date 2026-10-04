@@ -37,7 +37,7 @@ that one); `opacity` is the line-centre opacity. The level energies only order t
 opacity added to the continuum arrays (`linopac`) is not included. The level table needs the Fe UTA levels, which
 `level_table` includes.
 """
-function rate(coef::RadiativeFeDecay, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, index=false, verbose=false)
+function rate(coef::RadiativeFeDecay, cell::Cell; mass=atomic_mass(levels_of(coef), coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
 

@@ -47,7 +47,7 @@ Saha factor of the ground to the continuum level weights and `e^{E/T}` with the 
 temperature in K (which is ≈ 1; the units look wrong in the source and are reproduced). `init` is the level and
 `final` the continuum level of the record. The level table needs the ground (1) and the continuum (`nlev`) levels.
 """
-function rate(coef::AutoionizeSat, cell::Cell; index=false, verbose=false)
+function rate(coef::AutoionizeSat, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()

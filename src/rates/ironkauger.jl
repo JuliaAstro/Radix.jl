@@ -30,7 +30,7 @@ Auger decay of a K-vacancy level of iron (XSTAR ucalc type 86): `frate` is the A
 `A_widths[1]` (s⁻¹), independent of the cell, from `init` (the vacancy level) to `final` (`nlev` + the
 level of the parent ion − 1); `irate` is 0. `ucalc` does not look at the levels, so none are needed.
 """
-function rate(coef::IronKAuger, cell::Cell; index=false, verbose=false)
+function rate(coef::IronKAuger, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     init, final = Int(coef.level), nlev + Int(coef.parent.level) - 1

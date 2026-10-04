@@ -73,7 +73,7 @@ including the electron density), `init` the level and `final` the continuum (`nl
 `ienergy` are the rates times the ionization potential, negated (ucalc's `ans6` and `ans5`). The
 ground level, and a level with a non-positive potential, give nothing. The stored `Zeff` is not used.
 """
-function rate(coef::EffectiveCharge, cell::Cell; index=false, verbose=false)
+function rate(coef::EffectiveCharge, cell::Cell; index=false)
     levels = levels_of(coef)
     nlev = nlevels(levels, coef.ion)
     K = constants()
