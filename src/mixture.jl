@@ -51,6 +51,10 @@ function electrons(mixture::Mixture, fractions)
     end
 end
 
+# `escape` of one element: a vector with one vector of pairs for each element (see `escape_probabilities`) gives that of the element k;
+# anything else (nothing, a function of the record, a vector of pairs of the records) is the same for all
+element_escape(escape, k) = escape isa AbstractVector && !isempty(escape) && first(escape) isa AbstractVector ? escape[k] : escape
+
 """
     ionization_balance(mixture, T, ntot; radiation=NO_RADIATION, escape=nothing, xee=1.0, iterate=true,
                        neutral=0.0, lfast=photoionization_lfast, tolerance=electron_tolerance)
@@ -81,7 +85,7 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     function evaluate(x)
         cell = Cell(Float64(T), nₕ, ntot*x, Float64(ntot))
         Threads.@threads for k in eachindex(elements)
-            element_matrix!(matrices[k], elements[k], cell; radiation, escape, lfast)
+            element_matrix!(matrices[k], elements[k], cell; radiation, escape=element_escape(escape, k), lfast)
             populations[k] = level_populations(matrices[k])
             fractions[k] = ion_fractions(populations[k], elements[k])
         end
@@ -151,7 +155,7 @@ function heating_cooling(mixture::Mixture, balance, T, ntot, compton::ComptonTab
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     elements = Vector{NTuple{4, Float64}}(undef, length(mixture.elements))
     Threads.@threads for k in eachindex(mixture.elements)
-        elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape, lfast)
+        elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape=element_escape(escape, k), lfast)
     end
     weighted = [mixture.abundance[k] .* elements[k] for k in eachindex(elements)]
     K = constants()

@@ -254,6 +254,31 @@ iteration of `dsec`. What the code does and what was found:
 - **Not included**: the escape probabilities from the optical depths (the second zone of the reference run has line trapping:
   its equilibrium temperature is 0.5% low), `linopac` and the opacity arrays, and the transfer.
 
+## Transfer: escape probabilities and optical depths
+
+`src/transfer.jl` ports `pescl`/`pescv`, the opacities of `calc_emisab_ion`, `stpcut` (the accumulation of the depths) and the use of
+the depths in `calc_hmc_ion`:
+
+- **What is accumulated.** Each line (rate types 4 and 9) has a centre optical depth `tau0` and each recombination edge (rate type 7) a
+  `tauc`, in two directions; `stpcut` adds `opacity × Δr` after every zone (`add_zone!`). The opacity of a line is the cross section at
+  its centre (the `opacity` of `rate`, ucalc's `opakab` without the abundance) times the density `ntot × abundance × population` of its
+  lower level; that of an edge is the `opacity` of the photoionization record called with `abund = (population × abundance of its
+  initial level, of its final level)`. The next zone's escape probabilities follow: `(pescl(τ₁)(1-c), pescl(τ₂)(1-c) + 2 pescl(τ₁+τ₂) c)`
+  for a line (`c` the covering fraction), `pescv` for an edge, 1/2 each for the others (`escape_probabilities`). The continuum
+  depth `dpthc` (the attenuation `exp(-dpthc)` of the spectrum in `trnfrc`) and `linopac` are not ported.
+- **Single-precision literals in `pescl`/`pescv`**: 1.2, 1.e-5 and 1.e-12 are single precision, which makes the double-precision
+  values differ by 4×10⁻⁸; checked against the real functions (`test/reference/ucalc/drvpesc.f90`) to 10⁻¹³.
+- **`trnfrc` writes the flux as `L/(12.56 r²)`, not `L/(4π r²)`**: 0.05% smaller. `point_source` uses the `fourpi` of the constants
+  in use (4π by default, 12.56 with `ucalc_constants()`), which is what the 0.1% bias between Radix and XSTAR's heating and
+  cooling was.
+- **The reference run has two zones.** `nsteps=2` is a slab of two zones of 5×10¹² cm: the first computed at 10¹³ cm (`frac_heat_error`
+  and the first row of the table of the second), the second at 1.5×10¹³ cm (the third row), and the optical depths in `xout_lines1.fits`
+  (`depth_inward`) and `xout_rrc1.fits` (its `depth_outward`, which is the inward one) are their sum. This reproduces the line depths of
+  all 451 lines above 10⁻⁹ to 1% (median 0.9999984, with XSTAR's constants) and the edge depths of the H-like and He-like ions
+  (the others have several records with the same level and threshold and no parent level in the table to tell them apart) to 0.1-0.3%.
+- **Line trapping is negligible in that slab**: the largest depth is 4×10⁻³ (O VIII Lyα), which changes the heating and cooling of the second
+  zone by 10⁻⁷. The 0.5% difference of the equilibrium temperature of that zone is not trapping.
+
 ## Reference tests
 
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records

@@ -28,3 +28,6 @@ julia generate.jl /path/to/atdb.fits /tmp/ucalc-ref 56          # writes type56.
 `src/heating.jl` ports as `compton_integrals`): it reads `coheat.dat` as `xstarsetup` does, then a temperature and a spectrum. For
 the incident spectrum of `../xstar_pow_xi2` at 10¹³ cm (`F = L/(4π r²)`, 999 points) and T = 10⁶ K it returns
 `cmp1 = 9.8459456377190043E-09` and `cmp2 = 8.9007105172073563E-11`, which `test/mixture_tests.jl` compares with.
+
+`drvpesc.f90` is a third driver, around `pescl` and `pescv` (the escape probabilities of the lines and the recombination continua that
+`src/transfer.jl` ports): it prints both for the optical depths on its input; `test/transfer_tests.jl` has the values for 14 depths.

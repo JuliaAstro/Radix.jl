@@ -166,7 +166,8 @@ function heating_balance_tests(db)
 
         @testset "the Compton integrals of the real comp2" begin
             # drvcomp (test/reference/ucalc) around XSTAR's comp2 on this spectrum at T = 10⁶ K
-            cmp1, cmp2 = Radix.compton_integrals(compton, incident, 100.0)
+            exact = Radix.Radiation(E, L ./ (4π*radius^2))             # (the driver's input has F = L/(4π r²), `point_source` the 12.56 of XSTAR)
+            cmp1, cmp2 = Radix.compton_integrals(compton, exact, 100.0)
             @test cmp1 ≈ 9.8459456377190043e-9 rtol=1e-6
             @test cmp2 ≈ 8.9007105172073563e-11 rtol=1e-6
         end

@@ -48,10 +48,10 @@ mean_intensity(rad::Radiation) = rad.F ./ 4π
     point_source(E, L, r)
 
 The radiation at the distance `r` (cm) from a point source of the spectrum `L` (erg s⁻¹ erg⁻¹) on the grid
-`E`, in a medium without absorption: the 1-D geometry of XSTAR, `F = L/(4π r²)`. Other geometries supply
-their own `J`.
+`E`, in a medium without absorption: the 1-D geometry of XSTAR, `F = L/(4π r²)` with the `fourpi` of the constants in use (4π, or
+the 12.56 that XSTAR's `trnfrc` writes: a flux 0.05% smaller than for 4π). Other geometries supply their own `J`.
 """
-point_source(E::AbstractVector, L::AbstractVector, r) = Radiation(E, L ./ (4π*r^2))
+point_source(E::AbstractVector, L::AbstractVector, r) = Radiation(E, L ./ (constants().fourpi*r^2))
 
 """
     map_spectrum(radiation, E=radiation.E)

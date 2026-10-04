@@ -29,6 +29,7 @@ include("atomicdb.jl")
 include("elements.jl")
 include("heating.jl")
 include("mixture.jl")
+include("transfer.jl")
 
 include("abundances.jl")
 
