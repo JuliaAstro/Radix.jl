@@ -199,7 +199,7 @@ unconfirmed.
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
 single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 9, 30,
-38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 95, 98 and 99.
+38, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 63, 70, 71, 74, 77, 85, 86, 88, 91, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -318,6 +318,8 @@ ported type (except 4, which has no `rate` method). Notes:
   temperature floor ΔE/50k, from the energies of the levels, is `T_floor_coeff` over the wavelength
   from the single-precision 12398.4016 of `ucalc` (`hc_eVÅ_single`): with `ucalc_constants()` the
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
+- `RadiativeAPED` (ucalc 91) is `ucalc`'s type 50 (it jumps to that code): `rate` builds the equivalent
+  `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
 - `CollisionIonize` (ucalc 95) keeps the scaled temperature grid `x_grid` and the strengths `ρ` apart (the old
   constructor put `T0` in `ρ`, and the header omits the grid). `ucalc` always takes level 1 as the initial
   level, and its statistical weight, whatever the level of the record; records of rate type 5 end in the

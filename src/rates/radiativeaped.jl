@@ -20,3 +20,15 @@ function RadiativeAPED(rate::Int32, label::String, ivec::I, rvec::R) where
 
     RadiativeAPED(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec[1], rvec[3])
 end
+
+"""
+    rate(coef::RadiativeAPED, cell; kw...)
+
+Radiative decay and photoexcitation of an APED line (XSTAR ucalc type 91). `ucalc` treats it as type 50
+(it jumps to the same code, the wavelength, the stored 0 and A being in the same places), so the
+result and the keywords are those of `rate(::AtomicLine2, ...)`.
+"""
+function rate(coef::RadiativeAPED, cell::Cell; kw...)
+    line = AtomicLine2(coef.rtype, "", coef.transition, coef.Z, coef.ion, coef.λ, zero(coef.λ), coef.A)
+    rate(line, cell; kw...)
+end

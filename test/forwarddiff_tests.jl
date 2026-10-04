@@ -27,6 +27,8 @@ const AD_CASES = [
     "type38" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type50" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13], vturb=c.cond[6],
         pesc=c.cond[11] + c.cond[12], nlev=c.nlev, radiation=ucalc_radiation(c), cfrac=c.cond[8]),
+    "type91" => (co, ce, lv, c) -> Radix.rate(co, ce; levels=lv, mass=c.cond[13], vturb=c.cond[6],
+        pesc=c.cond[11] + c.cond[12], nlev=c.nlev, radiation=ucalc_radiation(c), cfrac=c.cond[8]),
     "type51" => level_call,
     "type54" => level_call,
     "type56" => level_call,
