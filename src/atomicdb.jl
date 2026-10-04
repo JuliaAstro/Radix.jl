@@ -35,7 +35,7 @@ function load(io::IO)
     for j in 1:nrec
         implemented(j) && ptr[2,j] in level_data_types && (rates[j] = record(j, nothing))
     end
-    table = level_table(rates)
+    table = levels(rates)
     for j in 1:nrec
         implemented(j) && !(ptr[2,j] in level_data_types) && (rates[j] = record(j, table))
     end
@@ -45,14 +45,14 @@ end
 const level_data_types = (6, 13, 14, 83)   # AtomicLevel, Atom, Ion and AtomicLevelFe records
 
 """
-    level_table(records; masses=Dict())
+    levels(records; masses=Dict())
 
-The `LevelTable` of a loaded database (or any collection of records): the `AtomicLevel` records, the Fe UTA levels
+The `Levels` of a loaded database (or any collection of records): the `AtomicLevel` records, the Fe UTA levels
 (`AtomicLevelFe`, which hold only the energy and the weight, added as `AtomicLevel`s with zero quantum numbers unless
 the level is already there), and the atomic masses of the ions from the `Atom` and `Ion` records. `masses`
 (`ion => mass`) adds to or replaces those.
 """
-function level_table(records; masses=Dict{Int, Float64}())
+function levels(records; masses=Dict{Int, Float64}())
     levels = Dict((r.ion, r.level) => r for r in records if r isa AtomicLevel)
     for r in records
         r isa AtomicLevelFe || continue
@@ -70,6 +70,6 @@ function level_table(records; masses=Dict{Int, Float64}())
         r isa Ion && haskey(element_mass, Int(r.Z)) && (mass[Int(r.ion)] = element_mass[Int(r.Z)])
     end
     merge!(mass, Dict(Int(k) => Float64(v) for (k, v) in masses))
-    LevelTable(levels, nlev, mass)
+    Levels(levels, nlev, mass)
 end
 

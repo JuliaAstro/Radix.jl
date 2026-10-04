@@ -7,7 +7,7 @@
 
 const ElectronCollisionDesc = "op and chianti line coll rates"
 
-struct ElectronCollision{I, R, L<:LevelTable} <: AbstractRate
+struct ElectronCollision{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     kind::I             # transition type
@@ -17,10 +17,10 @@ struct ElectronCollision{I, R, L<:LevelTable} <: AbstractRate
     ΔE::R               # Ry
     C::R
     Υ::Vector{R}  # reduced effective collision strengths
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function ElectronCollision(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     ElectronCollision(Int8(rate), label, ivec[1], Transition(ivec[2], ivec[3]), ivec[4:5]..., rvec[1:2]..., Vector(rvec[3:end]), levels)

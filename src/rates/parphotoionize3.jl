@@ -8,7 +8,7 @@
 
 const ParPhotoIonize3Desc = "verner pi x!"
 
-struct ParPhotoIonize3{I, R, L<:LevelTable} <: AbstractRate
+struct ParPhotoIonize3{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n_electrons::I   # electrons in the ion
@@ -23,10 +23,10 @@ struct ParPhotoIonize3{I, R, L<:LevelTable} <: AbstractRate
     ya::R
     P::R
     yw::R
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function ParPhotoIonize3(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function ParPhotoIonize3(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     ParPhotoIonize3(Int8(rate), label, ivec[1:3]..., Parent(ivec[5], ivec[4]), ivec[6:7]..., rvec..., levels)

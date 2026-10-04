@@ -8,7 +8,7 @@
 
 const CollisionSuperDesc = "coll rates from 71"
 
-struct CollisionSuper{I, R, L<:LevelTable} <: AbstractRate
+struct CollisionSuper{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -18,10 +18,10 @@ struct CollisionSuper{I, R, L<:LevelTable} <: AbstractRate
     ne_grid::Vector{R}  # log₁₀ densities (cm⁻³)
     T_grid::Vector{R}   # log₁₀ temperatures (K)
     C::Matrix{R}        # log₁₀ collision rates (s⁻¹), size (T, ne)
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function CollisionSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     Nd, Nt = ivec[1:2]

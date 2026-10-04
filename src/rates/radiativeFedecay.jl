@@ -6,7 +6,7 @@
 
 const RadiativeFeDecayDesc = "Fe UTA rad rates"
 
-struct RadiativeFeDecay{I, R, L<:LevelTable} <: AbstractRate
+struct RadiativeFeDecay{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -16,10 +16,10 @@ struct RadiativeFeDecay{I, R, L<:LevelTable} <: AbstractRate
     gf::R      # weighted oscillator strength
     A_rad::R   # s⁻¹
     A_auto::R  # s⁻¹
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function RadiativeFeDecay(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function RadiativeFeDecay(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     RadiativeFeDecay(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3], rvec..., levels)
@@ -36,7 +36,7 @@ from `radiation` at the line energy (zero without it); `init` is the higher and 
 `ienergy` is the photoexcitation rate times the line energy and `fenergy` is 0 (`ucalc` returns only
 that one); `opacity` is the line-centre opacity. The level energies only order the two levels. The line
 opacity added to the continuum arrays (`linopac`) is not included. The level table needs the Fe UTA levels, which
-`level_table` includes.
+`levels` includes.
 """
 function rate(coef::RadiativeFeDecay, cell::Cell; mass=atomic_mass(coef.levels, coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, index=false)
     levels = coef.levels

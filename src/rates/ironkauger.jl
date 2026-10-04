@@ -6,7 +6,7 @@
 
 const IronKAugerDesc = "Iron K Auger data from Patrick"
 
-struct IronKAuger{I, R, L<:LevelTable} <: AbstractRate
+struct IronKAuger{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     parent::Parent{I}           # parent ion and level
@@ -15,10 +15,10 @@ struct IronKAuger{I, R, L<:LevelTable} <: AbstractRate
     ion::I               # ion index (XSTAR ionN)
     E::R                 # energy relative to E∞ (eV)
     A_widths::Vector{R}  # [A_auto(k), A_auto(k,parent), A_rad(k)] (s⁻¹)
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function IronKAuger(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     IronKAuger(Int8(rate), label, Parent(ivec[4], ivec[1]), ivec[2], ivec[3], ivec[5], rvec[1], Vector(rvec[2:end]), levels)

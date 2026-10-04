@@ -8,7 +8,7 @@
 
 const RadiativeSuperDesc = "Transition rates from superlevel to spect. lvls"
 
-struct RadiativeSuper{I, R, L<:LevelTable} <: AbstractRate
+struct RadiativeSuper{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -18,10 +18,10 @@ struct RadiativeSuper{I, R, L<:LevelTable} <: AbstractRate
     ne_grid::Vector{R}  # log₁₀ densities (cm⁻³)
     T_grid::Vector{R}   # log₁₀ temperatures (K)
     A::Matrix{R}        # log₁₀ Einstein A (s⁻¹; a single entry above 30 is A itself), size (T, ne)
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function RadiativeSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function RadiativeSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     Nd, Nt = ivec[1:2]

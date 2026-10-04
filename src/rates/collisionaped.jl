@@ -6,7 +6,7 @@
 
 const CollisionAPEDDesc = "aped collision strengths"
 
-struct CollisionAPED{I, R, L<:LevelTable} <: AbstractRate
+struct CollisionAPED{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -17,10 +17,10 @@ struct CollisionAPED{I, R, L<:LevelTable} <: AbstractRate
     T_max::R            # highest temperature of the fit (K)
     T_grid::Vector{R}   # temperatures (K)
     Υ::Vector{R}        # effective collision strengths
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function CollisionAPED(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function CollisionAPED(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     n = (length(rvec) - 2) ÷ 2

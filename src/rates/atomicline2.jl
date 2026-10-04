@@ -15,7 +15,7 @@ const decay_floor = 1e-20              # floor of the decay rate, per unit ntot
 const cm_per_Å = 1e-8
 const cm_per_km = 1e5
 
-struct AtomicLine2{I, R, L<:LevelTable} <: AbstractRate
+struct AtomicLine2{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # the two levels, in stored order
@@ -24,10 +24,10 @@ struct AtomicLine2{I, R, L<:LevelTable} <: AbstractRate
     λ::R      # wavelength (Å)
     gf::R     # weighted oscillator strength
     A::R      # Einstein A (s⁻¹)
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     AtomicLine2(Int8(rate), label::String, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec..., levels)

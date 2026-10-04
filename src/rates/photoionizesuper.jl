@@ -9,7 +9,7 @@
 
 const PhotoionizeSuperDesc = "Coefficients for phot x-section of suplevels"
 
-struct PhotoionizeSuper{I, R, L<:LevelTable} <: AbstractRate
+struct PhotoionizeSuper{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     n::I                # principal quantum number
@@ -24,10 +24,10 @@ struct PhotoionizeSuper{I, R, L<:LevelTable} <: AbstractRate
     logα::Matrix{R}     # log₁₀ α (cm³ s⁻¹), size (T, ne)
     E_grid::Vector{R}   # energies
     σ::Vector{R}        # cross sections
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function PhotoionizeSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function PhotoionizeSuper(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     Nd, Nt, Nx = ivec[1:3]

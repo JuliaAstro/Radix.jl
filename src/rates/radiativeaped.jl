@@ -5,7 +5,7 @@
 
 const RadiativeAPEDDesc = "aped line wavelengths same as 50"
 
-struct RadiativeAPED{I, R, L<:LevelTable} <: AbstractRate
+struct RadiativeAPED{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     transition::Transition{I}   # lower and upper level
@@ -13,10 +13,10 @@ struct RadiativeAPED{I, R, L<:LevelTable} <: AbstractRate
     ion::I    # ion index (XSTAR ionN)
     λ::R      # wavelength (Å)
     A::R      # s⁻¹
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function RadiativeAPED(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function RadiativeAPED(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     RadiativeAPED(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec[1], rvec[3], levels)

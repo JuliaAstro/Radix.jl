@@ -6,7 +6,7 @@
 
 const AutoionizeSatDesc = "Autoinization rates (in s^-1) for satellite lvls"
 
-struct AutoionizeSat{I, R, L<:LevelTable} <: AbstractRate
+struct AutoionizeSat{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
     spin_mult::I        # 2S+1
@@ -18,10 +18,10 @@ struct AutoionizeSat{I, R, L<:LevelTable} <: AbstractRate
     A_auto::R           # autoionization rate (s⁻¹)
     E::R                # energy above ionization limit (eV)
     g::R                # statistical weight 2J+1
-    levels::L              # the level data of the database (a LevelTable)
+    levels::L              # the level data of the database (a Levels)
 end
 
-function AutoionizeSat(rate::Int32, label::String, ivec::I, rvec::R, levels::LevelTable) where
+function AutoionizeSat(rate::Int32, label::String, ivec::I, rvec::R, levels::Levels) where
     {I<:AbstractVector{Int32}, R<:AbstractVector{Float32}}
 
     AutoionizeSat(Int8(rate), label, ivec[1:3]..., Parent(zero(eltype(ivec)), ivec[4]),
