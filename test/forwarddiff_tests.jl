@@ -13,8 +13,8 @@ const AD_RTOL = 2e-3
 # relation until it changes by less than 1%, which makes it slightly non-smooth: its finite
 # differences are noisy at the 1% level while the derivative stays within it.
 const AD_RTOLS = Dict("type70" => 3e-2)
-# the fewest derivatives a case must compare (type 22 has three records, half of them above its 6e4 K limit)
-const AD_MIN_CHECKS = Dict("type22" => 4)
+# the fewest derivatives a case must compare (type 22 has three records, half of them above its 6e4 K limit; type 10 has four)
+const AD_MIN_CHECKS = Dict("type22" => 4, "type10" => 4)
 const AD_OFFSET = 1.2345              # moves T and the densities off the table nodes
 
 ad_photo(co, ce, lv, c; kw...) = Radix.rate(co, ce; levels=lv, radiation=ucalc_radiation(c), nlev=c.nlev,
@@ -27,6 +27,7 @@ const AD_CASES = [
     "type07" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type22" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type39" => (co, ce, lv, c) -> Radix.rate(co, ce),
+    "type10" => (co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev),   # (the H⁺ density follows the cell)
     "type09" => (co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev),
     "type30" => (co, ce, lv, c) -> Radix.rate(co, ce),
     "type38" => (co, ce, lv, c) -> Radix.rate(co, ce),

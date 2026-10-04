@@ -97,6 +97,17 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
         @test check_ucalc("type09";
             call=(co, ce, lv, c) -> Radix.rate(co, ce; nlev=c.nlev), expected=direct) == 100
     end
+    @testset "type 10 ChargeExHp" begin
+        # the rate multiplies the density of H⁺ (xh1, the fifth condition), which is ntot - nₕ in the cell: the
+        # conditions of the fixtures do not have xh0 + xh1 = xpx, so their cell gets nₕ = xpx - xh1
+        @test check_ucalc("type10";
+            call=(co, ce, lv, c) -> Radix.rate(co, Radix.Cell(ce.T, ce.ntot - c.cond[5], ce.nₑ, ce.ntot); nlev=c.nlev),
+            expected=direct, rtol=1e-6) == 16
+        # a cell with 8e3 of 1e4 hydrogen nuclei ionized
+        coef = Radix.ChargeExHp(Int32(5), "", Int32[1, 29], Float32[0.074, 0.47, 24.37, -0.74, 10, 1e4, 0.023, 0.913])
+        @test Radix.rate(coef, Radix.Cell(1.0, 2e3, 1e4, 1e4)).frate ≈ 4*Radix.rate(coef, Radix.Cell(1.0, 8e3, 1e4, 1e4)).frate
+        @test coef(Radix.Cell(1.0, 2e3, 1e4, 1e4); nlev=7).final == 7
+    end
     @testset "type 30 TotRadRecombH" begin
         @test check_ucalc("type30"; call=plain_call, expected=direct) == 100
     end

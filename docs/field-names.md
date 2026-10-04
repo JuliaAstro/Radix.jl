@@ -107,9 +107,9 @@ built and differs in constants and logic) and by loading `atdb.fits`:
   → `rtype`; kept because code uses it.
 - **Charge exchange.** Type 9 (`ChargeExHe`) takes `idat(1)` as its own level
   and `idat(2)` → `nlevp + idat(2) − 1`, a level of the recombined ion; with one
-  integer both default to 1. Type 10 (`ChargeExHp`) ignores its integers in
-  `ucalc`; in the data they are (level, ion index of the neutral, e.g. 29 =
-  O I). Both are inferred.
+  integer both default to 1. Type 10 (`ChargeExHp`) takes its first integer as the level
+  (for the record with one integer that is the ion index, e.g. 29 = O I); the others are
+  (level, ion index of the neutral). Both are inferred.
 - **`PhotoionizeDamp.k`** is a superlevel index present only in the 8-integer
   variant and 0 otherwise → `superlevel`.
 - **`Atom`:** both integers equal `Z` in every record (`n_ions`, `Z`); the first
@@ -198,7 +198,7 @@ unconfirmed.
 `test/ucalc_tests.jl` compares each ported rate with XSTAR's real `ucalc` on records
 sampled from `atdb.fits` (`test/reference/ucalc/`, with the driver, the build script
 and the generator). The driver is built like HEASoft's `xstar`, so XSTAR's
-single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 66, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
+single-precision literals limit the agreement to about 1e-6. Types covered: 1, 2, 7, 9, 10, 22, 30, 38, 39, 49, 50, 51 (5- and 9-point fits), 53, 54, 56, 57, 59, 60, 62, 63, 66, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 81, 82, 85, 86, 88, 91, 92, 95, 98 and 99.
 
 ### Superlevels (types 70 and 99)
 
@@ -274,7 +274,6 @@ ported type (except 4, which has no `rate` method). Notes:
   3.70 and 1.0); check the source table.
 - `AtomicLine` (ucalc 4) has no `rate` method yet (an unfinished draft was removed); `atdb.fits` has no
   type 4 records to check a port against.
-- The integer meanings of `ChargeExHp` are inferred.
 - `DielecRecombH` and `TotDielecRecomb` store no data yet.
 - `AtomicLine2`: the decay rate is `A` times the escape probability `pesc` and the
   photoexcitation rate (`irate`) comes from the `radiation` at the line energy, as in
@@ -321,8 +320,13 @@ ported type (except 4, which has no `rate` method). Notes:
   `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
 - `TwoPhotonDecay` (ucalc 76) returns the stored `A` as `irate` (independent of the cell), from the higher to the lower
   level by energy, with `ienergy = A ΔE`. `ucalc` also adds the two-photon continuum (`E²(E_max − E)` normalized to `A`)
-  to its emissivity array; that is not included, as for the line opacity of types 50 and 82. `ChargeExHp` (ucalc 10,
-  four records) is not ported: its rate multiplies the H⁺ density, which `Cell` does not carry.
+  to its emissivity array; that is not included, as for the line opacity of types 50 and 82.
+- `ChargeExHp` (ucalc 10, four records) multiplies the H⁺ density, which `Cell` does not carry (it has the neutral
+  hydrogen), so `rate` uses `ntot - nₕ` for it (`xh1`; the `ucalc` test builds its cell with `nₕ = xpx - xh1`). The reals are `a, b, c, d`, the range of the fit
+  `T_min` and `T_max` (K, not applied) and `E_k` = ΔE/k in 10⁴ K (the old fields `e`, `T1`, `T2`, `ΔE` had these
+  shifted by one); the eighth is not used. `ucalc` takes the level from the first integer of the record even when
+  it is the only one (the ion, in one record) and does not look at the levels; `1 + c e^{dT}` is not limited at 0,
+  unlike in type 2, and there is no temperature limit.
 - `AutoionizeSat` (ucalc 72) and `AutoionizeFe25Sat` (75) use `calt72`, `3.3e-11 (13.6 eV/kT)^{3/2} e^{-E/kT} (A/10¹³) g`
   (`g` is 1 for type 75, whose records have two reals), a capture-like rate built from the stored autoionization rate.
   `ucalc` multiplies it by the electron density and calls the result the rate of the transition (`irate`); type 72 also
@@ -443,7 +447,7 @@ brackets are the XSTAR data-type codes.
 | `TotDielecRecomb` (39) | `rate` |
 | `ChargeExH0` (2) | `ion`, `a`, `b`, `c`, `d`, `T1`, `T2`, `ΔE` |
 | `ChargeExHe` (9) | `level`, `parent`, `a`, `b`, `c`, `d`, `T1`, `T2`, `ΔE` |
-| `ChargeExHp` (10) | `level`, `ion`, `a`, `b`, `c`, `d`, `e`, `T1`, `T2`, `ΔE` |
+| `ChargeExHp` (10) | `level`, `ion`, `a`, `b`, `c`, `d`, `T_min`, `T_max`, `E_k`, `extra` |
 
 **Collisions**
 
