@@ -205,6 +205,21 @@ function toy_transfer_tests()
             @test [z.Δr for z in thin.zones] == [0.0, 1e13]                          # a thin slab: the column left
         end
 
+        @testset "the source" begin
+            E = Radix.xstar_energy_grid(999)
+            L = 1e46
+            for α in (-1.0, -2.0, 0.5)
+                spectrum = Radix.power_law(E, α, L)
+                @test spectrum[500]/spectrum[300] ≈ (E[500]/E[300])^α rtol=1e-12
+                # the luminosity between 13.6 eV and 13.6 keV is the one asked for
+                inside = findall(e -> Float64(13.6f0) <= e <= 1.36e4, E)
+                @test sum((spectrum[i] + spectrum[i - 1])*(E[i] - E[i - 1])/2 for i in inside)*Radix.constants().ergsev ≈ L rtol=1e-12
+            end
+            @test Radix.power_law(E, -1.0, 2L) ≈ 2 .* Radix.power_law(E, -1.0, L) rtol=1e-12
+            @test Radix.power_law([0.005, 0.5, 5.0, 50.0, 500.0], -1.0, L)[1] < 1e-20*Radix.power_law([0.005, 0.5, 5.0, 50.0, 500.0], -1.0, L)[2]   # (the floor below 0.01 eV)
+            @test Radix.source_distance(1e46, 10.0, 1e4) ≈ 3.1622776601683794e20 && Radix.source_distance(4e46, 10.0, 1e4) ≈ 2*Radix.source_distance(1e46, 10.0, 1e4)
+        end
+
         @testset "the escape of one element" begin
             per_element = [[(0.1, 0.2), (0.3, 0.4)]]
             @test Radix.element_escape(per_element, 1) == [(0.1, 0.2), (0.3, 0.4)]
@@ -327,9 +342,13 @@ function transfer_balance_tests(db)
             @test thickrun.zones[1].fractions[2][2] ≈ slabab.he_ii[2] rtol=1e-4
             @test thickrun.zones[1].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[2] rtol=1e-4
             # the thickness of the zones of XSTAR's `step` (its log: log N = 20.26, 20.56, 20.74, 20.86, 20.95, 21.00 at the inner edges of the zones after the first two and at the end)
-            auto = Radix.march_slab(mixture, 1e4, processes, Es, Is*1e38; r=r0, column=1e21, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+            auto = Radix.slab_model(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
             @test length(auto.zones) == 7 && auto.zones[1].Δr == 0
-            @test [z.r - r0 for z in auto.zones][1:6] ≈ [0; depth[1:5]] atol=3e-4*1.8e16 rtol=1e-3
+            @test auto.r ≈ r0 rtol=1e-6                              # the source of the reference run: E⁻¹ with the luminosity 10⁴⁶ erg/s
+            @test auto.E ≈ Es rtol=1e-5
+            @test auto.incident ./ 1e38 ≈ Is rtol=1e-5
+            @test abs(sort(auto.transmitted ./ 1e38 ./ Ts)[end ÷ 2] - 1) < 5e-3 && all(abs.(auto.transmitted ./ 1e38 ./ Ts .- 1) .< 6e-2)
+            @test [z.r - auto.r for z in auto.zones][1:6] ≈ [0; depth[1:5]] atol=3e-4*1.8e16 rtol=1e-3
             @test round.(log10.(1e4 .* cumsum([z.Δr for z in auto.zones])[2:end]); digits=2) == [20.26, 20.56, 20.74, 20.86, 20.95, 21.0]
             @test sum(z.Δr for z in auto.zones) ≈ 1e17
             for k in 2:length(zones)

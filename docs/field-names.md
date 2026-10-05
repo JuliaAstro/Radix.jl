@@ -318,6 +318,11 @@ the depths in `calc_hmc_ion`:
   and whose spectrum `zrems(1)` is above 10⁻¹² (10³⁸ erg s⁻¹ erg⁻¹), with the `opakc` of the zone before (lines included: the bin of the He II line at 41 eV limits the zones of the reference slab). `numrec` is `nsteps` (not a number of zones) and `emult` `emult`
   (the defaults are 0.75, `taumax = 5`). For the thick slab of 10²¹ cm⁻² (`emult = 1`, `nsteps = 3`) it reproduces the seven zones of XSTAR's log (log N = 20.26, 20.56, 20.74, 20.86, 20.95, 21.00 at their ends): their depths agree to
   10⁻⁴ (1.8321, 3.6643, 5.4553 and 7.2120 ×10¹⁶ cm against the 1.8322, 3.6644, 5.4550 and 7.2111 of the table of the run; the table has no row for the sixth zone). The final calculation at the end of the slab and the conditions on the temperature and the electron fraction of the loop of XSTAR are not done.
+- **The source and the model** (`src/spectrum.jl`, `power_law`, `source_distance`; `slab_model`). `ispec4` makes the spectrum `E^α` (`trad = α`; 10⁻²⁴ below 0.01 eV) and normalizes it to the luminosity of 1 to 1000 Ry in the bins
+  `nbinc(13.6)` to `nbinc(1.36e4)`; `ispecgg` normalizes it again in the bins whose energies are in the range (with 13.6 as a single-precision literal), which is not the same bins. The result is the incident
+  spectrum of the reference runs to 5×10⁻⁶ (the precision of the files). The distance of the source follows from the ionization parameter, `r² = L/(ξ n)`. `slab_model(mixture, processes; density, column, logξ, luminosity, α, ...)` puts it all together:
+  `power_law`, `source_distance` and `march_slab`, returning the zones, the spectra and the `transmitted` spectrum `incident × exp(-dpthcont)` of the output. The turbulent speed `vturbi` only gives the widths of the lines
+  (XSTAR's `gsmooth` of the continuum for `vturbi > 0` is not done: see the next item). Not ported: the spectra of the other types (`bbody`, `brems`, `file`).
 - **`gsmooth2` zeroes the continuum when `vturbi > 0`.** XSTAR 2.59j smooths `opakc`, `rccemis` and `brcems` with a Gaussian of width
   `E vtherm/c` whenever `vturbi > 1e-34` (the default is 1 km/s). That is about 10⁻⁴ E, and the bins of a grid of 999 points are 1.6% wide
   (of 9999 points 0.16%: the same for T below 4×10⁵ K): the loop ends at the first neighbour with `exp(-earg) = 0`, and never adds the bin
