@@ -31,7 +31,8 @@ the records. `edges` are the edge opacities of the records (`record_opacities`),
 edges of each energy bin (by the edge energy of `rank_energy`) enter, and every record of rate type 42. With the `emissivities` of the lines
 (`line_emissivities`) the lines are put in the bins too, as `linopac` does (`add_line!`): the `nrank` strongest lines of each bin, by their emissivity, enter.
 
-Returns `(; total, continuum, edges)`, the two arrays of the opacity and the number of records called.
+Returns `(; total, continuum, emissivity, bremsstrahlung, edges)`: the two arrays of the opacity, `emissivity` (`rccemis`, 2 × n, per steradian: the recombination
+continua of the records called), `bremsstrahlung` (`brcems`: the `emissivity` of the processes, in all directions) and the number of records called.
 """
 struct Continuum{M<:Mixture, P}
     mixture::M
@@ -66,6 +67,19 @@ function add_lines!(arrays, continuum::Continuum, balance, T, ntot, radiation::R
     arrays
 end
 
+# the continua of the two-photon decays (the records of type 9), which `calc_emis_ion` calls with the lines optically thin
+function add_two_photon_continua!(arrays, mixture::Mixture, balance, ntot, radiation::Radiation)
+    for k in eachindex(mixture.elements)
+        el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
+        for (indices, records) in el.groups, i in eachindex(records)
+            coef = records[i]
+            (coef isa Union{AtomicLine2, TwoPhotonDecay} && coef.rtype == two_photon_data_type) || continue
+            add_two_photon!(arrays, radiation, coef, x[el.up[indices[i]]]*ntot*abundance, optically_thin)
+        end
+    end
+    arrays
+end
+
 function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges; emissivities=nothing)
     mixture, nrank, lfast, vturb = continuum.mixture, continuum.nrank, continuum.lfast, continuum.vturb
     E = radiation.E
@@ -91,6 +105,7 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
         rank!(list, (strength, k, j), nrank)
     end
     emissivities === nothing || add_lines!(arrays, continuum, balance, T, ntot, radiation, edges, emissivities)
+    add_two_photon_continua!(arrays, mixture, balance, ntot, radiation)
     called = 0
     for k in eachindex(mixture.elements)
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
@@ -103,5 +118,6 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
             called += 1
         end
     end
-    (; total=arrays.total, continuum=arrays.continuum, edges=called)
+    bremsstrahlung = sum((emissivity(process, E, T, balance.nₑ) for process in continuum.processes); init=zeros(length(E)))
+    (; total=arrays.total, continuum=arrays.continuum, emissivity=arrays.emissivity, bremsstrahlung, edges=called)
 end

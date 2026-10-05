@@ -90,6 +90,9 @@ end
 density(::AbstractContinuum, nₑ) = 0.0
 opacity(process::AbstractContinuum, E, T, nₑ) = density(process, nₑ) .* (α(process, E, T) .+ σ(process, E, T))
 
+# the emission (erg s⁻¹ cm⁻³ per erg, in all directions) in the bins of E: the density times the emission coefficient j
+emissivity(process::AbstractContinuum, E, T, nₑ) = density(process, nₑ) .* j(process, E, T)
+
 heating(::AbstractContinuum, ::Radiation, T, nₑ) = 0.0
 cooling(::AbstractContinuum, ::Radiation, T, nₑ) = 0.0
 heating_cooling(process::AbstractContinuum, rad::Radiation, T, nₑ) = (heating(process, rad, T, nₑ), cooling(process, rad, T, nₑ))

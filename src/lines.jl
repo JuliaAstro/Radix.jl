@@ -232,3 +232,48 @@ function add_line!(opacity::Opacity, radiation::Radiation, coef::AtomicLine2, ce
     add_line!(opacity, radiation, centre, emissivity[1], emissivity[2], abs(Float64(coef.λ)), vturb, T, mass, line_width(coef); lfast)
 end
 add_line!(opacity::Opacity, radiation::Radiation, ::AbstractRate, centre, emissivity, T; kw...) = opacity
+
+# ---------------------------------------------------------------------------
+# two-photon decays
+
+const two_photon_data_type = 9                    # the lines of this type are two-photon decays: they emit a continuum, not a line
+const two_photon_size_min = Float64(0.01f0)       # calc_emis_ion: the records of type 9 whose first real (the wavelength of a line, the rate of a decay) is below this are not called
+two_photon_size(coef::AtomicLine2) = Float64(coef.λ)
+two_photon_size(coef::TwoPhotonDecay) = Float64(coef.A)
+const two_photon_sum_floor = 1e-24                # ucalc: added to the integral of the shape in its normalization
+
+"""
+    add_two_photon!(opacity, radiation, coef, abund2, ptmp)
+
+Puts the continuum of the two-photon decay `coef` (a `TwoPhotonDecay`, or an `AtomicLine2` of rate type 9) in the recombination emissivity of `opacity`, as `ucalc` does (`ind = 50`, `nrdesc = 9`):
+the energy `A hν` of the decay of the upper level, with the density `abund2`, is spread over the bins below the energy `hν` of the transition with the shape `E² (hν - E)`,
+`ptmp[1]` of it in the first direction and `ptmp[2]` in the second (per steradian: the emissivity is `abund2 A hν shape ptmp / (4π ∫ shape dE)`; the integral starts from 0 at the first bin as `ucalc` does it). The records with a level out of the table
+or a wavelength (or rate) below 0.01 add nothing.
+"""
+function add_two_photon!(opacity::Opacity, radiation::Radiation, coef::Union{AtomicLine2, TwoPhotonDecay}, abund2, ptmp)
+    levels = coef.levels
+    nlev = nlevels(levels, coef.ion)
+    i1, i2 = coef.transition.lower, coef.transition.upper
+    (i1 <= 0 || i1 >= nlev || i2 <= 0 || i2 >= nlev || two_photon_size(coef) <= two_photon_size_min) && return opacity
+    a, b = get(levels, (coef.ion, i1), nothing), get(levels, (coef.ion, i2), nothing)
+    (a === nothing || b === nothing) && return opacity
+    K = constants()
+    E = radiation.E
+    emax = abs(Float64(a.E) - Float64(b.E))
+    nbmx = nbin(radiation, emax)
+    shape(ll) = E[ll]^2*max(0.0, E[nbmx] - E[ll])
+    total = 0.0
+    previous = 0.0
+    for ll in 2:nbmx
+        current = shape(ll)
+        total += (current + previous)*(E[ll] - E[ll - 1])/2
+        previous = current
+    end
+    scale = Float64(coef.A)*emax/(two_photon_sum_floor + total)
+    for ll in 2:nbmx
+        emission = abund2*shape(ll)*scale/K.fourpi
+        opacity.emissivity[1, ll] += emission*ptmp[1]
+        opacity.emissivity[2, ll] += emission*ptmp[2]
+    end
+    opacity
+end

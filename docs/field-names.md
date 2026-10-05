@@ -287,7 +287,7 @@ the depths in `calc_hmc_ion`:
   `nrank = 10` strongest edges of each energy bin enter (`rlbin`, ranked by the edge opacity of the zone; the bin of an edge is that
   of its edge energy, `E_grid[1] × 13.598` for type 49 and `max(0.1, E∞ - E)` of the level for the others, set once by `xstarsetup`)
   and every record of rate type 42. The transmitted spectrum of the output (`writespectra3`) is `incident × exp(-dpthcont)`, with `dpthcont` the depth of `opakcont` (Thomson and photoionization: no lines or free-free), while
-  `trnfrc` attenuates the spectrum of the next zone by `exp(-dpthc)`, with the lines and free-free (`march_zones` returns both). Against XSTAR's slab of 10²¹ cm⁻²
+  the spectrum that passes the zones loses the `opakc` (lines and free-free included) of each (`transmit`; `march_zones` returns `dpthc` and `dpthcont` as well). Against XSTAR's slab of 10²¹ cm⁻²
   (`test/reference/xstar_thick_slab`) the depth `dpthcont` of all 999 bins agrees to a median of 1.0004 and within 5%
   (Thomson scattering 0.1%, the He II edge 2.5%).
 - **Lines in the bins** (`src/lines.jl`, `add_line!`, `voigt`). `linopac` puts the opacity of a line (its centre opacity `oplin` times the Voigt profile of the thermal and turbulent widths
@@ -296,10 +296,18 @@ the depths in `calc_hmc_ion`:
   (`AtomicLine2`) call it. `rlbin` never stores an entry whose place is the last of the list (`rank!`, which the ranking of the edges uses too). Checked against the real `linopac` and
   `voigte` (`test/reference/ucalc/drvlinopac.f90`): `voigt` is identical and the bins of four lines agree to 10⁻⁷ (the single-precision `12.9` of the thermal speed), including the quirk that the profile
   loop never ends early (`ml1min` stays above the bin of the line, so the wings fill the grid out to 10⁴ steps). `delea` is `A × 4.136×10⁻¹⁵` eV; the records of type 41 of the database, which
-  `deleafnd` looks for first, are not read. Not ported: the Fe UTA lines (type 82), whose `delea` is its `A_auto`, the lines of the records of type 9, `heatt`, which
-  updates the flux zone by zone as `F(1 - τ fac) + 12.56 ε fac Δr` with the diffuse emission `ε` of the recombination continua and
-  bremsstrahlung added (the next zone's flux is that of `heatt`, not `zremsz exp(-dpthc)`). Both matter for the ionization deep in
-  a slab: XSTAR's He II fraction rises 2.4% in the first zone of the reference slab, Radix's 0.8%.
+  `deleafnd` looks for first, are not read. Not ported: the Fe UTA lines (type 82), whose `delea` is its `A_auto`.
+- **Two-photon continua** (`add_two_photon!`). The decays of type 9 (`TwoPhotonDecay`, 85 records, and the four `AtomicLine2` of rate type 9) are not lines: `ucalc` spreads the energy `A hν`
+  of the decay over the bins below `hν` with the shape `E² (hν - E)` (normalized by its integral from 0, which starts at the second bin) in `rccemis`, with the population of the upper level and `ptmp` of the optically thin line (`Continuum` adds them).
+  Without them the diffuse emission of the reference slab misses the 2γ continua of the H-like and He-like ions that fill the bins between the edges (a factor 6 at 588 eV).
+- **The spectrum that passes through the zones** (`Transmitted`, `transmit`: XSTAR's `heatt` and `trnfrn`). In the first pass (`ldir = -1`) `trnfrc` makes the radiation of each zone from `zrems(1)/(4π r²)`, and `heatt` updates it:
+  `zrems(1) = max(0, zrems(1) - (F κ - 4π(ε₁+ε₂)) fac Δr 4π r²)` with `κ = opakc`, `fac = (1 - e^{-κΔr})/(κΔr)` (1 below 0.01), `ε₁ = rccemis₁ + brcems (1-c)/2`, `ε₂ = rccemis₂ + brcems (1+c)/2`;
+  `zrems(2)` to `zrems(5)` accumulate `4π ε fac Δr 4π r²` (with `opakcont` for the last two), and the last two are the columns `emit_inward` and `emit_outward` of `xout_cont1.fits`. It is
+  `exp(-κΔr)` for the attenuation (to first order in a thin zone), plus the emission, so that the field of the next zone is not `zremsz exp(-dpthc)`. **The bremsstrahlung of the source code is 4π too large** (it adds `brcems`, in all directions, to the emission per steradian
+  of the recombination continua, and multiplies the sum by 12.56): the XSTAR 2.59j that made the references does not do it (bin 1 of `xstar_pow_xi2` agrees to 10⁻⁶ and the bremsstrahlung bins of the thick slab to 4×10⁻⁶ without the factor,
+  and are 12.56 times too high with it), so `transmit` divides it by 4π. With the XSTAR zones of the thick slab (`delta_r` of its table: five zones of 1.8×10¹⁶ to 2.8×10¹⁶ cm)
+  the emission columns of 571 bins agree to a median of 1.0002 and 1.0015 (inward and outward) and 5% at worst, and the He II and O VIII fractions at the inner edges of the zones to 2×10⁻⁴-9×10⁻⁴ and 3×10⁻⁵-1×10⁻⁴ (0.7-2.7% and 0.07-0.3% without the emission). The last row of the table (the end of the slab) is not a zone:
+  XSTAR's final calculation uses the field of the last zone before `heatt`, which Radix does not do. Not ported: the luminosities of the lines and edges (`elum`, `elumab`), which `heatt` also updates, and the further passes (`ldir > 0`).
 - **`gsmooth2` zeroes the continuum when `vturbi > 0`.** XSTAR 2.59j smooths `opakc`, `rccemis` and `brcems` with a Gaussian of width
   `E vtherm/c` whenever `vturbi > 1e-34` (the default is 1 km/s). That is about 10⁻⁴ E, and the bins of a grid of 999 points are 1.6% wide
   (of 9999 points 0.16%: the same for T below 4×10⁵ K): the loop ends at the first neighbour with `exp(-earg) = 0`, and never adds the bin

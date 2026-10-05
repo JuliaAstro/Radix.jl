@@ -108,6 +108,64 @@ function toy_transfer_tests()
             @test Radix.opacity(continuum, weak, T, ntot, rad, Radix.record_opacities(mixture, weak, T, ntot); emissivities=Radix.line_emissivities(mixture, weak, T, ntot)).total == without.total
         end
 
+        @testset "the transmitted spectrum" begin
+            # `heatt`: the spectrum of the source is attenuated and the emission added zone by zone
+            K = Radix.constants()
+            E = [1.0, 2.0, 3.0, 4.0]
+            L = [10.0, 20.0, 30.0, 40.0]
+            r, Δr, cfrac = 2e13, 1e12, 0.25
+            rad = Radix.point_source(E, L, r)
+            total = [1e-14, 1e-12, 5e-12, 1e-30]
+            continuum = (; total, continuum=total ./ 2, emissivity=[1e-20 2e-20 3e-20 4e-20; 4e-20 3e-20 2e-20 1e-20], bremsstrahlung=[1e-18, 2e-18, 3e-18, 4e-18])
+            start = Radix.Transmitted(L)
+            @test start.L == L && all(iszero, start.inward) && all(iszero, start.outward) && all(iszero, start.inward_continuum) && all(iszero, start.outward_continuum)
+            after = Radix.transmit(start, rad, continuum, r, Δr; cfrac)
+            fpr2 = K.fourpi*r^2
+            for k in 1:4
+                τ = max(1e-49, total[k])*Δr
+                fac = τ > 0.01 ? (1 - exp(-τ))/τ : 1.0
+                ε₁ = continuum.emissivity[1, k] + continuum.bremsstrahlung[k]*(1 - cfrac)/2/K.fourpi
+                ε₂ = continuum.emissivity[2, k] + continuum.bremsstrahlung[k]*(1 + cfrac)/2/K.fourpi
+                @test after.L[k] ≈ max(0.0, L[k] - (rad.F[k]*max(1e-49, total[k]) - K.fourpi*(ε₁ + ε₂))*fac*Δr*fpr2)
+                @test after.inward[k] ≈ K.fourpi*ε₁*fac*Δr*fpr2 && after.outward[k] ≈ K.fourpi*ε₂*fac*Δr*fpr2
+                τc = max(1e-49, total[k]/2)*Δr
+                facc = τc > 0.01 ? (1 - exp(-τc))/τc : 1.0
+                @test after.inward_continuum[k] ≈ K.fourpi*ε₁*facc*Δr*fpr2 && after.outward_continuum[k] ≈ K.fourpi*ε₂*facc*Δr*fpr2
+            end
+            # a thick bin without emission: the flux is what exp(-τ) leaves
+            absorbing = (; total=fill(1e-12, 4), continuum=fill(1e-12, 4), emissivity=zeros(2, 4), bremsstrahlung=zeros(4))
+            @test Radix.transmit(start, rad, absorbing, r, Δr).L ≈ L .- rad.F .* (1 .- exp.(-1e-12*Δr)) .* fpr2 rtol=1e-12
+            # the spectrum does not go below 0 and one zone after another add up
+            dark = Radix.transmit(Radix.Transmitted([1.0]), Radix.Radiation([1.0], [1.0]), (; total=[1.0], continuum=[1.0], emissivity=zeros(2, 1), bremsstrahlung=[0.0]), 1e13, 1e13)
+            @test dark.L == [0.0]
+            twice = Radix.transmit(after, rad, continuum, r, Δr; cfrac)
+            @test twice.inward ≈ after.inward .+ K.fourpi .* (continuum.emissivity[1, :] .+ continuum.bremsstrahlung .* (1 - cfrac)/2/K.fourpi) .* [t > 0.01 ? (1 - exp(-t))/t : 1.0 for t in max.(1e-49, total) .* Δr] .* Δr .* fpr2
+        end
+
+        @testset "two-photon continua" begin
+            levelsx = Radix.levels([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 13.6, 1)]; masses=Dict(5 => 1.0))
+            decay = Radix.TwoPhotonDecay(Int32(9), "", Int32[2, 1, 1, 5], f32[8.23], levelsx)
+            E = Radix.xstar_energy_grid(999)
+            rad = Radix.Radiation(E, zeros(length(E)))
+            opacity = Radix.Opacity(length(E))
+            abund2 = 1e-3
+            Radix.add_two_photon!(opacity, rad, decay, abund2, (0.5, 0.5))
+            emax = 10.2
+            nbmx = Radix.nbin(rad, emax)
+            @test opacity.emissivity[1, :] == opacity.emissivity[2, :]
+            @test all(==(0), opacity.emissivity[:, nbmx + 1:end]) && opacity.emissivity[1, 1] == 0
+            # the energy of the decay, `A hν` per atom, in all directions: the shape E²(hν - E) normalized
+            total = sum(4π*(opacity.emissivity[1, k] + opacity.emissivity[2, k])*(E[k] - E[k - 1]) for k in 2:nbmx)
+            @test total ≈ abund2*8.23*emax*(1 + 0.0) rtol=0.1
+            shape(k) = E[k]^2*max(0.0, E[nbmx] - E[k])
+            @test opacity.emissivity[1, 100]/opacity.emissivity[1, 200] ≈ shape(100)/shape(200)
+            # the records with a level out of the table or a rate below 0.01 add nothing
+            none = Radix.Opacity(length(E))
+            Radix.add_two_photon!(none, rad, Radix.TwoPhotonDecay(Int32(9), "", Int32[2, 1, 1, 5], f32[0.005], levelsx), abund2, (0.5, 0.5))
+            Radix.add_two_photon!(none, rad, Radix.TwoPhotonDecay(Int32(9), "", Int32[3, 1, 1, 5], f32[8.23], levelsx), abund2, (0.5, 0.5))
+            @test all(==(0), none.emissivity)
+        end
+
         @testset "the escape of one element" begin
             per_element = [[(0.1, 0.2), (0.3, 0.4)]]
             @test Radix.element_escape(per_element, 1) == [(0.1, 0.2), (0.3, 0.4)]
@@ -127,7 +185,7 @@ function toy_transfer_tests()
             processes = Radix.standard_processes(Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0]))
             E = Radix.xstar_energy_grid(999)
             L = 1e30 ./ E
-            run = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false)
+            run = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false, diffuse=false)
             @test length(run.zones) == 2
             @test [z.r for z in run.zones] == [1e13, 2e13] && [z.Δr for z in run.zones] == [1e12, 3e12]
             @test run.zones[1].radiation.F == Radix.map_spectrum(Radix.point_source(E, L, 1e13)).F
@@ -135,14 +193,18 @@ function toy_transfer_tests()
             @test all(z -> z.T == 1.0 && z.xee == 1.0, run.zones)
             @test run.depths.inward == [[0.0]] && run.zones[1].escape == [[(0.5, 0.5)]]
             # the continuum is attenuated by the depth of the zones before (here Thomson scattering): exp(-Σ opacity Δr)
-            thick = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false)
+            thick = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, diffuse=false)
             thomson = thick.zones[1].nₑ*Radix.constants().sigma_thomson
             @test thick.zones[1].opacity.total[10] ≈ thomson + Radix.opacity(Radix.FreeFree(), E, 1.0, thick.zones[1].nₑ)[10]
-            @test thick.zones[2].radiation.F[10] ≈ thick.zones[1].radiation.F[10]*exp(-thick.zones[1].opacity.total[10]*1e17) rtol=1e-12
+            @test thick.zones[2].radiation.F[10] ≈ thick.zones[1].radiation.F[10]*exp(-thick.zones[1].opacity.total[10]*1e17) rtol=1e-6      # (`heatt` steps linearly in a thin zone)
             @test thick.dpthc[10] ≈ 2*thick.zones[1].opacity.total[10]*1e17
             @test thick.dpthcont[10] ≈ 2*thomson*1e17                                      # (free-free is not in the continuum)
             @test thick.dpthc[10] > thick.dpthcont[10]
-            @test Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, lines=false).dpthc == thick.dpthc    # (no lines here)
+            @test Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, diffuse=false, lines=false).dpthc == thick.dpthc    # (no lines here)
+            # the diffuse emission (here the bremsstrahlung of the zone) adds to the spectrum that the next zone has
+            emitting = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false)
+            @test emitting.zones[2].radiation.F[10] > thick.zones[2].radiation.F[10]
+            @test emitting.spectrum.inward_continuum[10] > 0 && emitting.spectrum.L[10] > thick.spectrum.L[10]
             flat = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
             @test flat.zones[2].radiation.F == flat.zones[1].radiation.F
             @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
@@ -203,13 +265,16 @@ function transfer_balance_tests(db)
             @test abs(sort(ratios)[length(ratios) ÷ 2] - 1) < 2e-3                           # the median
         end
 
-        @testset "the continuum depth of a thick slab" begin
-            # test/reference/xstar_thick_slab: 10²¹ cm⁻² at log ξ = 1, T = 10⁵ K, without the vturb of XSTAR (see its README)
+        @testset "the continuum depth and the emission of a thick slab" begin
+            # test/reference/xstar_thick_slab: 10²¹ cm⁻² at log ξ = 1, T = 10⁵ K, without the vturb of XSTAR (see its README). The zones are those of XSTAR: the rows
+            # of its table are the states at their inner edges (`delta_r`), the last being the end of the slab
             dir = joinpath(@__DIR__, "reference", "xstar_thick_slab")
             slab = fits(joinpath(dir, "xout_cont1.fits"))[3].data
             Es, Is, Ts = Float64.(slab.energy), Float64.(slab.incident), Float64.(slab.transmitted)
+            slabab = fits(joinpath(dir, "xout_abund1.fits"))[2].data
             r0 = 3.16228e20
-            zones = [(r0 + k*1e17/6, 1e17/6) for k in 0:5]
+            depth = Float64.(slabab.delta_r)[2:end]
+            zones = [(r0 + depth[k], depth[k + 1] - depth[k]) for k in 1:length(depth) - 1]
             thickrun = Radix.march_zones(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false, vturb=0.0)
             τx = -log.(Ts ./ Is)
             ratio = thickrun.dpthcont ./ τx
@@ -218,10 +283,26 @@ function transfer_balance_tests(db)
             @test all(r -> abs(r - 1) < 6e-2, ratio)
             i = argmin(abs.(Es .- 13.6)); @test thickrun.dpthcont[i] ≈ τx[i] rtol=2e-3           # Thomson scattering
             i = argmin(abs.(Es .- 54.7)); @test thickrun.dpthcont[i] ≈ τx[i] rtol=4e-2           # the edge of He II
-            # the state of the first zone is that of the table
-            slabab = fits(joinpath(dir, "xout_abund1.fits"))[2].data
+            # the states at the inner edges of the zones follow the table: the first is that of the table, the others differ by the diffuse emission that the zones add to the
+            # radiation of those after them (`transmit`), which XSTAR's table has: 0.1% in He II without the emission 2.7%
             @test thickrun.zones[1].fractions[2][2] ≈ slabab.he_ii[2] rtol=1e-4
             @test thickrun.zones[1].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[2] rtol=1e-4
+            for k in 2:length(zones)
+                @test thickrun.zones[k].fractions[2][2] ≈ slabab.he_ii[k + 1] rtol=1.5e-3
+                @test thickrun.zones[k].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[k + 1] rtol=3e-4
+            end
+            # the diffuse emission of the zones, summed, is the emission columns of the transmitted spectrum of XSTAR (the bremsstrahlung, the recombination continua and
+            # the two-photon continua): the bins with at least a thousandth of the strongest
+            for (mine, reference) in ((thickrun.spectrum.inward_continuum, slab.emit_inward), (thickrun.spectrum.outward_continuum, slab.emit_outward))
+                reference = Float64.(reference)
+                strong = findall(>(1e-3*maximum(reference)), reference)
+                bins = (mine[strong] ./ 1e38) ./ reference[strong]
+                @test length(strong) > 500
+                @test abs(sort(bins)[length(bins) ÷ 2] - 1) < 3e-3
+                @test all(r -> abs(r - 1) < 6e-2, bins)
+                @test sum(mine)/1e38 ≈ sum(reference) rtol=1e-2
+            end
+            # the end of the spectrum is the transmitted spectrum, where the lines do not absorb the bins that the edges do
             # the XSTAR of the reference does not absorb the continuum at all when vturb > 0 (gsmooth2)
             smoothed = fits(joinpath(dir, "xout_cont1_vturb1.fits"))[3].data
             @test count(==(1), Float64.(smoothed.transmitted) ./ Float64.(smoothed.incident)) > 700
