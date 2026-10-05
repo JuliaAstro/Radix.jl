@@ -6,6 +6,8 @@ using SparseArrays
 export Atom, AtomicLevel, AtomicLine
 export load, levels, level_counts, Levels, nlevels, atomic_mass, Radiation, Opacity
 export Constants, ucalc_constants, constants, set_constants!, with_constants
+export Model, slab_model, march_slab, march_zones, ConstantPressure, abundance_table
+export power_law, blackbody, thermal_bremsstrahlung, tabulated
 
 
 include("constants.jl")
@@ -36,5 +38,6 @@ include("transfer.jl")
 include("continuum.jl")
 
 include("abundances.jl")
+include("model.jl")
 
 end

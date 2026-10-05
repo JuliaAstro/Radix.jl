@@ -36,10 +36,10 @@ end
 (p::ConstantPressure)(T) = p.P/pressure_per_density/max(T, pressure_T_floor)
 
 """
-    Mixture(records, levels; multiplier=Dict())
+    Mixture(records, levels; abundances=nothing, multiplier=Dict())
 
 The elements of the database `records` (an `Elements` for each `Atom` record) with their abundances relative to
-hydrogen, the `abundance` of the record times `multiplier[Z]` (1 if missing; XSTAR's `habund`, `heabund`, ...). Elements
+hydrogen, the `abundance` of the record (or `abundances[Z]`, a table of the elements 1 to 30 such as `abundance_table(:angr)`) times `multiplier[Z]` (1 if missing; XSTAR's `habund`, `heabund`, ...). Elements
 whose abundance is below `minimum_abundance` (0 for instance) are left out, as in XSTAR. `levels` is `levels(records)`.
 """
 struct Mixture{L<:Levels}
@@ -49,11 +49,12 @@ struct Mixture{L<:Levels}
     elements::Vector{Elements{L}}
 end
 
-function Mixture(records, levels::Levels; multiplier=Dict{Int, Float64}())
+function Mixture(records, levels::Levels; abundances=nothing, multiplier=Dict{Int, Float64}())
     atoms = sort!(filter(r -> r isa Atom, records); by=atom -> atom.Z)
-    atoms = [atom for atom in atoms if Float64(atom.abundance)*get(multiplier, Int(atom.Z), 1.0) > minimum_abundance]
+    relative(atom) = (abundances === nothing ? Float64(atom.abundance) : Float64(abundances[Int(atom.Z)]))*get(multiplier, Int(atom.Z), 1.0)
+    atoms = [atom for atom in atoms if relative(atom) > minimum_abundance]
     Z = [Int(atom.Z) for atom in atoms]
-    abundance = [Float64(atom.abundance)*get(multiplier, Int(atom.Z), 1.0) for atom in atoms]
+    abundance = [relative(atom) for atom in atoms]
     Mixture(levels, Z, abundance, [Elements(records, levels, z) for z in Z])
 end
 
