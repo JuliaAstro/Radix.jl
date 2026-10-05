@@ -329,7 +329,7 @@ function transfer_balance_tests(db)
             r0 = 3.16228e20
             depth = Float64.(slabab.delta_r)[2:end]
             zones = [(r0 + depth[k], depth[k + 1] - depth[k]) for k in 1:length(depth) - 1]
-            thickrun = Radix.march_zones(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false, vturb=0.0)
+            thickrun = Radix.march_zones(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false, vturb=0.0, luminous=false)
             τx = -log.(Ts ./ Is)
             ratio = thickrun.dpthcont ./ τx
             @test all(τx .> 6e-4)
@@ -342,7 +342,7 @@ function transfer_balance_tests(db)
             @test thickrun.zones[1].fractions[2][2] ≈ slabab.he_ii[2] rtol=1e-4
             @test thickrun.zones[1].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[2] rtol=1e-4
             # the thickness of the zones of XSTAR's `step` (its log: log N = 20.26, 20.56, 20.74, 20.86, 20.95, 21.00 at the inner edges of the zones after the first two and at the end)
-            auto = Radix.slab_model(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+            auto = Radix.slab_model(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false)
             @test length(auto.zones) == 7 && auto.zones[1].Δr == 0
             @test auto.r ≈ r0 rtol=1e-6                              # the source of the reference run: E⁻¹ with the luminosity 10⁴⁶ erg/s
             @test auto.E ≈ Es rtol=1e-5
@@ -370,6 +370,42 @@ function transfer_balance_tests(db)
             # the XSTAR of the reference does not absorb the continuum at all when vturb > 0 (gsmooth2)
             smoothed = fits(joinpath(dir, "xout_cont1_vturb1.fits"))[3].data
             @test count(==(1), Float64.(smoothed.transmitted) ./ Float64.(smoothed.incident)) > 700
+        end
+
+        @testset "the luminosities of the lines and the recombination edges of the thick slab" begin
+            # the zones of `slab_model` (the seven of XSTAR) with its table of the lines (`xout_lines1.fits`: emit_inward + emit_outward in 10³⁸ erg/s, for the lines above 10²) and the total of
+            # its table of the recombination edges (`xout_rrc1.fits`, 6 MB, not kept): 807150.6. The run of the table has the hydrogen of the database of the package of XSTAR
+            slab = Radix.slab_model(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+            ionlabel = Dict(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion)
+            label(ion, level) = strip(levels[(Int(ion), Int(level))].label)
+            emission = Dict{Tuple{String, String, String}, Float64}()
+            edge_total = 0.0
+            for (k, el) in enumerate(mixture.elements), j in eachindex(el.rates)
+                c = el.rates[j]
+                total = slab.luminosities.inward[k][j] + slab.luminosities.outward[k][j]
+                if c isa Radix.AtomicLine2 && c.rtype == Radix.line_data_type && el.lo[j] != 0 && total > 0
+                    key = (ionlabel[Int(c.ion)], label(c.ion, c.transition.lower), label(c.ion, c.transition.upper))
+                    emission[key] = get(emission, key, 0.0) + total
+                elseif c.rtype == Radix.edge_rate_type && c isa Radix.opacity_edge_types
+                    edge_total += total
+                end
+            end
+            @test edge_total ≈ 807150.611744286 rtol=1e-3
+            table = fits(joinpath(@__DIR__, "reference", "xstar_thick_slab", "xout_lines1.fits"))[3].data
+            ratios = Float64[]
+            for i in eachindex(table.ion)
+                reference = Float64(table.emit_inward[i]) + Float64(table.emit_outward[i])
+                reference > 1e2 || continue
+                key = (strip(table.ion[i]), strip(table.lower_level[i]), strip(table.upper_level[i]))
+                mine = get(emission, key, get(emission, (key[1], key[3], key[2]), nothing))
+                @test mine !== nothing
+                mine === nothing && continue
+                key[1] == "h_i" && continue                           # (the hydrogen of the database of the tree differs: 2×)
+                push!(ratios, mine/reference)
+            end
+            @test length(ratios) > 500
+            @test abs(sort(ratios)[length(ratios) ÷ 2] - 1) < 1e-3
+            @test all(r -> abs(r - 1) < 6e-2, ratios)
         end
 
         @testset "optical depths of the recombination edges" begin

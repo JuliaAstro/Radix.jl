@@ -124,6 +124,64 @@ function line_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
 end
 
 """
+    edge_emissivities(mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+
+The emission of the recombination continua (the records of rate type 7, `edge_rate_type`) of every element in the zone as the pairs `(cemab1, cemab2)` (erg s⁻¹ cm⁻³ in the two directions) of
+`calc_emisab_ion`, in vectors aligned with the records: the energy `|ans3|` that the population of the upper level radiates in the recombination, split by the escape probabilities `escape`
+(`pescv` of the depths of the edges, `escape_probabilities`; without it the edges are optically thin). The other records have 0.
+"""
+function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+    cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
+    map(eachindex(mixture.elements)) do k
+        el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
+        emissivity = fill((0.0, 0.0), length(el.rates))
+        for (indices, records) in el.groups
+            for i in eachindex(records)
+                coef, j = records[i], indices[i]
+                (coef.rtype == edge_rate_type && coef isa opacity_edge_types) || continue
+                lo, up = el.lo[j], el.up[j]
+                abund1, abund2 = x[lo]*abundance, x[up]*abundance
+                (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
+                ptmp = something(escape_of(element_escape(escape, k), j, coef), optically_thin)
+                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))[1]
+                emissivity[j] = (ptmp[1]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot, ptmp[2]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot)
+            end
+        end
+        emissivity
+    end
+end
+
+"""
+    Luminosities(mixture)
+
+The luminosity that the lines (rate type 4) and the recombination edges (rate type 7) of every record of every element add to the spectrum along the slab (XSTAR's `elum` and `elumab`, the `emit_inward` and
+`emit_outward` of `xout_lines1.fits` and `xout_rrc1.fits`, in units of 10³⁸ erg s⁻¹), as vectors of pairs aligned with `mixture.elements[k].rates`. `add_luminosities!` adds the zones.
+"""
+struct Luminosities
+    inward::Vector{Vector{Float64}}
+    outward::Vector{Vector{Float64}}
+end
+Luminosities(mixture::Mixture) = Luminosities([zeros(length(el.rates)) for el in mixture.elements], [zeros(length(el.rates)) for el in mixture.elements])
+
+"""
+    add_luminosities!(luminosities, line_emissivities, edge_emissivities, r, Δr)
+
+Adds a zone at the distance `r` and of thickness `Δr` (cm) to the `Luminosities`, as `heatt` does: a line adds `rcem Δr 4π r²` in each direction, an edge adds half of `cemab Δr 4π r²` to each (its
+two emissivities summed), in units of 10³⁸ erg s⁻¹.
+"""
+function add_luminosities!(luminosities::Luminosities, lines, edges, r, Δr)
+    scale = constants().fourpi*r^2*Δr/luminosity_unit
+    for k in eachindex(lines)
+        for j in eachindex(lines[k])
+            line, edge = lines[k][j], edges[k][j]
+            luminosities.inward[k][j] += line[1]*scale + (edge[1] + edge[2])*scale/2
+            luminosities.outward[k][j] += line[2]*scale + (edge[1] + edge[2])*scale/2
+        end
+    end
+    luminosities
+end
+
+"""
     add_zone!(depths, opacities, Δr; direction=:inward)
 
 Adds the opacities of a zone (`record_opacities`) times its thickness `Δr` (cm) to the optical depths in the given direction,
@@ -239,7 +297,7 @@ its own radius with the radiation of the incident spectrum attenuated by the con
 `exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
 edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
 (`thermal_equilibrium`, from `T` and the `xee` of the previous zone), otherwise `T` is kept and the electron fraction iterated
-(`ionization_balance`). `attenuate=false` leaves the spectrum as it is; `lines=false` leaves the lines out of the continuum opacity (`add_line!`), with the turbulent speed `vturb` (km/s). `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
+(`ionization_balance`). `attenuate=false` leaves the spectrum as it is; `lines=false` leaves the lines out of the continuum opacity (`add_line!`), `luminous=false` does not add up the luminosities of the lines and edges (`Luminosities`), with the turbulent speed `vturb` (km/s). `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
 opacity are those of the zones; `cfrac` is the covering fraction of the escape probabilities (give `Thomson` the same). Further keywords go to those functions.
 
 After each zone the opacities are added to the depths (`stpcut`): the lines and edges to the `OpticalDepths`, the continuum
@@ -251,12 +309,13 @@ fields `r`, `Δr`, `radiation`, `escape`, `opacity`), the final `OpticalDepths` 
 not added to the radiation.
 """
 function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
-        attenuate=true, diffuse=true, lines=true, vturb=default_turbulence, lfast=photoionization_lfast, kw...)
+        attenuate=true, diffuse=true, lines=true, luminous=true, vturb=default_turbulence, lfast=photoionization_lfast, kw...)
     depths = OpticalDepths(mixture)
     continuum_gas = Continuum(mixture, processes; lfast, vturb)
     dpthc = zeros(length(E))
     dpthcont = zeros(length(E))
     spectrum = Transmitted(L)
+    luminosities = Luminosities(mixture)
     results = NamedTuple[]
     next_zone = zone_source(zones)
     while true
@@ -275,6 +334,8 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         T, xee = zone.T, zone.xee
         edges = record_opacities(mixture, zone, zone.T, ntot; radiation, lfast, vturb)
         emissivities = lines ? line_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast, vturb) : nothing
+        luminous && add_luminosities!(luminosities, something(emissivities, line_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast, vturb)),
+            edge_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast), r, Δr)
         continuum = opacity(continuum_gas, zone, zone.T, ntot, radiation, edges; emissivities)
         attenuate && (spectrum = transmit(spectrum, incident, diffuse ? continuum : (; continuum..., emissivity=zero(continuum.emissivity),
             bremsstrahlung=zero(continuum.bremsstrahlung)), r, Δr; cfrac))
@@ -283,7 +344,7 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         dpthc .+= continuum.total .* Δr
         dpthcont .+= continuum.continuum .* Δr
     end
-    (; zones=results, depths, dpthc, dpthcont, spectrum)
+    (; zones=results, depths, dpthc, dpthcont, spectrum, luminosities)
 end
 
 """
