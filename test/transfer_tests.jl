@@ -202,6 +202,20 @@ function toy_transfer_tests()
             # another source
             hot = Radix.slab_model(hmixture, processes; density=1e4, column=1e17, logξ=2.0, luminosity=1e35, spectrum=(E, L) -> Radix.blackbody(E, 0.5, L), T=1.0, iterate=false, diffuse=false)
             @test hot.incident == Radix.blackbody(hot.E, 0.5, 1e35) && hot.r ≈ sqrt(1e35/(1e2*1e4)) && hot.zones[1].radiation.F[10] ≈ Radix.map_spectrum(Radix.point_source(hot.E, hot.incident, hot.r)).F[10]
+            # constant pressure: the density of each zone is P/(k T) at the temperature of the zone (here fixed), and the column adds up with it
+            pressure = 1.38e-12*1e4*1.0                                          # n = 10⁴ at T = 1 (10⁴ K)
+            @test Radix.ConstantPressure(pressure)(1.0) ≈ 1e4 rtol=1e-6
+            @test Radix.ConstantPressure(pressure)(4.0) ≈ 2.5e3 rtol=1e-6
+            @test Radix.gas_density(5.0, 2.0) == 5.0
+            @test Radix.gas_density(Radix.ConstantPressure(pressure), 2.0) ≈ 5e3 rtol=1e-6
+            cp = Radix.march_slab(hmixture, Radix.ConstantPressure(pressure), processes, E, L; r=1e13, column=1e21, T=1.0, iterate=false, diffuse=false)
+            @test all(z -> isapprox(z.ntot, 1e4; rtol=1e-6) && z.T == 1.0, cp.zones)
+            @test isapprox([z.Δr for z in cp.zones], [z.Δr for z in slab.zones]; rtol=1e-5)          # (the same as the constant density of 10⁴ at the same temperature)
+            hot = Radix.march_slab(hmixture, Radix.ConstantPressure(pressure), processes, E, L; r=1e13, column=1e21, T=2.0, iterate=false, diffuse=false)
+            @test all(z -> isapprox(z.ntot, 5e3; rtol=1e-6), hot.zones)
+            @test sum(z.Δr for z in hot.zones) ≈ 1e21/5e3 rtol=1e-6        # half the density: twice the length for the column
+            @test_throws ArgumentError Radix.slab_model(hmixture, processes; column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false)
+            @test Radix.source_distance_pressure(1e46, 10.0, 1e-7) ≈ sqrt(1e46/(Radix.constants().fourpi*Float64(2.99792458f10)*1e-7*10.0))
             few = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, steps=10, T=1.0, iterate=false, diffuse=false)
             @test few.zones[2].Δr == 1e12 && length(few.zones) > length(slab.zones)
             thin = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e30, column=1e17, T=1.0, iterate=false, diffuse=false)
@@ -428,6 +442,19 @@ function transfer_balance_tests(db)
             @test length(ratios) > 500
             @test abs(sort(ratios)[length(ratios) ÷ 2] - 1) < 1e-3
             @test all(r -> abs(r - 1) < 6e-2, ratios)
+        end
+
+        @testset "a slab at constant pressure" begin
+            # test/reference/xstar_const_pressure: `lcpres=1 pressure=1e-7`, log Ξ = 1, 10²¹ cm⁻² (the thick slab at a pressure instead of a density): r = 1.62965×10²⁰ cm, the first zone at
+            # T = 10.4611 and n = 6927 (the database of the package of XSTAR: 10.4574 and 6929 here, 0.04% and 0.03%; the one of the tree has other hydrogen records)
+            pressure = 1e-7
+            cp = Radix.slab_model(mixture, processes; pressure, column=3e20, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, equilibrium=true, vturb=0.0, luminous=false)
+            @test cp.r ≈ 1.62965e20 rtol=1e-5
+            @test length(cp.zones) == 2 && cp.zones[1].Δr == 0
+            @test all(z -> isapprox(z.ntot*1.38e-12*z.T, pressure; rtol=1e-6), cp.zones)          # n = P/(k T) at the temperature of each zone
+            @test cp.zones[1].T > 8 && cp.zones[1].T < 12 && 6e3 < cp.zones[1].ntot < 8e3
+            @test sum(z.ntot*z.Δr for z in cp.zones) ≈ 3e20 rtol=1e-9                           # the column of the zones
+            @test all(z -> z.converged && abs(z.imbalance) <= 1e-4, cp.zones)
         end
 
         @testset "optical depths of the recombination edges" begin

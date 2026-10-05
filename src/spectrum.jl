@@ -101,3 +101,12 @@ end
 The distance (cm) from a source of the luminosity (erg s⁻¹) at which the ionization parameter `ξ = L/(n r²)` is `ξ` for the density `n` (cm⁻³).
 """
 source_distance(luminosity, ξ, n) = sqrt(luminosity/(ξ*n))
+
+const pressure_light_speed = Float64(2.99792458f10)   # `ccc` of the constants of XSTAR: a single-precision literal
+
+"""
+    source_distance_pressure(luminosity, Ξ, P)
+
+The distance (cm) from a source of the luminosity (erg s⁻¹) at which the ionization parameter of the pressure `Ξ = L/(4π c P r²)` is `Ξ` for the pressure `P` (dyn cm⁻²): XSTAR's `r` for `lcpres=1`.
+"""
+source_distance_pressure(luminosity, Ξ, P) = sqrt(luminosity/(constants().fourpi*pressure_light_speed*P*Ξ))

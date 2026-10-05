@@ -328,15 +328,16 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         zone = if equilibrium
             thermal_equilibrium(mixture, ntot, processes; radiation, escape, T, xee, lfast, kw...)
         else
-            balance = ionization_balance(mixture, T, ntot; radiation, escape, xee, lfast, kw...)
-            (; heating_cooling(mixture, balance, T, ntot, processes; radiation, escape, lfast)..., T=Float64(T), balance...)
+            n = gas_density(ntot, T)
+            balance = ionization_balance(mixture, T, n; radiation, escape, xee, lfast, kw...)
+            (; heating_cooling(mixture, balance, T, n, processes; radiation, escape, lfast)..., T=Float64(T), ntot=n, balance...)
         end
-        T, xee = zone.T, zone.xee
-        edges = record_opacities(mixture, zone, zone.T, ntot; radiation, lfast, vturb)
-        emissivities = lines ? line_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast, vturb) : nothing
-        luminous && add_luminosities!(luminosities, something(emissivities, line_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast, vturb)),
-            edge_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast), r, Δr)
-        continuum = opacity(continuum_gas, zone, zone.T, ntot, radiation, edges; emissivities)
+        T, xee, n = zone.T, zone.xee, zone.ntot
+        edges = record_opacities(mixture, zone, zone.T, n; radiation, lfast, vturb)
+        emissivities = lines ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb) : nothing
+        luminous && add_luminosities!(luminosities, something(emissivities, line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb)),
+            edge_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast), r, Δr)
+        continuum = opacity(continuum_gas, zone, zone.T, n, radiation, edges; emissivities)
         attenuate && (spectrum = transmit(spectrum, incident, diffuse ? continuum : (; continuum..., emissivity=zero(continuum.emissivity),
             bremsstrahlung=zero(continuum.bremsstrahlung)), r, Δr; cfrac))
         push!(results, (; zone..., r, Δr, radiation, escape, opacity=continuum))
@@ -362,11 +363,11 @@ function march_slab(mixture::Mixture, ntot, processes, E, L; r, column, emult=st
     source = function (results, dpthc, spectrum)
         if last !== nothing
             position += last
-            depth += ntot*last
+            depth += results[end].ntot*last                 # (the density of the zone at its temperature, which is constant for a constant density)
         end
         depth < column || return nothing
         thickness = isempty(results) ? 0.0 :
-            step_thickness(results[end].opacity.total, E, spectrum.L, dpthc, position, depth, ntot, column, emult, taumax, ectt, steps)
+            step_thickness(results[end].opacity.total, E, spectrum.L, dpthc, position, depth, results[end].ntot, column, emult, taumax, ectt, steps)
         last = thickness
         (position, thickness)
     end
@@ -387,16 +388,20 @@ end
 
 """
     slab_model(mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> power_law(E, α, L), ncn2=999, kw...)
+    slab_model(mixture, processes; pressure, column, logξ, luminosity, ...)
 
-A slab of gas of the constant `density` (cm⁻³) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `power_law(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
+A slab of gas of the constant `density` (cm⁻³) or the constant `pressure` (dyn cm⁻², `ConstantPressure`, XSTAR's `lcpres=1`: the density of each zone is `P/(k T)` at its temperature, `logξ` is then the logarithm of the ionization parameter of the pressure `Ξ`) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `power_law(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
 of `ncn2` points (or the spectrum `spectrum(E, luminosity)`, e.g. `(E, L) -> blackbody(E, 0.5, L)`), at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `march_slab` solves (its keywords
 `T` and `xee` of the first zone, `equilibrium`, `emult`, `taumax`, `steps` (`nsteps`), `vturb`, `lines`, ... go to it). Returns what `march_slab` does and the energies `E`, the incident spectrum
 `incident`, the distance `r` and the `transmitted` spectrum of XSTAR's output, `incident × exp(-dpthcont)`.
 """
-function slab_model(mixture::Mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> power_law(E, α, L), ncn2=999, kw...)
+function slab_model(mixture::Mixture, processes; density=nothing, pressure=nothing, column, logξ, luminosity, α=-1.0,
+        spectrum=(E, L) -> power_law(E, α, L), ncn2=999, kw...)
+    (density === nothing) == (pressure === nothing) && throw(ArgumentError("give the density (constant density) or the pressure (constant pressure)"))
     E = xstar_energy_grid(ncn2)
     incident = spectrum(E, luminosity)
-    r = source_distance(luminosity, 10^logξ, density)
-    result = march_slab(mixture, density, processes, E, incident; r, column, kw...)
+    ntot, r = density !== nothing ? (density, source_distance(luminosity, 10^logξ, density)) :
+        (ConstantPressure(pressure), source_distance_pressure(luminosity, 10^logξ, pressure))
+    result = march_slab(mixture, ntot, processes, E, incident; r, column, kw...)
     (; result..., E, incident, r, transmitted=incident .* exp.(-result.dpthcont))
 end
