@@ -77,6 +77,37 @@ function toy_transfer_tests()
             @test all(>=(0), ff) && ff[end] > ff[1]*1e-30
         end
 
+        @testset "the lines in the continuum opacity" begin
+            cell = Radix.Cell(1.0, 0.0, 1e4, ntot)
+            T = 1.0
+            edges = Radix.record_opacities(mixture, balance, T, ntot; vturb=10.0)
+            # the emissivity of a line: the energy radiated in the decay of the upper level, split by the escape probabilities
+            emissivities = Radix.line_emissivities(mixture, balance, T, ntot)
+            r = Radix.rate(line, cell; pesc=1.0)
+            @test sum(emissivities[1][1]) ≈ 0.3*0.5*ntot*r.fenergy && emissivities[1][1][1] == emissivities[1][1][2]
+            @test emissivities[1][2] == (0.0, 0.0)                       # (only the records of type 4)
+            thick = Radix.line_emissivities(mixture, balance, T, ntot; escape=[[(0.1, 0.3), (0.5, 0.5)]])
+            @test thick[1][1][1]/thick[1][1][2] ≈ 1/3 && sum(thick[1][1]) ≈ 0.3*0.5*ntot*Radix.rate(line, cell; pesc=0.4).fenergy
+            @test Radix.line_emissivities(mixture, (; balance..., populations=[[1.0, 0.0, 0.0]]), T, ntot)[1][1] == (0.0, 0.0)
+            # the line is added to the bins of the total opacity, and not to the continuum
+            E = Radix.xstar_energy_grid(999)
+            rad = Radix.Radiation(E, 1e10 ./ E)
+            continuum = Radix.Continuum(mixture, (Radix.Thomson(), Radix.FreeFree()); vturb=10.0)
+            without = Radix.opacity(continuum, balance, T, ntot, rad, edges)
+            with = Radix.opacity(continuum, balance, T, ntot, rad, edges; emissivities)
+            added = with.total .- without.total
+            @test with.continuum == without.continuum && all(>=(0), added)
+            K = Radix.constants()
+            e0 = K.hc_eVÅ_single/1215.67
+            @test argmax(added) == Radix.nbin(rad, e0) || argmax(added) == Radix.nbin(rad, e0) + 1
+            centre = Radix.rate(line, cell; vturb=10.0).opacity*0.7*0.5*ntot
+            width = sqrt(((K.thermal_speed/Radix.cm_per_km)*sqrt(T/1.0)*e0/(K.light_speed/Radix.cm_per_km))^2 + (e0*10.0/(K.light_speed/Radix.cm_per_km))^2)
+            @test sum(added[k]*(E[k + 1] - E[k]) for k in 1:length(E) - 1) ≈ centre*width rtol=0.05
+            # a line weaker than the limit is not added
+            weak = (; balance..., populations=[[1e-40, 0.0, 0.0]])
+            @test Radix.opacity(continuum, weak, T, ntot, rad, Radix.record_opacities(mixture, weak, T, ntot); emissivities=Radix.line_emissivities(mixture, weak, T, ntot)).total == without.total
+        end
+
         @testset "the escape of one element" begin
             per_element = [[(0.1, 0.2), (0.3, 0.4)]]
             @test Radix.element_escape(per_element, 1) == [(0.1, 0.2), (0.3, 0.4)]
@@ -109,6 +140,9 @@ function toy_transfer_tests()
             @test thick.zones[1].opacity.total[10] ≈ thomson + Radix.opacity(Radix.FreeFree(), E, 1.0, thick.zones[1].nₑ)[10]
             @test thick.zones[2].radiation.F[10] ≈ thick.zones[1].radiation.F[10]*exp(-thick.zones[1].opacity.total[10]*1e17) rtol=1e-12
             @test thick.dpthc[10] ≈ 2*thick.zones[1].opacity.total[10]*1e17
+            @test thick.dpthcont[10] ≈ 2*thomson*1e17                                      # (free-free is not in the continuum)
+            @test thick.dpthc[10] > thick.dpthcont[10]
+            @test Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, lines=false).dpthc == thick.dpthc    # (no lines here)
             flat = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
             @test flat.zones[2].radiation.F == flat.zones[1].radiation.F
             @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
@@ -176,14 +210,14 @@ function transfer_balance_tests(db)
             Es, Is, Ts = Float64.(slab.energy), Float64.(slab.incident), Float64.(slab.transmitted)
             r0 = 3.16228e20
             zones = [(r0 + k*1e17/6, 1e17/6) for k in 0:5]
-            thickrun = Radix.march_zones(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false)
+            thickrun = Radix.march_zones(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false, vturb=0.0)
             τx = -log.(Ts ./ Is)
-            ratio = thickrun.dpthc ./ τx
+            ratio = thickrun.dpthcont ./ τx
             @test all(τx .> 6e-4)
             @test abs(sort(ratio)[length(ratio) ÷ 2] - 1) < 5e-3                 # the median of the 999 bins
             @test all(r -> abs(r - 1) < 6e-2, ratio)
-            i = argmin(abs.(Es .- 13.6)); @test thickrun.dpthc[i] ≈ τx[i] rtol=2e-3           # Thomson scattering
-            i = argmin(abs.(Es .- 54.7)); @test thickrun.dpthc[i] ≈ τx[i] rtol=4e-2           # the edge of He II
+            i = argmin(abs.(Es .- 13.6)); @test thickrun.dpthcont[i] ≈ τx[i] rtol=2e-3           # Thomson scattering
+            i = argmin(abs.(Es .- 54.7)); @test thickrun.dpthcont[i] ≈ τx[i] rtol=4e-2           # the edge of He II
             # the state of the first zone is that of the table
             slabab = fits(joinpath(dir, "xout_abund1.fits"))[2].data
             @test thickrun.zones[1].fractions[2][2] ≈ slabab.he_ii[2] rtol=1e-4

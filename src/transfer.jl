@@ -53,30 +53,31 @@ OpticalDepths(mixture::Mixture) = OpticalDepths([zeros(length(el.rates)) for el 
 
 # the opacity (cm⁻¹) of record j: the centre of a line (its cross section times the density of its lower level) or the edge of a
 # recombination continuum (ucalc's opakab with the populations of its two levels); 0 for the other records
-function record_opacity(coef::AbstractRate, cell::Cell, density, abund, radiation, lfast)
+function record_opacity(coef::AbstractRate, cell::Cell, density, abund, radiation, lfast; vturb=default_turbulence)
     0.0
 end
-function record_opacity(coef::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}, cell::Cell, density, abund, radiation, lfast)
+function record_opacity(coef::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}, cell::Cell, density, abund, radiation, lfast;
+        vturb=default_turbulence)
     coef.rtype in line_rate_types || return 0.0
-    r = rate(coef, cell; radiation, pesc=1.0)
+    r = rate(coef, cell; radiation, pesc=1.0, vturb)
     r.opacity*density
 end
 function record_opacity(coef::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoRecombX, PhotoionizeSuper}, cell::Cell,
-        density, abund, radiation, lfast)
+        density, abund, radiation, lfast; vturb=default_turbulence)
     r = rate(coef, cell; radiation, abund, lfast, ptmp=optically_thin)
     r.opacity
 end
 
 """
-    record_opacities(mixture, balance, T, ntot; radiation=NO_RADIATION, lfast=photoionization_lfast)
+    record_opacities(mixture, balance, T, ntot; radiation=NO_RADIATION, lfast=photoionization_lfast, vturb=default_turbulence)
 
 The centre opacities of the lines and the edge opacities of the recombination continua of every record of every element in the zone
 whose `balance` (from `ionization_balance`) is at the temperature `T` (10⁴ K) and hydrogen density `ntot`, in vectors aligned with
 the records: XSTAR's `oplin` and `opakab`, as `calc_emisab_ion` makes them. A line has the cross section at its centre times the
 density `ntot × abundance × population` of its lower level; an edge the opacity of `photoionization_integrals` for the populations
-(times the abundance) of the two levels of its transition.
+(times the abundance) of the two levels of its transition. `vturb` is the turbulent speed (km/s) of the lines.
 """
-function record_opacities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, lfast=photoionization_lfast)
+function record_opacities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, lfast=photoionization_lfast, vturb=default_turbulence)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     map(eachindex(mixture.elements)) do k
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
@@ -86,10 +87,39 @@ function record_opacities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIA
                 j = indices[i]
                 lo, up = el.lo[j], el.up[j]
                 density = x[lo]*ntot*abundance
-                opacity[j] = record_opacity(records[i], cell, density, (x[lo]*abundance, x[up]*abundance), radiation, lfast)
+                opacity[j] = record_opacity(records[i], cell, density, (x[lo]*abundance, x[up]*abundance), radiation, lfast; vturb)
             end
         end
         opacity
+    end
+end
+
+"""
+    line_emissivities(mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast, vturb=default_turbulence)
+
+The emissivity of the lines (the records of type 4, `line_data_type`) of every element in the zone, as the pairs `(rcem1, rcem2)` (erg s⁻¹ cm⁻³ outward and inward) of
+`calc_emisab_ion`, in vectors aligned with the records: the energy that the population of the upper level of the record radiates in the decay,
+`-abund₂ ans3` split by the escape probabilities `escape` (`escape_probabilities`; the lines are optically thin without it). The other records have 0.
+"""
+function line_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast,
+        vturb=default_turbulence)
+    cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
+    map(eachindex(mixture.elements)) do k
+        el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
+        emissivity = fill((0.0, 0.0), length(el.rates))
+        for (indices, records) in el.groups
+            for i in eachindex(records)
+                coef, j = records[i], indices[i]
+                coef.rtype == line_data_type || continue
+                lo, up = el.lo[j], el.up[j]
+                abund1, abund2 = x[lo]*ntot*abundance, x[up]*ntot*abundance
+                (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
+                ptmp = something(escape_of(element_escape(escape, k), j, coef), optically_thin)
+                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))[1]
+                emissivity[j] = (-abund2*ans3*ptmp[1]/(ptmp[1] + ptmp[2]), -abund2*ans3*ptmp[2]/(ptmp[1] + ptmp[2]))
+            end
+        end
+        emissivity
     end
 end
 
@@ -134,7 +164,7 @@ function escape_probabilities(mixture::Mixture, depths::OpticalDepths; cfrac=0.0
 end
 
 """
-    march_zones(mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, kw...)
+    march_zones(mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, lines=true, vturb=default_turbulence, kw...)
 
 The zones of a slab, one after the other, for a point source of the spectrum `L` (erg s⁻¹ erg⁻¹, 10³⁸ erg/s × the XSTAR file) on the
 energy grid `E`: `zones` is a vector of `(r, Δr)`, the distance of the zone from the source and its thickness (cm), each solved at
@@ -142,21 +172,23 @@ its own radius with the radiation of the incident spectrum attenuated by the con
 `exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
 edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
 (`thermal_equilibrium`, from `T` and the `xee` of the previous zone), otherwise `T` is kept and the electron fraction iterated
-(`ionization_balance`). `attenuate=false` leaves the spectrum as it is. `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
+(`ionization_balance`). `attenuate=false` leaves the spectrum as it is; `lines=false` leaves the lines out of the continuum opacity (`add_line!`), with the turbulent speed `vturb` (km/s). `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
 opacity are those of the zones; `cfrac` is the covering fraction of the escape probabilities (give `Thomson` the same). Further keywords go to those functions.
 
 After each zone the opacities are added to the depths (`stpcut`): the lines and edges to the `OpticalDepths`, the continuum
-opacity (`Continuum` of the `processes`, the strongest photoionization edges of each bin) to `dpthc`.
+opacity (`Continuum` of the `processes`, the strongest photoionization edges and lines of each bin) to `dpthc`, and the part of it that is `continuum` (not
+the lines or free-free: XSTAR's `opakcont`) to `dpthcont`, which is the depth in the transmitted spectrum of XSTAR's output.
 
 Returns the named tuples of the zones (the result of `thermal_equilibrium` or `ionization_balance` with `heating_cooling`, and the
-fields `r`, `Δr`, `radiation`, `escape`, `opacity`), the final `OpticalDepths` and the continuum depth `dpthc`. The diffuse emission is
-not added to the radiation and the lines do not enter the continuum opacity (`linopac`).
+fields `r`, `Δr`, `radiation`, `escape`, `opacity`), the final `OpticalDepths` and the continuum depths `dpthc` and `dpthcont`. The diffuse emission is
+not added to the radiation.
 """
 function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
-        attenuate=true, lfast=photoionization_lfast, kw...)
+        attenuate=true, lines=true, vturb=default_turbulence, lfast=photoionization_lfast, kw...)
     depths = OpticalDepths(mixture)
-    continuum_gas = Continuum(mixture, processes; lfast)
+    continuum_gas = Continuum(mixture, processes; lfast, vturb)
     dpthc = zeros(length(E))
+    dpthcont = zeros(length(E))
     results = NamedTuple[]
     for (r, Δr) in zones
         radiation = map_spectrum(point_source(E, attenuate ? L .* exp.(-dpthc) : L, r))
@@ -168,11 +200,13 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
             (; heating_cooling(mixture, balance, T, ntot, processes; radiation, escape, lfast)..., T=Float64(T), balance...)
         end
         T, xee = zone.T, zone.xee
-        edges = record_opacities(mixture, zone, zone.T, ntot; radiation, lfast)
-        continuum = opacity(continuum_gas, zone, zone.T, ntot, radiation, edges)
+        edges = record_opacities(mixture, zone, zone.T, ntot; radiation, lfast, vturb)
+        emissivities = lines ? line_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast, vturb) : nothing
+        continuum = opacity(continuum_gas, zone, zone.T, ntot, radiation, edges; emissivities)
         push!(results, (; zone..., r, Δr, radiation, escape, opacity=continuum))
         add_zone!(depths, edges, Δr)
         dpthc .+= continuum.total .* Δr
+        dpthcont .+= continuum.continuum .* Δr
     end
-    (; zones=results, depths, dpthc)
+    (; zones=results, depths, dpthc, dpthcont)
 end
