@@ -142,7 +142,7 @@ its own radius with the radiation of the incident spectrum attenuated by the con
 `exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
 edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
 (`thermal_equilibrium`, from `T` and the `xee` of the previous zone), otherwise `T` is kept and the electron fraction iterated
-(`ionization_balance`). `attenuate=false` leaves the spectrum as it is. `processes` is a collection of `AbstractContinuum`es (`standard_processes(compton)`) whose heating, cooling and
+(`ionization_balance`). `attenuate=false` leaves the spectrum as it is. `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
 opacity are those of the zones; `cfrac` is the covering fraction of the escape probabilities (give `Thomson` the same). Further keywords go to those functions.
 
 After each zone the opacities are added to the depths (`stpcut`): the lines and edges to the `OpticalDepths`, the continuum
