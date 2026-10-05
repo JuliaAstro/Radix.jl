@@ -5,8 +5,6 @@
 
 const compton_Eph_min = 1e-4             # cmpfnc: below this energy (in electron rest masses) its limit 4 Te - Eph is used
 const compton_Te_floor = 1e-10          # comp2: added to kT (eV) in the ratio of the rest energy to it
-const ff_absorption_coeff = Float64(2.614f-37)       # freef: the free-free absorption coefficient (Gaunt factor 1; T in 10⁴ K)
-const ff_emission_coeff = Float64(1.032f-13)         # bremem: the bremsstrahlung emissivity coefficient
 const ion_density_factor = Float64(1.4f0)            # both: the density of the ions, in electron densities (n_i Z² = 1.4 nₑ)
 
 """
@@ -108,7 +106,7 @@ end
 # free-free: the absorption coefficient (1 - e^{-E/kT} is the stimulated emission) and the heating of the radiation it absorbs
 function α(::FreeFree, E::AbstractVector, T)
     ekt = T*constants().kT_eV
-    [ff_absorption_coeff/sqrt(T)/e^3*(1 - exp(-e/ekt)) for e in E]
+    [constants().ff_absorption_coeff/sqrt(T)/e^3*(1 - exp(-e/ekt)) for e in E]
 end
 density(::FreeFree, nₑ) = nₑ*ion_density_factor*nₑ
 heating(process::FreeFree, rad::Radiation, T, nₑ) = absorbed(rad.F, opacity(process, rad.E, T, nₑ), rad.E)
@@ -116,7 +114,7 @@ heating(process::FreeFree, rad::Radiation, T, nₑ) = absorbed(rad.F, opacity(pr
 # bremsstrahlung: the emission coefficient per electron and ion, and the cooling, its integral over the energy grid
 function j(::Bremsstrahlung, E::AbstractVector, T)
     ekt = T*constants().kT_eV
-    [ff_emission_coeff*exp(-e/ekt)/sqrt(T) for e in E]
+    [constants().ff_emission_coeff*exp(-e/ekt)/sqrt(T) for e in E]
 end
 density(::Bremsstrahlung, nₑ) = nₑ*ion_density_factor*nₑ
 cooling(process::Bremsstrahlung, rad::Radiation, T, nₑ) =

@@ -58,8 +58,8 @@ function toy_heating_tests()
             rad = Radix.Radiation(E, F)
             T, nₑ = 2.0, 1e4
             ekt = T*K.kT_eV
-            α(e) = Radix.ff_absorption_coeff*nₑ*(Radix.ion_density_factor*nₑ)/sqrt(T)/e^3*(1 - exp(-e/ekt))
-            j(e) = Radix.ff_emission_coeff*nₑ*(Radix.ion_density_factor*nₑ)*exp(-e/ekt)/sqrt(T)
+            α(e) = K.ff_absorption_coeff*nₑ*(Radix.ion_density_factor*nₑ)/sqrt(T)/e^3*(1 - exp(-e/ekt))
+            j(e) = K.ff_emission_coeff*nₑ*(Radix.ion_density_factor*nₑ)*exp(-e/ekt)/sqrt(T)
             @test Radix.heating(Radix.FreeFree(), rad, T, nₑ) ≈ K.ergsev*sum((F[k]*α(E[k]) + F[k - 1]*α(E[k - 1]))*(E[k] - E[k - 1])/2 for k in 2:3)
             @test Radix.cooling(Radix.Bremsstrahlung(), rad, T, nₑ) ≈ K.ergsev*sum((j(E[k]) + j(E[k - 1]))*(E[k] - E[k - 1])/2 for k in 2:3)
             @test Radix.cooling(Radix.Bremsstrahlung(), rad, T, 2nₑ) ≈ 4*Radix.cooling(Radix.Bremsstrahlung(), rad, T, nₑ)       # ∝ nₑ²
@@ -78,7 +78,7 @@ function toy_heating_tests()
             ekt = T*K.kT_eV
             # free-free: the absorption coefficient, with the stimulated emission; in the total opacity only
             ff = Radix.α(Radix.FreeFree(), E, T)
-            @test ff ≈ [Radix.ff_absorption_coeff/sqrt(T)/e^3*(1 - exp(-e/ekt)) for e in E]
+            @test ff ≈ [K.ff_absorption_coeff/sqrt(T)/e^3*(1 - exp(-e/ekt)) for e in E]
             @test Radix.α(Radix.FreeFree(), rad, T) == ff                          # (a Radiation gives its grid)
             # the opacity is the coefficient times the density that absorbs: nₑ nᵢ with nᵢ = 1.4 nₑ
             @test Radix.density(Radix.FreeFree(), nₑ) == nₑ*Radix.ion_density_factor*nₑ
@@ -90,6 +90,11 @@ function toy_heating_tests()
             @test Radix.density(Radix.Thomson(), nₑ) == nₑ
             @test Radix.opacity(Radix.Thomson(0.25), E, T, nₑ) ≈ fill(0.75*nₑ*K.sigma_thomson, 3)
             @test Radix.Thomson().cfrac == 0 && (Radix.Thomson() isa Radix.AbstractScattering)
+            # the coefficients from CODATA 2022 agree with those that XSTAR writes (Gaunt factor 1) to 0.1%
+            xstar = Radix.ucalc_constants()
+            @test K.ff_absorption_coeff ≈ xstar.ff_absorption_coeff rtol=1e-3
+            @test K.ff_emission_coeff ≈ xstar.ff_emission_coeff rtol=1e-3
+            @test K.ff_absorption_coeff ≈ 2.611798464985841e-37 && K.ff_emission_coeff ≈ 1.0325265054853345e-13
             # the processes without opacity have none, and Thomson scattering neither heats nor cools
             @test Radix.α(Radix.Bremsstrahlung(), E, T) == zeros(3) && Radix.j(Radix.Bremsstrahlung(), E, T) == Radix.j(Radix.Bremsstrahlung(), rad, T) && Radix.opacity(Radix.Bremsstrahlung(), E, T, nₑ) == zeros(3)
             compton0 = Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0])

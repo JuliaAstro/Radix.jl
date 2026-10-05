@@ -136,12 +136,17 @@ function bracket_electron_fraction(evaluate, xee, elcter; tolerance)
     (xee, elcter, iterations, false)
 end
 
+function process_term(process, radiation, T, nₑ)
+    h, c = heating_cooling(process, radiation, T, nₑ)
+    (; process, heating=h, cooling=c)
+end
+
 """
     heating_cooling(mixture, balance, T, ntot, processes; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
 
 The heating and cooling (erg cm⁻³ s⁻¹) of the gas of `mixture` at the temperature `T` (10⁴ K) and hydrogen density `ntot`
 whose populations are those of `balance` (from `ionization_balance`, at the same `T`, `ntot` and `radiation`). `processes` is a collection of
-`AbstractContinuum`es (`standard_processes(compton)`: Compton and Thomson scattering, free-free absorption and bremsstrahlung): the totals of XSTAR's `calc_hmc_all` and
+`AbstractContinuum` processes (`standard_processes(compton)`: Compton and Thomson scattering, free-free absorption and bremsstrahlung): the totals of XSTAR's `calc_hmc_all` and
 `heatf` are the elements (`element_heating`, weighted by their abundances) plus the `heating` and `cooling` derived from each process.
 
 Returns a named tuple with `heating` and `cooling` (the radiative energy that the gas absorbs and emits: `httot`, `cltot`), `imbalance` =
@@ -149,12 +154,6 @@ Returns a named tuple with `heating` and `cooling` (the radiative energy that th
 the energy of the electrons), `processes`, a vector with the `process`, its `heating` and its `cooling`, and `elements`, the `heating`, `cooling`,
 `heating2` and `cooling2` of each element weighted by its abundance, in the order of `mixture.Z`.
 """
-# the heating and cooling of one process, with the process
-function process_term(process, radiation, T, nₑ)
-    h, c = heating_cooling(process, radiation, T, nₑ)
-    (; process, heating=h, cooling=c)
-end
-
 function heating_cooling(mixture::Mixture, balance, T, ntot, processes; radiation=NO_RADIATION, escape=nothing,
         lfast=photoionization_lfast)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
