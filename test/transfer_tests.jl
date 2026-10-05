@@ -199,6 +199,9 @@ function toy_transfer_tests()
             @test slab.zones[1].r == 1e13 && slab.zones[2].r == 1e13 && slab.zones[3].r == 1e13 + Δ[2]
             @test sum(Δ) ≈ 1e17 && all(>=(0), Δ)
             @test sum(Δ[1:end - 1])*1e4 < 1e21 <= sum(Δ)*1e4*(1 + 1e-12)           # the zones go on until the column is reached
+            # another source
+            hot = Radix.slab_model(hmixture, processes; density=1e4, column=1e17, logξ=2.0, luminosity=1e35, spectrum=(E, L) -> Radix.blackbody(E, 0.5, L), T=1.0, iterate=false, diffuse=false)
+            @test hot.incident == Radix.blackbody(hot.E, 0.5, 1e35) && hot.r ≈ sqrt(1e35/(1e2*1e4)) && hot.zones[1].radiation.F[10] ≈ Radix.map_spectrum(Radix.point_source(hot.E, hot.incident, hot.r)).F[10]
             few = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, steps=10, T=1.0, iterate=false, diffuse=false)
             @test few.zones[2].Δr == 1e12 && length(few.zones) > length(slab.zones)
             thin = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e30, column=1e17, T=1.0, iterate=false, diffuse=false)
@@ -217,6 +220,25 @@ function toy_transfer_tests()
             end
             @test Radix.power_law(E, -1.0, 2L) ≈ 2 .* Radix.power_law(E, -1.0, L) rtol=1e-12
             @test Radix.power_law([0.005, 0.5, 5.0, 50.0, 500.0], -1.0, L)[1] < 1e-20*Radix.power_law([0.005, 0.5, 5.0, 50.0, 500.0], -1.0, L)[2]   # (the floor below 0.01 eV)
+            # the thermal spectra and the real ones of XSTAR (test/reference/xstar_sources): the bins with at least 10⁻³⁰ of the maximum, to the precision of the files
+            sources = joinpath(@__DIR__, "reference", "xstar_sources")
+            for (name, f, T) in (("bbody_0.5", Radix.blackbody, 0.5), ("bbody_0.0003", Radix.blackbody, 0.0003), ("brems_0.1", Radix.thermal_bremsstrahlung, 0.1))
+                reference = Float64.(fits(joinpath(sources, name * ".fits"))[3].data.incident)
+                mine = Radix.with_constants(Radix.ucalc_constants()) do        # (XSTAR's k: 0.861707 eV per 10⁴ K)
+                    f(Radix.xstar_energy_grid(999), T, 1e35) ./ 1e38
+                end
+                strong = findall(>(1e-30*maximum(reference)), reference)
+                @test length(strong) > 800
+                @test all(abs.(mine[strong] ./ reference[strong] .- 1) .< 1e-4)
+            end
+            # a table: a power law is exact in the logarithms, the photons and the logarithms of the units are as they are read, and nothing is outside the table
+            table_E = [0.5, 3.0, 40.0, 700.0, 9000.0, 3e5]
+            reference = Radix.power_law(E, -1.5, L)
+            inside = findall(e -> 0.5 <= e <= 3e5, E)
+            @test Radix.tabulated(E, table_E, table_E .^ -1.5, L)[inside] ≈ reference[inside] rtol=1e-10
+            @test Radix.tabulated(E, table_E, table_E .^ -2.5, L; units=:photons)[inside] ≈ reference[inside] rtol=1e-10
+            @test Radix.tabulated(E, table_E, -1.5 .* log10.(table_E), L; units=:log10)[inside] ≈ reference[inside] rtol=1e-10
+            @test all(==(0), Radix.tabulated(E, table_E, table_E .^ -1.5, L)[setdiff(eachindex(E), inside)])
             @test Radix.source_distance(1e46, 10.0, 1e4) ≈ 3.1622776601683794e20 && Radix.source_distance(4e46, 10.0, 1e4) ≈ 2*Radix.source_distance(1e46, 10.0, 1e4)
         end
 
