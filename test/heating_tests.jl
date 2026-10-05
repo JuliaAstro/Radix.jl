@@ -250,6 +250,27 @@ function heating_balance_tests(db)
             @test term(plain, Radix.Compton).heating ≈ term(hc, Radix.Compton).heating/1.506 rtol=1e-3
         end
 
+        @testset "the iron at log ξ = 1 (a record from the ground level to a level of the next ion)" begin
+            # test/reference/xstar_fe_balance: T = 4.5513, x_e = 1. The records of rate type 1 of Fe VII and Fe VIII (`ParPhotoIonize3`, to the levels 3 and 4 of the next ion) used to be left out
+            # of the matrix, which put 4-7% of the iron in the wrong ions and made the temperature of the equilibrium 3% low (8% with the database of the tree)
+            dir = joinpath(@__DIR__, "reference", "xstar_fe_balance")
+            cont = fits(joinpath(dir, "xout_cont1.fits"))[3].data
+            ab = fits(joinpath(dir, "xout_abund1.fits"))[2].data
+            rad = Radix.map_spectrum(Radix.point_source(Float64.(cont.energy), Float64.(cont.incident)*1e38, 3.16228e20))
+            T = 4.5513
+            balance = Radix.ionization_balance(mixture, T, 1e4; radiation=rad, xee=1.0, iterate=false)
+            iron = findfirst(==(26), mixture.Z)
+            for (ion, name) in ((7, :fe_vii), (8, :fe_viii), (9, :fe_ix), (10, :fe_x), (11, :fe_xi), (12, :fe_xii))
+                @test balance.fractions[iron][ion] ≈ getproperty(ab, name)[1] rtol=1e-3
+            end
+            hc = Radix.heating_cooling(mixture, balance, T, 1e4, processes; radiation=rad)
+            @test hc.elements[iron].heating ≈ 1.07571729e-15 rtol=1e-3
+            @test hc.elements[iron].cooling ≈ 9.67042360e-16 rtol=1e-3
+            @test hc.heating ≈ 1.18243531e-14 rtol=1e-3
+            @test term(hc, Radix.Compton).heating ≈ 2.37589869e-17 rtol=1e-4
+            @test term(hc, Radix.Bremsstrahlung).cooling ≈ 4.14848716e-17 rtol=1e-4
+        end
+
         @testset "thermal equilibrium of the first zone" begin
             eq = fits(joinpath(@__DIR__, "reference", "xstar_pow_xi2_eq", "xout_abund1.fits"))[2].data
             res = Radix.thermal_equilibrium(mixture, 1e4, processes; radiation=mapped, T=100.0)
