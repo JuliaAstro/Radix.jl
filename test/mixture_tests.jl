@@ -27,6 +27,16 @@ function toy_mixture_tests()
             m = Radix.Mixture(records[[1, 2, 3, 5, 6]], levels)
             @test m.Z == [1] && m.abundance == [1.0] && length(m.elements) == 1
             @test Radix.Mixture(records[[1, 2, 3, 5, 6]], levels; multiplier=Dict(1 => 0.5)).abundance == [0.5]
+            # the abundances of a table replace those of the records (and the multipliers apply to them)
+            @test Radix.Mixture(records, levels; abundances=[1.0, 0.25]).abundance == [1.0, 0.25]
+            @test Radix.Mixture(records, levels; abundances=[1.0, 0.0]).Z == [1]                    # (a zero in the table leaves an element out)
+            @test Radix.Mixture(records[[1, 2, 3, 5, 6]], levels; abundances=[2.0, 0.25], multiplier=Dict(1 => 0.5)).abundance == [1.0]
+            @test Radix.abundance_table() == Radix.abundance_table(:xdef) && length(Radix.abundance_table(:angr)) == 30
+            @test Radix.abundance_table(:xdef)[1:2] == [1.0, 0.1] && Radix.abundance_table(:angr)[26] == 4.68e-5 && Radix.abundance_table(:wilm)[3] == 0
+            @test sort(collect(keys(Radix.xstar_abundance_tables))) == sort([:xdef, :angr, :aspl, :feld, :aneb, :grsa, :wilm, :lodd, :lgpp, :lgps])
+            @test_throws ArgumentError Radix.abundance_table(:nonsense)
+            copy = Radix.abundance_table(:xdef); copy[1] = 5.0
+            @test Radix.abundance_table(:xdef)[1] == 1.0                                          # (a copy)
         end
 
         @testset "the electrons" begin

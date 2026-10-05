@@ -217,6 +217,20 @@ function heating_balance_tests(db)
         processes = Radix.standard_processes(compton)
         @test size(compton.Es) == (101, 101) && compton.Te[1] == 1e-7 && compton.Eph[end] == 100.0
         mixture = Radix.Mixture(db, levels; multiplier=Dict(3 => 0.0, 4 => 0.0, 5 => 0.0))
+        @testset "the model from the files" begin
+            model = Radix.Model(db, compton)                                         # (`Model(atdb, coheat)` loads the two files, which takes minutes)
+            @test model.mixture.Z == mixture.Z
+            @test model.mixture.abundance ≈ mixture.abundance rtol=1e-6              # (the table of XSTAR in double precision, the records in single)
+            @test model.processes[1].Es == compton.Es && length(model.processes) == 4
+            # the other tables and the exclusion go through the same `Mixture` (the database is not read again: it takes minutes)
+            no_exclusion = Radix.Mixture(db, levels; abundances=Radix.abundance_table(:xdef))
+            @test 3 in no_exclusion.Z
+            wilms = Radix.Mixture(db, levels; abundances=Radix.abundance_table(:wilm), multiplier=Dict(3 => 0.0, 4 => 0.0, 5 => 0.0))
+            @test wilms.Z == setdiff(mixture.Z, [9, 19, 21, 23, 29, 30])                      # (the table of Wilms et al. has no F, K, Sc, V, Cu or Zn)
+            doubled = Radix.Mixture(db, levels; abundances=Radix.abundance_table(:angr), multiplier=Dict(26 => 2.0))
+            @test doubled.abundance[findfirst(==(26), doubled.Z)] ≈ 2*4.68e-5
+        end
+
         dir = joinpath(@__DIR__, "reference", "xstar_pow_xi2")
         spectrum = fits(joinpath(dir, "xout_cont1.fits"))[3].data
         E, L = Float64.(spectrum.energy), Float64.(spectrum.incident)*1e38
