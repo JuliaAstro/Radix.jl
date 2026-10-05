@@ -386,16 +386,16 @@ function step_thickness(opacity, E, L, dpthc, r, depth, ntot, column, emult, tau
 end
 
 """
-    slab_model(mixture, processes; density, column, logξ, luminosity, α=-1.0, ncn2=999, kw...)
+    slab_model(mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> power_law(E, α, L), ncn2=999, kw...)
 
 A slab of gas of the constant `density` (cm⁻³) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `power_law(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
-of `ncn2` points, at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `march_slab` solves (its keywords
+of `ncn2` points (or the spectrum `spectrum(E, luminosity)`, e.g. `(E, L) -> blackbody(E, 0.5, L)`), at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `march_slab` solves (its keywords
 `T` and `xee` of the first zone, `equilibrium`, `emult`, `taumax`, `steps` (`nsteps`), `vturb`, `lines`, ... go to it). Returns what `march_slab` does and the energies `E`, the incident spectrum
 `incident`, the distance `r` and the `transmitted` spectrum of XSTAR's output, `incident × exp(-dpthcont)`.
 """
-function slab_model(mixture::Mixture, processes; density, column, logξ, luminosity, α=-1.0, ncn2=999, kw...)
+function slab_model(mixture::Mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> power_law(E, α, L), ncn2=999, kw...)
     E = xstar_energy_grid(ncn2)
-    incident = power_law(E, α, luminosity)
+    incident = spectrum(E, luminosity)
     r = source_distance(luminosity, 10^logξ, density)
     result = march_slab(mixture, density, processes, E, incident; r, column, kw...)
     (; result..., E, incident, r, transmitted=incident .* exp.(-result.dpthcont))
