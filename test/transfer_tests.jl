@@ -166,6 +166,45 @@ function toy_transfer_tests()
             @test all(==(0), none.emissivity)
         end
 
+        @testset "the thickness of the zones" begin
+            # `step`: the smallest of r/steps, the column left and emult/κ of the bins above ectt, not too deep before, with spectrum
+            E = [0.5, 5.0, 50.0, 500.0, 5000.0]
+            κ = [1e-10, 2e-17, 1e-17, 4e-18, 1e-30]
+            L = fill(1e30, 5)
+            dpthc = zeros(5)
+            args(; r=1e21, depth=0.0, ntot=1e4, column=1e21, emult=1.0, taumax=5.0, ectt=1.0, steps=3) = (r, depth, ntot, column, emult, taumax, ectt, steps)
+            thickness(; κ=κ, L=L, dpthc=dpthc, kw...) = Radix.step_thickness(κ, E, L, dpthc, args(; kw...)...)
+            @test thickness() == 1/2e-17                                 # (the bin below ectt, with κ = 10⁻¹⁰, is not used)
+            @test thickness(; emult=0.5) == 0.5/2e-17
+            @test thickness(; ectt=0.1) == 1/1e-10
+            @test thickness(; dpthc=[0.0, 5.5, 0.0, 0.0, 0.0]) == 1/1e-17          # the deeper than taumax is not
+            @test thickness(; dpthc=[0.0, 5.0, 0.0, 0.0, 0.0]) == 1/2e-17          # (exactly taumax is)
+            @test thickness(; L=[1e30, 1e-10, 1e30, 1e30, 1e30]) == 1/1e-17        # spectrum below 10⁻¹² of 10³⁸
+            @test thickness(; r=3e16) == 1e16                                    # r / steps
+            @test thickness(; depth=9.99e20) ≈ 1e17*1e-3 rtol=1e-6              # the column left
+            @test thickness(; κ=zeros(5)) == 1e17                                  # a transparent slab: all the column
+        end
+
+        @testset "a slab" begin
+            hlevels = Radix.levels([lv(1, 0.0, 2), lv(2, 13.6, 1)]; masses=Dict(5 => 1.0))
+            hrate = RecombiningToyRate(Int8(3), Int32(5), 2e-4)
+            hmixture = Radix.Mixture(hlevels, [1], [1.0], [Radix.Elements([[hrate]], hlevels, [5])])
+            processes = Radix.standard_processes(Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0]))
+            E = Radix.xstar_energy_grid(999)
+            L = 1e30 ./ E
+            slab = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, T=1.0, iterate=false, diffuse=false)
+            # a thin gas (Thomson scattering at about 10⁻²⁰ cm⁻¹): zones of the largest size, r/steps, the first of no thickness, the last ends at the column
+            Δ = [z.Δr for z in slab.zones]
+            @test Δ[1] == 0 && Δ[2] == 1e13/2                                      # (steps = 2)
+            @test slab.zones[1].r == 1e13 && slab.zones[2].r == 1e13 && slab.zones[3].r == 1e13 + Δ[2]
+            @test sum(Δ) ≈ 1e17 && all(>=(0), Δ)
+            @test sum(Δ[1:end - 1])*1e4 < 1e21 <= sum(Δ)*1e4*(1 + 1e-12)           # the zones go on until the column is reached
+            few = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, steps=10, T=1.0, iterate=false, diffuse=false)
+            @test few.zones[2].Δr == 1e12 && length(few.zones) > length(slab.zones)
+            thin = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e30, column=1e17, T=1.0, iterate=false, diffuse=false)
+            @test [z.Δr for z in thin.zones] == [0.0, 1e13]                          # a thin slab: the column left
+        end
+
         @testset "the escape of one element" begin
             per_element = [[(0.1, 0.2), (0.3, 0.4)]]
             @test Radix.element_escape(per_element, 1) == [(0.1, 0.2), (0.3, 0.4)]
@@ -287,6 +326,12 @@ function transfer_balance_tests(db)
             # radiation of those after them (`transmit`), which XSTAR's table has: 0.1% in He II without the emission 2.7%
             @test thickrun.zones[1].fractions[2][2] ≈ slabab.he_ii[2] rtol=1e-4
             @test thickrun.zones[1].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[2] rtol=1e-4
+            # the thickness of the zones of XSTAR's `step` (its log: log N = 20.26, 20.56, 20.74, 20.86, 20.95, 21.00 at the inner edges of the zones after the first two and at the end)
+            auto = Radix.march_slab(mixture, 1e4, processes, Es, Is*1e38; r=r0, column=1e21, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+            @test length(auto.zones) == 7 && auto.zones[1].Δr == 0
+            @test [z.r - r0 for z in auto.zones][1:6] ≈ [0; depth[1:5]] atol=3e-4*1.8e16 rtol=1e-3
+            @test round.(log10.(1e4 .* cumsum([z.Δr for z in auto.zones])[2:end]); digits=2) == [20.26, 20.56, 20.74, 20.86, 20.95, 21.0]
+            @test sum(z.Δr for z in auto.zones) ≈ 1e17
             for k in 2:length(zones)
                 @test thickrun.zones[k].fractions[2][2] ≈ slabab.he_ii[k + 1] rtol=1.5e-3
                 @test thickrun.zones[k].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[k + 1] rtol=3e-4
