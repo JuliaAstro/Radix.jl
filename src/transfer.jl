@@ -163,8 +163,61 @@ function escape_probabilities(mixture::Mixture, depths::OpticalDepths; cfrac=0.0
     end
 end
 
+const transmission_tau_min = 0.01       # heatt: below this optical depth of a zone the step of the flux is linear in it
+const transmission_floor = 1e-49        # heatt: the opacity is not below this
+
 """
-    march_zones(mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, lines=true, vturb=default_turbulence, kw...)
+    Transmitted(L)
+
+The spectrum that passes through the zones of a slab and the diffuse emission that they add: XSTAR's `zrems`. `L` is the spectrum (erg s⁻¹ erg⁻¹) of the source
+of the zones, which the zones attenuate and the emission adds to; `inward` and `outward` (XSTAR's `zrems(2)` and `zrems(3)`: the emission in the direction of the first
+and second escape probability of each zone, summed over the zones) and `inward_continuum` and `outward_continuum` (`zrems(4)` and `zrems(5)`, which are the emission columns of
+the output of XSTAR) have the same units and start at 0. The attenuation and the emission of a zone are added by `transmit`.
+"""
+struct Transmitted
+    L::Vector{Float64}
+    inward::Vector{Float64}
+    outward::Vector{Float64}
+    inward_continuum::Vector{Float64}
+    outward_continuum::Vector{Float64}
+end
+Transmitted(L::AbstractVector) = Transmitted(Float64.(L), (zeros(length(L)) for _ in 1:4)...)
+
+"""
+    transmit(spectrum::Transmitted, radiation, continuum, r, Δr; cfrac=0.0)
+
+The `Transmitted` after a zone at the distance `r` of the source and thickness `Δr` (cm), as XSTAR's `heatt` updates `zrems`: `radiation` is the field at the zone (`point_source`
+of `spectrum.L`) and `continuum` the result of `opacity(::Continuum, …)` (the opacity `total` and `continuum`, the `emissivity` of the recombination continua and the
+`bremsstrahlung`). In each bin the optical depth of the zone `τ = κ Δr` gives the factor `fac = (1 - e^{-τ})/τ` (1 below 0.01) and
+
+    L = max(0, L - (F κ - 4π (ε₁ + ε₂)) fac Δr 4π r²),   inward += 4π ε₁ fac Δr 4π r²,   outward += 4π ε₂ fac Δr 4π r²
+
+with `ε₁ = rccemis₁ + brems (1 - cfrac)/2` and `ε₂ = rccemis₂ + brems (1 + cfrac)/2`; the last two use the factor of the continuum opacity for `inward_continuum` and
+`outward_continuum`. XSTAR adds the bremsstrahlung, which is in all directions, to the emission per steradian of the recombination continua, so it is 4π too large in `L` and the sums.
+"""
+function transmit(spectrum::Transmitted, radiation::Radiation, continuum, r, Δr; cfrac=0.0)
+    K = constants()
+    fpr2 = K.fourpi*r^2
+    n = length(spectrum.L)
+    step(opacity) = (tau = max(transmission_floor, opacity)*Δr; tau > transmission_tau_min ? (1 - exp(-tau))/tau : one(tau))
+    L, inward, outward, inward_continuum, outward_continuum = (zeros(n) for _ in 1:5)
+    for kl in 1:n
+        ε₁ = continuum.emissivity[1, kl] + continuum.bremsstrahlung[kl]*(1 - cfrac)/2/K.fourpi
+        ε₂ = continuum.emissivity[2, kl] + continuum.bremsstrahlung[kl]*(1 + cfrac)/2/K.fourpi
+        absorbed = radiation.F[kl]*max(transmission_floor, continuum.total[kl])
+        fac = step(continuum.total[kl])
+        L[kl] = max(0.0, spectrum.L[kl] - (absorbed - K.fourpi*(ε₁ + ε₂))*fac*Δr*fpr2)
+        inward[kl] = spectrum.inward[kl] + K.fourpi*ε₁*fac*Δr*fpr2
+        outward[kl] = spectrum.outward[kl] + K.fourpi*ε₂*fac*Δr*fpr2
+        fac = step(continuum.continuum[kl])
+        inward_continuum[kl] = spectrum.inward_continuum[kl] + K.fourpi*ε₁*fac*Δr*fpr2
+        outward_continuum[kl] = spectrum.outward_continuum[kl] + K.fourpi*ε₂*fac*Δr*fpr2
+    end
+    Transmitted(L, inward, outward, inward_continuum, outward_continuum)
+end
+
+"""
+    march_zones(mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, diffuse=true, lines=true, vturb=default_turbulence, kw...)
 
 The zones of a slab, one after the other, for a point source of the spectrum `L` (erg s⁻¹ erg⁻¹, 10³⁸ erg/s × the XSTAR file) on the
 energy grid `E`: `zones` is a vector of `(r, Δr)`, the distance of the zone from the source and its thickness (cm), each solved at
@@ -184,14 +237,16 @@ fields `r`, `Δr`, `radiation`, `escape`, `opacity`), the final `OpticalDepths` 
 not added to the radiation.
 """
 function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
-        attenuate=true, lines=true, vturb=default_turbulence, lfast=photoionization_lfast, kw...)
+        attenuate=true, diffuse=true, lines=true, vturb=default_turbulence, lfast=photoionization_lfast, kw...)
     depths = OpticalDepths(mixture)
     continuum_gas = Continuum(mixture, processes; lfast, vturb)
     dpthc = zeros(length(E))
     dpthcont = zeros(length(E))
+    spectrum = Transmitted(L)
     results = NamedTuple[]
     for (r, Δr) in zones
-        radiation = map_spectrum(point_source(E, attenuate ? L .* exp.(-dpthc) : L, r))
+        incident = point_source(E, spectrum.L, r)
+        radiation = map_spectrum(incident)
         escape = escape_probabilities(mixture, depths; cfrac)
         zone = if equilibrium
             thermal_equilibrium(mixture, ntot, processes; radiation, escape, T, xee, lfast, kw...)
@@ -203,10 +258,12 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         edges = record_opacities(mixture, zone, zone.T, ntot; radiation, lfast, vturb)
         emissivities = lines ? line_emissivities(mixture, zone, zone.T, ntot; radiation, escape, lfast, vturb) : nothing
         continuum = opacity(continuum_gas, zone, zone.T, ntot, radiation, edges; emissivities)
+        attenuate && (spectrum = transmit(spectrum, incident, diffuse ? continuum : (; continuum..., emissivity=zero(continuum.emissivity),
+            bremsstrahlung=zero(continuum.bremsstrahlung)), r, Δr; cfrac))
         push!(results, (; zone..., r, Δr, radiation, escape, opacity=continuum))
         add_zone!(depths, edges, Δr)
         dpthc .+= continuum.total .* Δr
         dpthcont .+= continuum.continuum .* Δr
     end
-    (; zones=results, depths, dpthc, dpthcont)
+    (; zones=results, depths, dpthc, dpthcont, spectrum)
 end
