@@ -9,6 +9,7 @@ include("elements_tests.jl")
 include("mixture_tests.jl")
 include("heating_tests.jl")
 include("transfer_tests.jl")
+include("lines_tests.jl")
 
 # Rate formulas below are transcribed independently from XSTAR's ucalc()
 # (ftools/xstar/utils/xstarsub.f) so Radix is checked against the Fortran,
@@ -459,3 +460,4 @@ toy_balance_tests()
 toy_mixture_tests()
 toy_heating_tests()
 toy_transfer_tests()
+lines_tests()

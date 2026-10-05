@@ -257,7 +257,7 @@ iteration of `dsec`. What the code does and what was found:
   which comes from XSTAR's Lucy iteration, converged to 1% only) and the electron fraction and the temperature of the equilibrium
   to 10⁻⁵ and 2×10⁻⁴; with the database of the tree the temperature is 4-5% low. The Compton and bremsstrahlung terms agree to 5×10⁻⁴.
 - **Not included**: the escape probabilities from the optical depths (the second zone of the reference run has line trapping:
-  its equilibrium temperature is 0.5% low), `linopac` and the opacity arrays, and the transfer.
+  its equilibrium temperature is 0.5% low), and the transfer.
 
 ## Transfer: escape probabilities and optical depths
 
@@ -270,7 +270,7 @@ the depths in `calc_hmc_ion`:
   lower level; that of an edge is the `opacity` of the photoionization record called with `abund = (population × abundance of its
   initial level, of its final level)`. The next zone's escape probabilities follow: `(pescl(τ₁)(1-c), pescl(τ₂)(1-c) + 2 pescl(τ₁+τ₂) c)`
   for a line (`c` the covering fraction), `pescv` for an edge, 1/2 each for the others (`escape_probabilities`). The continuum
-  depth `dpthc` (the attenuation `exp(-dpthc)` of the spectrum in `trnfrc`) and `linopac` are not ported.
+  depth `dpthc` (the attenuation `exp(-dpthc)` of the spectrum in `trnfrc`) is in the next section.
 - **Single-precision literals in `pescl`/`pescv`**: 1.2, 1.e-5 and 1.e-12 are single precision, which makes the double-precision
   values differ by 4×10⁻⁸; checked against the real functions (`test/reference/ucalc/drvpesc.f90`) to 10⁻¹³.
 - **`trnfrc` writes the flux as `L/(12.56 r²)`, not `L/(4π r²)`**: 0.05% smaller. `point_source` uses the `fourpi` of the constants
@@ -286,10 +286,17 @@ the depths in `calc_hmc_ion`:
   `abund`) and then free-free (`FreeFree()` (its coefficient times `nₑ nᵢ`), only in the total, not in `opakcont`); `stpcut` adds `opakc Δr` to `dpthc`. Only the
   `nrank = 10` strongest edges of each energy bin enter (`rlbin`, ranked by the edge opacity of the zone; the bin of an edge is that
   of its edge energy, `E_grid[1] × 13.598` for type 49 and `max(0.1, E∞ - E)` of the level for the others, set once by `xstarsetup`)
-  and every record of rate type 42. The transmitted spectrum is `incident × exp(-dpthc)`. Against XSTAR's slab of 10²¹ cm⁻²
-  (`test/reference/xstar_thick_slab`) the depth `dpthc` of all 999 bins agrees to a median of 0.9987 and within 5%
-  (Thomson scattering 0.1%, the He II edge 2.5%). Not ported: `linopac`, the Voigt profiles of the lines that `calc_emis_ion` adds to
-  `opakc` (they limit the step of XSTAR's `step.f90`, so the zones cannot be predicted yet), and `heatt`, which
+  and every record of rate type 42. The transmitted spectrum of the output (`writespectra3`) is `incident × exp(-dpthcont)`, with `dpthcont` the depth of `opakcont` (Thomson and photoionization: no lines or free-free), while
+  `trnfrc` attenuates the spectrum of the next zone by `exp(-dpthc)`, with the lines and free-free (`march_zones` returns both). Against XSTAR's slab of 10²¹ cm⁻²
+  (`test/reference/xstar_thick_slab`) the depth `dpthcont` of all 999 bins agrees to a median of 1.0004 and within 5%
+  (Thomson scattering 0.1%, the He II edge 2.5%).
+- **Lines in the bins** (`src/lines.jl`, `add_line!`, `voigt`). `linopac` puts the opacity of a line (its centre opacity `oplin` times the Voigt profile of the thermal and turbulent widths
+  and the damping parameter `delea/(width 4π)`, averaged in the bins of the grid) into `opakc`. `calc_emis_ion` calls it for the `nrank` lines of data type 4 with the largest
+  emissivity `rcem` in each bin (`rlbin` with `lopak = 0`; `line_emissivities`, the energy of the decay split by the escape probabilities as `calc_emisab_ion` makes it); only the type 50 lines
+  (`AtomicLine2`) call it. `rlbin` never stores an entry whose place is the last of the list (`rank!`, which the ranking of the edges uses too). Checked against the real `linopac` and
+  `voigte` (`test/reference/ucalc/drvlinopac.f90`): `voigt` is identical and the bins of four lines agree to 10⁻⁷ (the single-precision `12.9` of the thermal speed), including the quirk that the profile
+  loop never ends early (`ml1min` stays above the bin of the line, so the wings fill the grid out to 10⁴ steps). `delea` is `A × 4.136×10⁻¹⁵` eV; the records of type 41 of the database, which
+  `deleafnd` looks for first, are not read. Not ported: the Fe UTA lines (type 82), whose `delea` is its `A_auto`, the lines of the records of type 9, `heatt`, which
   updates the flux zone by zone as `F(1 - τ fac) + 12.56 ε fac Δr` with the diffuse emission `ε` of the recombination continua and
   bremsstrahlung added (the next zone's flux is that of `heatt`, not `zremsz exp(-dpthc)`). Both matter for the ionization deep in
   a slab: XSTAR's He II fraction rises 2.4% in the first zone of the reference slab, Radix's 0.8%.
@@ -387,8 +394,8 @@ ported type (except 4, which has no `rate` method). Notes:
 - `DielecRecombH` and `TotDielecRecomb` store no data yet.
 - `AtomicLine2`: the decay rate is `A` times the escape probability `pesc` and the
   photoexcitation rate (`irate`) comes from the `radiation` at the line energy, as in
-  `ucalc`; the line opacity XSTAR adds to its continuum arrays (`linopac`) is not
-  included.
+  `ucalc`; the line opacity XSTAR adds to its continuum arrays (`linopac`) is `add_line!`,
+  which `Continuum` calls for the lines that `rlbin` selects.
 - The second real of `ElectronImpact2` (`gf`) is not used by `ucalc`; its meaning is a guess.
 - For type 98 with kind 1 or 4 and `C < 1`, `ucalc` can read its spline abscissa array
   out of bounds at low temperatures; no record in `atdb.fits` has that combination and
@@ -417,7 +424,7 @@ ported type (except 4, which has no `rate` method). Notes:
   line from the first level of the record (`transition.lower`, which the header calls the lower
   level) as the upper one, and returns the decay as `irate`; reproduced as is. The decay of ions 96
   and 97 is capped at 10¹⁰ s⁻¹ and its energy uses a single-precision erg per eV. The line opacity
-  `linopac` is not part of this type.
+  `linopac` is not called for this type (XSTAR does not for it either).
 - `CollisionSuper` (ucalc 77) reads its table like `RadiativeSuper` (temperature fastest, `C` has size
   `(nT, nₑ)` and holds log₁₀ of the de-excitation rate) through the shared `interpolate_super_table`. The
   excitation rate uses the wavelength of the record in the Boltzmann factor (`hc_over_k`; `ucalc` has

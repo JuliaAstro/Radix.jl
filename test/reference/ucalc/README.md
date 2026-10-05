@@ -31,3 +31,9 @@ the incident spectrum of `../xstar_pow_xi2` at 10¹³ cm (`F = L/(4π r²)`, 999
 
 `drvpesc.f90` is a third driver, around `pescl` and `pescv` (the escape probabilities of the lines and the recombination continua that
 `src/transfer.jl` ports): it prints both for the optical depths on its input; `test/transfer_tests.jl` has the values for 14 depths.
+
+`drvlinopac.f90` is a fourth driver, around `linopac` (the opacity of a line put into the continuum bins) and `voigte` that
+`src/lines.jl` ports as `add_line!` and `voigt`: it reads a grid, lines (`optpp`, `rcem1`, `rcem2`, `elin`, `vturbi`, `t`, `aatmp`, `delea`, `lfast`) and pairs `(v, a)`, and
+prints the bins that each line changed and `voigte`. `data/linopac.in` (a log grid of 999 points and four lines, two of them with `lfast = 2` and a damping parameter
+below and above 10⁻⁶, one with `lfast = 3` and a hydrogen line) and `data/linopac.out` are what `test/lines_tests.jl` compares with. Built like `drvpesc`:
+`gfortran -c -O0 -w -ffree-line-length-none -fno-automatic -std=legacy -I$OUT -J$OUT drvlinopac.f90`, then `gfortran -O0 -o drvlinopac drvlinopac.o $OUT/libx.a`.

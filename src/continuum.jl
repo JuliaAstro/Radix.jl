@@ -18,17 +18,18 @@ end
 const opacity_edge_types = Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoionizeSuper, PhotoRecombX}
 
 """
-    Continuum(mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast)
+    Continuum(mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence)
 
 The continuum opacity of the gas of `mixture` (cm⁻¹), as `calc_emis_all` makes it. Its `opacity`,
 
-    opacity(continuum, balance, T, ntot, radiation, edges)
+    opacity(continuum, balance, T, ntot, radiation, edges; emissivities=nothing)
 
 of the zone whose `balance` (from `ionization_balance`) is at the temperature `T` (10⁴ K) and hydrogen density `ntot`, on the energy grid of
 `radiation`: the `opacity` of each of the `processes` (`standard_processes`: Thomson scattering and free-free absorption, the processes
 times their densities; the scatterers (`AbstractScattering`) are in `continuum` as well as in `total`) and the photoionization opacity of
 the records. `edges` are the edge opacities of the records (`record_opacities`), which rank them: as `rlbin` does, only the `nrank` strongest
-edges of each energy bin (by the edge energy of `rank_energy`) enter, and every record of rate type 42. The lines (`linopac`) are not added.
+edges of each energy bin (by the edge energy of `rank_energy`) enter, and every record of rate type 42. With the `emissivities` of the lines
+(`line_emissivities`) the lines are put in the bins too, as `linopac` does (`add_line!`): the `nrank` strongest lines of each bin, by their emissivity, enter.
 
 Returns `(; total, continuum, edges)`, the two arrays of the opacity and the number of records called.
 """
@@ -37,12 +38,36 @@ struct Continuum{M<:Mixture, P}
     processes::P
     nrank::Int
     lfast::Int
+    vturb::Float64
 end
-Continuum(mixture::Mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast) =
-    Continuum(mixture, processes, nrank, lfast)
+Continuum(mixture::Mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence) =
+    Continuum(mixture, processes, nrank, lfast, Float64(vturb))
 
-function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges)
-    mixture, nrank, lfast = continuum.mixture, continuum.nrank, continuum.lfast
+# the lines in the bins: the `nrank` strongest of each bin by emissivity (rlbin with lopak = 0 over the lines of data type 4), each put in with `add_line!`
+function add_lines!(arrays, continuum::Continuum, balance, T, ntot, radiation::Radiation, edges, emissivities)
+    mixture, E = continuum.mixture, radiation.E
+    hc = constants().hc_eVÅ_single
+    λmin, λmax = hc/E[end], hc/E[1]
+    ranked = Dict{Int, Vector{Tuple{Float64, Int, Int}}}()
+    for k in eachindex(mixture.elements), (indices, records) in mixture.elements[k].groups, i in eachindex(records)
+        coef, j = records[i], indices[i]
+        (coef.rtype == line_data_type && hasproperty(coef, :λ)) || continue
+        emissivity = sum(emissivities[k][j])
+        (edges[k][j] < line_rank_floor && emissivity < line_rank_floor) && continue
+        elin = abs(Float64(coef.λ))
+        (λmin <= elin <= λmax) || continue
+        list = get!(ranked, nbin(radiation, hc/(line_bin_floor + elin)), Tuple{Float64, Int, Int}[])
+        rank!(list, (emissivity, k, j), continuum.nrank)
+    end
+    for bin in sort!(collect(keys(ranked))), (_, k, j) in ranked[bin]
+        coef = mixture.elements[k].rates[j]
+        add_line!(arrays, radiation, coef, edges[k][j], emissivities[k][j], T; vturb=continuum.vturb)
+    end
+    arrays
+end
+
+function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges; emissivities=nothing)
+    mixture, nrank, lfast, vturb = continuum.mixture, continuum.nrank, continuum.lfast, continuum.vturb
     E = radiation.E
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     arrays = Opacity(length(E))
@@ -63,10 +88,9 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
         eth = rank_energy(coef)
         (E[1] < eth < E[end]) || continue
         list = get!(ranked, nbin(radiation, eth), Tuple{Float64, Int, Int}[])
-        position = findfirst(entry -> strength > entry[1], list)
-        position === nothing ? length(list) < nrank && push!(list, (strength, k, j)) : (insert!(list, position, (strength, k, j));
-            length(list) > nrank && pop!(list))
+        rank!(list, (strength, k, j), nrank)
     end
+    emissivities === nothing || add_lines!(arrays, continuum, balance, T, ntot, radiation, edges, emissivities)
     called = 0
     for k in eachindex(mixture.elements)
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
