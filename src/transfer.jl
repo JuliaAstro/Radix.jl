@@ -163,6 +163,21 @@ function escape_probabilities(mixture::Mixture, depths::OpticalDepths; cfrac=0.0
     end
 end
 
+const luminosity_unit = 1e38            # the spectra of XSTAR are in units of 10³⁸ erg s⁻¹
+const step_flux_min = Float64(1f-12)    # step: the bins whose spectrum (in these units) is below this do not limit the thickness of the zone
+const step_opacity_floor = 1e-49
+const step_default_emult = 0.75         # emult: the optical depth that a zone is allowed to have in the bin of the largest opacity
+const step_default_taumax = 5.0         # taumax: the bins that are more opaque than this before the zone do not limit it
+const step_energy_min = 1.0             # ectt: the lowest energy (eV) that limits the zone
+const step_default_steps = 2            # numrec: nsteps of XSTAR, its largest zone is `r/numrec`
+
+# the zones of `march_zones`: a vector of (r, Δr) or a function of the zones so far (the results, the continuum depth and the `Transmitted`) that gives the next (r, Δr) or nothing
+function zone_source(zones::AbstractVector)
+    index = 0
+    (results, dpthc, spectrum) -> (index += 1; index <= length(zones) ? zones[index] : nothing)
+end
+zone_source(zones) = zones
+
 const transmission_tau_min = 0.01       # heatt: below this optical depth of a zone the step of the flux is linear in it
 const transmission_floor = 1e-49        # heatt: the opacity is not below this
 
@@ -220,7 +235,7 @@ end
     march_zones(mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, diffuse=true, lines=true, vturb=default_turbulence, kw...)
 
 The zones of a slab, one after the other, for a point source of the spectrum `L` (erg s⁻¹ erg⁻¹, 10³⁸ erg/s × the XSTAR file) on the
-energy grid `E`: `zones` is a vector of `(r, Δr)`, the distance of the zone from the source and its thickness (cm), each solved at
+energy grid `E`: `zones` is a vector of `(r, Δr)`, the distance of the zone from the source and its thickness (cm) (or a function of the results, `dpthc` and `Transmitted` so far that gives the next, `march_slab`), each solved at
 its own radius with the radiation of the incident spectrum attenuated by the continuum depth of the zones before it,
 `exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
 edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
@@ -244,7 +259,11 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
     dpthcont = zeros(length(E))
     spectrum = Transmitted(L)
     results = NamedTuple[]
-    for (r, Δr) in zones
+    next_zone = zone_source(zones)
+    while true
+        step = next_zone(results, dpthc, spectrum)
+        step === nothing && break
+        r, Δr = step
         incident = point_source(E, spectrum.L, r)
         radiation = map_spectrum(incident)
         escape = escape_probabilities(mixture, depths; cfrac)
@@ -266,4 +285,42 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         dpthcont .+= continuum.continuum .* Δr
     end
     (; zones=results, depths, dpthc, dpthcont, spectrum)
+end
+
+"""
+    march_slab(mixture, ntot, processes, E, L; r, column, emult=0.75, taumax=5.0, ectt=1.0, steps=2, kw...)
+
+The zones of a slab of the hydrogen column density `column` (cm⁻²) and the constant density `ntot` (cm⁻³) starting at the distance `r` (cm) of the source, with the thickness of the zones chosen
+as XSTAR's `step` does, and each solved as in `march_zones` (to which `kw` goes). The first zone has no thickness. The thickness of each of the others is the smallest of `r/steps`,
+the column that is left and `emult/κ` for the bins above `ectt` eV whose depth `dpthc` before the zone is not above `taumax` and whose spectrum
+is above 10⁻¹² (in 10³⁸ erg s⁻¹ erg⁻¹), with `κ` the opacity of the zone before (lines included). The zones go on while the column of those so far is below `column`.
+Returns what `march_zones` does.
+"""
+function march_slab(mixture::Mixture, ntot, processes, E, L; r, column, emult=step_default_emult, taumax=step_default_taumax,
+        ectt=step_energy_min, steps=step_default_steps, kw...)
+    position, depth, last = float(r), 0.0, nothing
+    source = function (results, dpthc, spectrum)
+        if last !== nothing
+            position += last
+            depth += ntot*last
+        end
+        depth < column || return nothing
+        thickness = isempty(results) ? 0.0 :
+            step_thickness(results[end].opacity.total, E, spectrum.L, dpthc, position, depth, ntot, column, emult, taumax, ectt, steps)
+        last = thickness
+        (position, thickness)
+    end
+    march_zones(mixture, ntot, processes, E, L, source; kw...)
+end
+
+# step: the thickness of the next zone from the opacity of the one before
+function step_thickness(opacity, E, L, dpthc, r, depth, ntot, column, emult, taumax, ectt, steps)
+    thickness = min(column/ntot, r/steps)
+    for kl in eachindex(E)
+        limit = emult/max(opacity[kl], step_opacity_floor)
+        if E[kl] > ectt && dpthc[kl] <= taumax && L[kl] > step_flux_min*luminosity_unit
+            thickness = min(thickness, limit)
+        end
+    end
+    min(thickness, (column - depth)/ntot)
 end
