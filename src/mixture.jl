@@ -137,20 +137,25 @@ function bracket_electron_fraction(evaluate, xee, elcter; tolerance)
 end
 
 """
-    heating_cooling(mixture, balance, T, ntot, compton; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+    heating_cooling(mixture, balance, T, ntot, processes; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
 
 The heating and cooling (erg cm⁻³ s⁻¹) of the gas of `mixture` at the temperature `T` (10⁴ K) and hydrogen density `ntot`
-whose populations are those of `balance` (from `ionization_balance`, at the same `T`, `ntot` and `radiation`); `compton` is
-the `ComptonTable`. The totals of XSTAR's `calc_hmc_all` and `heatf`: the elements (`element_heating`, weighted by their
-abundances) plus the Compton heating and cooling, the free-free heating and the bremsstrahlung cooling.
+whose populations are those of `balance` (from `ionization_balance`, at the same `T`, `ntot` and `radiation`). `processes` is a collection of
+`AbstractContinuum`es (`standard_processes(compton)`: Compton and Thomson scattering, free-free absorption and bremsstrahlung): the totals of XSTAR's `calc_hmc_all` and
+`heatf` are the elements (`element_heating`, weighted by their abundances) plus the `heating` and `cooling` derived from each process.
 
-Returns a named tuple with `heating` and `cooling` (the radiative energy that the gas absorbs and emits: `httot`,
-`cltot`), `imbalance` = `2 (heating - cooling)/(heating + cooling)` (`hmctot`, what the temperature is iterated to zero),
-`heating2` and `cooling2` (the same for the energy of the electrons), the terms `compton_heating`, `compton_cooling`,
-`free_free_heating` and `bremsstrahlung_cooling`, and the `heating` and `cooling` of each element, weighted by its
-abundance, in the order of `mixture.Z` (as `elements`).
+Returns a named tuple with `heating` and `cooling` (the radiative energy that the gas absorbs and emits: `httot`, `cltot`), `imbalance` =
+`2 (heating - cooling)/(heating + cooling)` (`hmctot`, what the temperature is iterated to zero), `heating2` and `cooling2` (the same for
+the energy of the electrons), `processes`, a vector with the `process`, its `heating` and its `cooling`, and `elements`, the `heating`, `cooling`,
+`heating2` and `cooling2` of each element weighted by its abundance, in the order of `mixture.Z`.
 """
-function heating_cooling(mixture::Mixture, balance, T, ntot, compton::ComptonTable; radiation=NO_RADIATION, escape=nothing,
+# the heating and cooling of one process, with the process
+function process_term(process, radiation, T, nₑ)
+    h, c = heating_cooling(process, radiation, T, nₑ)
+    (; process, heating=h, cooling=c)
+end
+
+function heating_cooling(mixture::Mixture, balance, T, ntot, processes; radiation=NO_RADIATION, escape=nothing,
         lfast=photoionization_lfast)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     elements = Vector{NTuple{4, Float64}}(undef, length(mixture.elements))
@@ -158,24 +163,18 @@ function heating_cooling(mixture::Mixture, balance, T, ntot, compton::ComptonTab
         elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape=element_escape(escape, k), lfast)
     end
     weighted = [mixture.abundance[k] .* elements[k] for k in eachindex(elements)]
-    K = constants()
-    cmp1, cmp2 = compton_integrals(compton, radiation, T)
-    nₑ = balance.nₑ
-    compton_heating = cmp1*nₑ*K.ergsev
-    compton_cooling = T*K.kT_eV*cmp2*nₑ*K.ergsev
-    free_free = free_free_heating(radiation, T, nₑ)
-    bremsstrahlung = bremsstrahlung_cooling(radiation, T, nₑ)
-    heating = sum(w[1] for w in weighted) + compton_heating + free_free
-    cooling = sum(w[2] for w in weighted) + compton_cooling + bremsstrahlung
-    heating2 = sum(w[3] for w in weighted) + compton_heating + free_free
-    cooling2 = sum(w[4] for w in weighted) + compton_cooling + bremsstrahlung
-    (; heating, cooling, imbalance=2*(heating - cooling)/(heating_floor + heating + cooling), heating2, cooling2,
-       compton_heating, compton_cooling, free_free_heating=free_free, bremsstrahlung_cooling=bremsstrahlung,
+    terms = [process_term(process, radiation, T, balance.nₑ) for process in processes]
+    process_heating, process_cooling = sum(t.heating for t in terms; init=0.0), sum(t.cooling for t in terms; init=0.0)
+    total_heating = sum(w[1] for w in weighted) + process_heating
+    total_cooling = sum(w[2] for w in weighted) + process_cooling
+    (; heating=total_heating, cooling=total_cooling, imbalance=2*(total_heating - total_cooling)/(heating_floor + total_heating + total_cooling),
+       heating2=sum(w[3] for w in weighted) + process_heating, cooling2=sum(w[4] for w in weighted) + process_cooling,
+       processes=terms,
        elements=[(; heating=w[1], cooling=w[2], heating2=w[3], cooling2=w[4]) for w in weighted])
 end
 
 """
-    thermal_equilibrium(mixture, ntot, compton; radiation=NO_RADIATION, escape=nothing, T=1.0, xee=1.0, T_min=default_T_min,
+    thermal_equilibrium(mixture, ntot, processes; radiation=NO_RADIATION, escape=nothing, T=1.0, xee=1.0, T_min=default_T_min,
                         tolerance=imbalance_tolerance, iterations=temperature_iterations)
 
 The temperature at which the heating and cooling of the gas balance, and the ionization balance there, for the hydrogen
@@ -190,14 +189,14 @@ Returns the named tuple of `heating_cooling` for the last temperature with the a
 `populations`, `fractions` (those of `ionization_balance`), `evaluations` (the temperatures tried), `converged`,
 and `trace`, the temperatures tried with their imbalance.
 """
-function thermal_equilibrium(mixture::Mixture, ntot, compton::ComptonTable; radiation=NO_RADIATION, escape=nothing, T=1.0,
+function thermal_equilibrium(mixture::Mixture, ntot, processes; radiation=NO_RADIATION, escape=nothing, T=1.0,
         xee=1.0, T_min=default_T_min, lfast=photoionization_lfast, tolerance=imbalance_tolerance, iterations=temperature_iterations)
     xee = Float64(xee)
     neutral = 0.0
     local balance, energy
     function evaluate(t)
         balance = ionization_balance(mixture, t, ntot; radiation, escape, xee, neutral, lfast)
-        energy = heating_cooling(mixture, balance, t, ntot, compton; radiation, escape, lfast)
+        energy = heating_cooling(mixture, balance, t, ntot, processes; radiation, escape, lfast)
         xee, neutral = balance.xee, balance.nₕ
         energy.imbalance
     end

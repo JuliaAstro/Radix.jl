@@ -238,9 +238,14 @@ iteration of `dsec`. What the code does and what was found:
   and `nbinc` never returns a bin above `n - max(2, n/50)`. With the same grid every bin above it takes the flux of that bin: a flat
   tail where a power law falls. The Compton heating, which the high energies dominate, is 50% larger than for the unmapped spectrum for an E⁻¹
   spectrum on the grid of 999 bins. Radix does not map the spectrum itself: pass `map_spectrum(radiation)` to reproduce XSTAR.
-- **Compton.** `coheat.dat` (a table of 101 × 101 values, read by `load_compton`) is in the data directory of XSTAR, next to `atdb.fits`.
-  `compton_integrals` is checked against the real F90 `comp2` (`test/reference/ucalc/drvcomp.f90`) to 10⁻⁶. Free-free heating and
-  bremsstrahlung cooling use XSTAR's fitted coefficients (Gaunt factor 1, ion density 1.4 nₑ).
+- **Compton.** `coheat.dat` (a table of 101 × 101 values, read by `load(Compton, path)`) is in the data directory of XSTAR, next to `atdb.fits`.
+  `integral(Compton, radiation, T)` (the `comp2` integral; `σ(compton, Eph, Te)` is `cmpfnc`) is checked against the real F90 `comp2` (`test/reference/ucalc/drvcomp.f90`) to 10⁻⁶. The processes that
+  are not tied to levels are types (`src/processes.jl`, subtypes of `AbstractContinuum`, whose coefficients are the functions `α` (absorption), `j` (emission) and `σ` (scattering)) with generic functions: `heating(process, radiation, T, nₑ)`,
+  `cooling(...)`, `heating_cooling(...)` (both) and `α(process, E, T)`, `σ(process, E, T)`, the absorption or scattering coefficient, since each coefficient is a function of the process (the opacity is that times the density, `opacity(process, E, T, nₑ)`); `FreeFree()` (absorption: heating and opacity),
+  `Bremsstrahlung()` (emission: cooling), `Compton(Te, Eph, σ)` (heating and cooling; the energy exchanged per electron is the coefficients `heating(compton, E, T)` and `cooling(compton, E, T)`, from which the heating and cooling derive) and `Thomson(cfrac)` (an opacity, which is also in the
+  continuum opacity `opakcont`: `AbstractScattering`). A process without a heating, cooling or opacity has 0. `standard_processes(compton)` makes the four
+  of XSTAR; `heating_cooling(mixture, ...)`, `thermal_equilibrium` and `march_zones` take such a collection and report the term of each
+  (`hc.processes`). The free-free terms use XSTAR's fitted coefficients (Gaunt factor 1, ion density 1.4 nₑ).
 - **Photoionization that leaves an excited level of the next ion**: ucalc reads the energy of the final level from stale memory, and
   the energy measured from the threshold is a difference of nearly equal terms (it reached 10⁵ times the cooling). These records are left
   out of the second channel (the first, from zero, is verified for every parent). XSTAR keeps finite values for them, so the second channel
@@ -276,9 +281,9 @@ the depths in `calc_hmc_ion`:
   (`depth_inward`) and `xout_rrc1.fits` (its `depth_outward`, which is the inward one) are their sum. This reproduces the line depths of
   all 451 lines above 10⁻⁹ to 1% (median 0.9999984, with XSTAR's constants) and the edge depths of the H-like and He-like ions
   (the others have several records with the same level and threshold and no parent level in the table to tell them apart) to 0.1-0.3%.
-- **Continuum opacity and attenuation** (`src/continuum.jl`, `continuum_opacity`, used by `march_zones`). `calc_emis_all` starts
-  `opakc` at Thomson scattering `nₑ σ_T (1 - cfrac)`, adds the photoionization opacity of the records (called with the populations as
-  `abund`) and then free-free (`free_free_opacity`, only in the total, not in `opakcont`); `stpcut` adds `opakc Δr` to `dpthc`. Only the
+- **Continuum opacity and attenuation** (`src/continuum.jl`, `Continuum`, used by `march_zones`). `calc_emis_all` starts
+  `opakc` at Thomson scattering `nₑ σ_T (1 - cfrac)` (`Thomson(cfrac)` (the coefficient `σ_T (1 - cfrac)` times `nₑ`)), adds the photoionization opacity of the records (called with the populations as
+  `abund`) and then free-free (`FreeFree()` (its coefficient times `nₑ nᵢ`), only in the total, not in `opakcont`); `stpcut` adds `opakc Δr` to `dpthc`. Only the
   `nrank = 10` strongest edges of each energy bin enter (`rlbin`, ranked by the edge opacity of the zone; the bin of an edge is that
   of its edge energy, `E_grid[1] × 13.598` for type 49 and `max(0.1, E∞ - E)` of the level for the others, set once by `xstarsetup`)
   and every record of rate type 42. The transmitted spectrum is `incident × exp(-dpthc)`. Against XSTAR's slab of 10²¹ cm⁻²

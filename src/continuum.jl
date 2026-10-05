@@ -18,24 +18,39 @@ end
 const opacity_edge_types = Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoionizeSuper, PhotoRecombX}
 
 """
-    continuum_opacity(mixture, balance, T, ntot, radiation, edges; cfrac=0.0, nrank=rank_per_bin, lfast=photoionization_lfast)
+    Continuum(mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast)
 
-The continuum opacity (cm⁻¹) on the energy grid of `radiation` of the zone whose `balance` (from `ionization_balance`) is at the
-temperature `T` (10⁴ K) and hydrogen density `ntot`, as `calc_emis_all` makes it: Thomson scattering `nₑ σ_T (1 - cfrac)`, the
-photoionization opacity of the records, and the free-free opacity (the last only in `total`, not in `continuum`). `edges` are the
-edge opacities of the records (`record_opacities`), which rank them: as `rlbin` does, only the `nrank` strongest edges of each energy
-bin (by the edge energy of `rank_energy`) enter, and every record of rate type 42. The lines (`linopac`) are not added.
+The continuum opacity of the gas of `mixture` (cm⁻¹), as `calc_emis_all` makes it. Its `opacity`,
+
+    opacity(continuum, balance, T, ntot, radiation, edges)
+
+of the zone whose `balance` (from `ionization_balance`) is at the temperature `T` (10⁴ K) and hydrogen density `ntot`, on the energy grid of
+`radiation`: the `opacity` of each of the `processes` (`standard_processes`: Thomson scattering and free-free absorption, the processes
+times their densities; the scatterers (`AbstractScattering`) are in `continuum` as well as in `total`) and the photoionization opacity of
+the records. `edges` are the edge opacities of the records (`record_opacities`), which rank them: as `rlbin` does, only the `nrank` strongest
+edges of each energy bin (by the edge energy of `rank_energy`) enter, and every record of rate type 42. The lines (`linopac`) are not added.
 
 Returns `(; total, continuum, edges)`, the two arrays of the opacity and the number of records called.
 """
-function continuum_opacity(mixture::Mixture, balance, T, ntot, radiation::Radiation, edges; cfrac=0.0, nrank=rank_per_bin,
-        lfast=photoionization_lfast)
-    K = constants()
+struct Continuum{M<:Mixture, P}
+    mixture::M
+    processes::P
+    nrank::Int
+    lfast::Int
+end
+Continuum(mixture::Mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast) =
+    Continuum(mixture, processes, nrank, lfast)
+
+function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges)
+    mixture, nrank, lfast = continuum.mixture, continuum.nrank, continuum.lfast
     E = radiation.E
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
-    opacity = Opacity(length(E))
-    thomson = balance.nₑ*K.sigma_thomson*max(0.0, 1 - cfrac)
-    fill!(opacity.total, thomson); fill!(opacity.continuum, thomson)
+    arrays = Opacity(length(E))
+    for process in continuum.processes
+        o = opacity(process, E, T, balance.nₑ)
+        arrays.total .+= o
+        process isa AbstractScattering && (arrays.continuum .+= o)
+    end
 
     # the strongest `nrank` edges of each bin, in the order of the records (a later record of equal strength ranks lower)
     ranked = Dict{Int, Vector{Tuple{Float64, Int, Int}}}()
@@ -60,10 +75,9 @@ function continuum_opacity(mixture::Mixture, balance, T, ntot, radiation::Radiat
             coef, j = records[i], indices[i]
             (j in selected || (coef isa PhotoionizeDamp && coef.rtype == damp_rate_type)) || continue
             abund = (x[el.lo[j]]*abundance, x[el.up[j]]*abundance)
-            rate(coef, cell; radiation, abund, lfast, ptmp=optically_thin, opacity)
+            rate(coef, cell; radiation, abund, lfast, ptmp=optically_thin, opacity=arrays)
             called += 1
         end
     end
-    total = opacity.total .+ free_free_opacity(E, T, balance.nₑ)
-    (; total, continuum=opacity.continuum, edges=called)
+    (; total=arrays.total, continuum=arrays.continuum, edges=called)
 end

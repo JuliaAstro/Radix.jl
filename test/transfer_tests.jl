@@ -64,15 +64,16 @@ function toy_transfer_tests()
             rad = Radix.Radiation(E, 1e10 ./ E)
             K = Radix.constants()
             T = 1.0
-            op = Radix.continuum_opacity(mixture, balance, T, ntot, rad, [[0.0, 0.0]])
+            continuum = Radix.Continuum(mixture, (Radix.Thomson(), Radix.FreeFree()))
+            op = Radix.opacity(continuum, balance, T, ntot, rad, [[0.0, 0.0]])
             thomson = balance.nₑ*K.sigma_thomson
             @test all(op.continuum .== thomson)
-            @test op.total ≈ thomson .+ Radix.free_free_opacity(E, T, balance.nₑ)
+            @test op.total ≈ thomson .+ Radix.opacity(Radix.FreeFree(), E, T, balance.nₑ)
             @test op.edges == 0
-            @test Radix.continuum_opacity(mixture, balance, T, ntot, rad, [[0.0, 0.0]]; cfrac=0.25).continuum ≈ fill(0.75*thomson, length(E))
+            @test Radix.opacity(Radix.Continuum(mixture, (Radix.Thomson(0.25), Radix.FreeFree())), balance, T, ntot, rad, [[0.0, 0.0]]).continuum ≈ fill(0.75*thomson, length(E))
             # the free-free opacity is that of the heating
-            ff = Radix.free_free_opacity(E, T, 1e4)
-            @test Radix.free_free_heating(rad, T, 1e4) ≈ K.ergsev*sum((rad.F[k]*ff[k] + rad.F[k - 1]*ff[k - 1])*(E[k] - E[k - 1])/2 for k in 2:length(E))
+            ff = Radix.opacity(Radix.FreeFree(), E, T, 1e4)
+            @test Radix.heating(Radix.FreeFree(), rad, T, 1e4) ≈ K.ergsev*sum((rad.F[k]*ff[k] + rad.F[k - 1]*ff[k - 1])*(E[k] - E[k - 1])/2 for k in 2:length(E))
             @test all(>=(0), ff) && ff[end] > ff[1]*1e-30
         end
 
@@ -92,10 +93,10 @@ function toy_transfer_tests()
             hrate = RecombiningToyRate(Int8(3), Int32(5), 2e-4)
             helements = Radix.Elements([[hrate]], hlevels, [5])
             hmixture = Radix.Mixture(hlevels, [1], [1.0], [helements])
-            compton = Radix.ComptonTable([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0])
+            processes = Radix.standard_processes(Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0]))
             E = Radix.xstar_energy_grid(999)
             L = 1e30 ./ E
-            run = Radix.march_zones(hmixture, 1e4, compton, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false)
+            run = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false)
             @test length(run.zones) == 2
             @test [z.r for z in run.zones] == [1e13, 2e13] && [z.Δr for z in run.zones] == [1e12, 3e12]
             @test run.zones[1].radiation.F == Radix.map_spectrum(Radix.point_source(E, L, 1e13)).F
@@ -103,12 +104,12 @@ function toy_transfer_tests()
             @test all(z -> z.T == 1.0 && z.xee == 1.0, run.zones)
             @test run.depths.inward == [[0.0]] && run.zones[1].escape == [[(0.5, 0.5)]]
             # the continuum is attenuated by the depth of the zones before (here Thomson scattering): exp(-Σ opacity Δr)
-            thick = Radix.march_zones(hmixture, 1e4, compton, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false)
+            thick = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false)
             thomson = thick.zones[1].nₑ*Radix.constants().sigma_thomson
-            @test thick.zones[1].opacity.total[10] ≈ thomson + Radix.free_free_opacity(E, 1.0, thick.zones[1].nₑ)[10]
+            @test thick.zones[1].opacity.total[10] ≈ thomson + Radix.opacity(Radix.FreeFree(), E, 1.0, thick.zones[1].nₑ)[10]
             @test thick.zones[2].radiation.F[10] ≈ thick.zones[1].radiation.F[10]*exp(-thick.zones[1].opacity.total[10]*1e17) rtol=1e-12
             @test thick.dpthc[10] ≈ 2*thick.zones[1].opacity.total[10]*1e17
-            flat = Radix.march_zones(hmixture, 1e4, compton, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
+            flat = Radix.march_zones(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
             @test flat.zones[2].radiation.F == flat.zones[1].radiation.F
             @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
         end
@@ -122,7 +123,7 @@ function transfer_balance_tests(db)
         levels = Radix.levels(db)
         coheat = joinpath(dirname(get(ENV, "RADIX_ATDB", "")), "coheat.dat")
         isfile(coheat) || (@info "Skipping the transfer tests (coheat.dat next to atdb.fits is needed)"; return)
-        compton = Radix.load_compton(coheat)
+        processes = Radix.standard_processes(Radix.load(Radix.Compton, coheat))
         mixture = Radix.Mixture(db, levels; multiplier=Dict(3 => 0.0, 4 => 0.0, 5 => 0.0))
         dir = joinpath(@__DIR__, "reference", "xstar_pow_xi2")
         spectrum = fits(joinpath(dir, "xout_cont1.fits"))[3].data
@@ -130,7 +131,7 @@ function transfer_balance_tests(db)
         edges = fits(joinpath(dir, "xout_rrc1.fits"))[3].data
         abundances = fits(joinpath(dir, "xout_abund1.fits"))[2].data
         E, L = Float64.(spectrum.energy), Float64.(spectrum.incident)*1e38
-        run = Radix.march_zones(mixture, 1e4, compton, E, L, [(1e13, 5e12), (1.5e13, 5e12)]; T=100.0, iterate=false)
+        run = Radix.march_zones(mixture, 1e4, processes, E, L, [(1e13, 5e12), (1.5e13, 5e12)]; T=100.0, iterate=false)
         ionlabel = Dict(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion)
         label(ion, level) = strip(levels[(Int(ion), Int(level))].label)
 
@@ -141,7 +142,7 @@ function transfer_balance_tests(db)
             # the optical depths are those of the first zone's lines, which are tiny: the second zone is as without trapping
             @test maximum(maximum, run.depths.inward) < 6e-3
             @test run.zones[2].heating ≈ Radix.heating_cooling(mixture, Radix.ionization_balance(mixture, 100.0, 1e4;
-                radiation=run.zones[2].radiation, iterate=false), 100.0, 1e4, compton; radiation=run.zones[2].radiation).heating rtol=1e-5
+                radiation=run.zones[2].radiation, iterate=false), 100.0, 1e4, processes; radiation=run.zones[2].radiation).heating rtol=1e-5
         end
 
         @testset "optical depths of the lines" begin
@@ -175,7 +176,7 @@ function transfer_balance_tests(db)
             Es, Is, Ts = Float64.(slab.energy), Float64.(slab.incident), Float64.(slab.transmitted)
             r0 = 3.16228e20
             zones = [(r0 + k*1e17/6, 1e17/6) for k in 0:5]
-            thickrun = Radix.march_zones(mixture, 1e4, compton, Es, Is*1e38, zones; T=10.0, iterate=false)
+            thickrun = Radix.march_zones(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false)
             τx = -log.(Ts ./ Is)
             ratio = thickrun.dpthc ./ τx
             @test all(τx .> 6e-4)

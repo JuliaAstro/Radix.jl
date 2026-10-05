@@ -3,6 +3,9 @@
 
 using FITSFiles
 
+# the term of a process in the result of heating_cooling
+term(hc, P) = only(t for t in hc.processes if t.process isa P)
+
 function toy_heating_tests()
     @testset "Heating and cooling" begin
         K = Radix.constants()
@@ -11,30 +14,43 @@ function toy_heating_tests()
             # coheat.dat: i j sx x e d (the third, fifth and sixth columns are read)
             text = join(["    $i   $j  $(sx)E+00  0.1000E+08  $(e)E+00  $(round(1.0 + 2.0*sx + 3.0*e, digits=4))E+00\n"
                          for (i, sx) in enumerate((1.0, 2.0, 4.0)) for (j, e) in enumerate((0.5, 1.0, 3.0))], "")
-            table = Radix.load_compton(IOBuffer(text))
-            @test table.sx == [1.0, 2.0, 4.0] && table.e == [0.5, 1.0, 3.0] && size(table.d) == (3, 3)
-            @test table.d[2, 3] == 1.0 + 2.0*2.0 + 3.0*3.0
-            # interpolation of a linear function is exact, below the limit energy the limit 4 sx - ee is used
-            for (ee, sx) in ((0.7, 1.5), (2.0, 3.0), (1.2, 2.2))
-                @test Radix.compton_function(table, ee, sx) ≈ 1.0 + 2.0*sx + 3.0*ee
+            table = Radix.load(Radix.Compton, IOBuffer(text))
+            @test table.Te == [1.0, 2.0, 4.0] && table.Eph == [0.5, 1.0, 3.0] && size(table.Es) == (3, 3)
+            @test table.Es[2, 3] == 1.0 + 2.0*2.0 + 3.0*3.0
+            # from a file, as the stream
+            mktemp() do path, io
+                write(io, text); close(io)
+                from_file = Radix.load(Radix.Compton, path)
+                @test from_file.Te == table.Te && from_file.Eph == table.Eph && from_file.Es == table.Es
             end
-            @test Radix.compton_function(table, 5e-5, 0.3) == 4*0.3 - 5e-5
+            # interpolation of a linear function is exact, below the limit energy the limit 4 Te - Eph is used
+            for (Eph, Te) in ((0.7, 1.5), (2.0, 3.0), (1.2, 2.2))
+                @test Radix.σ(table, Eph, Te) ≈ 1.0 + 2.0*Te + 3.0*Eph
+            end
+            @test Radix.σ(table, 5e-5, 0.3) == 4*0.3 - 5e-5
         end
 
         @testset "the integrals" begin
-            table = Radix.load_compton(IOBuffer(join(["    $i   $j  $(sx)E+00  0.1000E+08  $(e)E+00  $(1.0 + 2.0*sx + 3.0*e)E+00\n"
+            table = Radix.load(Radix.Compton, IOBuffer(join(["    $i   $j  $(sx)E+00  0.1000E+08  $(e)E+00  $(1.0 + 2.0*sx + 3.0*e)E+00\n"
                 for (i, sx) in enumerate((1e-3, 1e-2, 1e-1)) for (j, e) in enumerate((1e-3, 1e-1, 10.0))], "")))
             E = [1e3, 1e4, 1e5]; F = [3.0, 2.0, 1.0]
             T = 1.0
             ekt = T*K.kT_eV
-            sxx = (ekt + Radix.compton_sx_floor)/K.electron_rest_eV
-            cmp1, cmp2 = Radix.compton_integrals(table, Radix.Radiation(E, F), T)
+            Te = (ekt + Radix.compton_Te_floor)/K.electron_rest_eV
+            cmp1, cmp2 = Radix.integral(table, Radix.Radiation(E, F), T)
             # by hand: heating σ ∫ F E/m c² dE, and the cooling coefficient (σ ∫ F cmpfnc dE + heating)/kT
             trap(g) = sum((g[k] + g[k - 1])*(E[k] - E[k - 1])/2 for k in 2:3)
             hfake = K.sigma_thomson*trap(F .* E ./ K.electron_rest_eV)
-            cohc = -K.sigma_thomson*trap(F .* Radix.compton_function.(Ref(table), E ./ K.electron_rest_eV, sxx))
+            cohc = -K.sigma_thomson*trap(F .* Radix.σ.(Ref(table), E ./ K.electron_rest_eV, Te))
             @test cmp1 ≈ hfake
             @test cmp2 ≈ (-cohc + hfake)/ekt
+            # the process: heating cmp1 nₑ, cooling kT cmp2 nₑ (eV → erg), from one pass for both
+            compton = table
+            @test compton isa Radix.AbstractContinuum
+            @test Radix.heating(compton, Radix.Radiation(E, F), T, 1e4) ≈ cmp1*1e4*K.ergsev
+            @test Radix.cooling(compton, Radix.Radiation(E, F), T, 1e4) ≈ ekt*cmp2*1e4*K.ergsev
+            @test Radix.heating_cooling(compton, Radix.Radiation(E, F), T, 1e4) ==
+                  (Radix.heating(compton, Radix.Radiation(E, F), T, 1e4), Radix.cooling(compton, Radix.Radiation(E, F), T, 1e4))
         end
 
         @testset "free-free and bremsstrahlung" begin
@@ -44,10 +60,46 @@ function toy_heating_tests()
             ekt = T*K.kT_eV
             α(e) = Radix.ff_absorption_coeff*nₑ*(Radix.ion_density_factor*nₑ)/sqrt(T)/e^3*(1 - exp(-e/ekt))
             j(e) = Radix.ff_emission_coeff*nₑ*(Radix.ion_density_factor*nₑ)*exp(-e/ekt)/sqrt(T)
-            @test Radix.free_free_heating(rad, T, nₑ) ≈ K.ergsev*sum((F[k]*α(E[k]) + F[k - 1]*α(E[k - 1]))*(E[k] - E[k - 1])/2 for k in 2:3)
-            @test Radix.bremsstrahlung_cooling(rad, T, nₑ) ≈ K.ergsev*sum((j(E[k]) + j(E[k - 1]))*(E[k] - E[k - 1])/2 for k in 2:3)
-            @test Radix.bremsstrahlung_cooling(rad, T, 2nₑ) ≈ 4*Radix.bremsstrahlung_cooling(rad, T, nₑ)       # ∝ nₑ²
-            @test Radix.free_free_heating(Radix.Radiation(E, 2 .* F), T, nₑ) ≈ 2*Radix.free_free_heating(rad, T, nₑ)
+            @test Radix.heating(Radix.FreeFree(), rad, T, nₑ) ≈ K.ergsev*sum((F[k]*α(E[k]) + F[k - 1]*α(E[k - 1]))*(E[k] - E[k - 1])/2 for k in 2:3)
+            @test Radix.cooling(Radix.Bremsstrahlung(), rad, T, nₑ) ≈ K.ergsev*sum((j(E[k]) + j(E[k - 1]))*(E[k] - E[k - 1])/2 for k in 2:3)
+            @test Radix.cooling(Radix.Bremsstrahlung(), rad, T, 2nₑ) ≈ 4*Radix.cooling(Radix.Bremsstrahlung(), rad, T, nₑ)       # ∝ nₑ²
+            @test Radix.heating(Radix.FreeFree(), Radix.Radiation(E, 2 .* F), T, nₑ) ≈ 2*Radix.heating(Radix.FreeFree(), rad, T, nₑ)
+            # a process that does not heat or cool has 0; heating_cooling gives both
+            @test Radix.cooling(Radix.FreeFree(), rad, T, nₑ) == 0 && Radix.heating(Radix.Bremsstrahlung(), rad, T, nₑ) == 0
+            @test Radix.heating_cooling(Radix.FreeFree(), rad, T, nₑ) == (Radix.heating(Radix.FreeFree(), rad, T, nₑ), 0.0)
+            @test Radix.heating_cooling(Radix.Bremsstrahlung(), rad, T, nₑ) == (0.0, Radix.cooling(Radix.Bremsstrahlung(), rad, T, nₑ))
+            @test all(p -> p isa Radix.AbstractContinuum, (Radix.FreeFree(), Radix.Bremsstrahlung(), Radix.Thomson()))
+        end
+
+        @testset "the processes and their opacities" begin
+            E = [1e2, 1e3, 1e4]
+            rad = Radix.Radiation(E, [5.0, 4.0, 3.0])
+            T, nₑ = 2.0, 1e4
+            ekt = T*K.kT_eV
+            # free-free: the absorption coefficient, with the stimulated emission; in the total opacity only
+            ff = Radix.α(Radix.FreeFree(), E, T)
+            @test ff ≈ [Radix.ff_absorption_coeff/sqrt(T)/e^3*(1 - exp(-e/ekt)) for e in E]
+            @test Radix.α(Radix.FreeFree(), rad, T) == ff                          # (a Radiation gives its grid)
+            # the opacity is the coefficient times the density that absorbs: nₑ nᵢ with nᵢ = 1.4 nₑ
+            @test Radix.density(Radix.FreeFree(), nₑ) == nₑ*Radix.ion_density_factor*nₑ
+            @test Radix.opacity(Radix.FreeFree(), E, T, nₑ) ≈ Radix.density(Radix.FreeFree(), nₑ) .* ff
+            @test !(Radix.FreeFree() isa Radix.AbstractScattering)
+            # Thomson scattering: nₑ σ_T (1 - cfrac) at every energy, in the continuum as well
+            @test Radix.σ(Radix.Thomson(), E, T) == fill(K.sigma_thomson, 3)               # the coefficient, per electron
+            @test Radix.σ(Radix.Thomson(0.25), E, T) ≈ fill(0.75*K.sigma_thomson, 3)
+            @test Radix.density(Radix.Thomson(), nₑ) == nₑ
+            @test Radix.opacity(Radix.Thomson(0.25), E, T, nₑ) ≈ fill(0.75*nₑ*K.sigma_thomson, 3)
+            @test Radix.Thomson().cfrac == 0 && (Radix.Thomson() isa Radix.AbstractScattering)
+            # the processes without opacity have none, and Thomson scattering neither heats nor cools
+            @test Radix.α(Radix.Bremsstrahlung(), E, T) == zeros(3) && Radix.j(Radix.Bremsstrahlung(), E, T) == Radix.j(Radix.Bremsstrahlung(), rad, T) && Radix.opacity(Radix.Bremsstrahlung(), E, T, nₑ) == zeros(3)
+            compton0 = Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0])
+            @test Radix.σ(compton0, rad, T) == fill(K.sigma_thomson, 3) && Radix.opacity(compton0, rad, T, nₑ) == zeros(3)
+            @test Radix.heating_cooling(Radix.Thomson(), rad, T, nₑ) == (0.0, 0.0)
+            # the processes of XSTAR
+            table = Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0])
+            processes = Radix.standard_processes(table; cfrac=0.1)
+            @test map(typeof, processes) == (Radix.Compton, Radix.FreeFree, Radix.Bremsstrahlung, Radix.Thomson)
+            @test processes[1] === table && processes[4].cfrac == 0.1
         end
 
         @testset "the mapped spectrum" begin
@@ -103,15 +155,17 @@ function toy_heating_tests()
 
         @testset "the totals" begin
             # no radiation: only the bremsstrahlung (T and nₑ dependent) cools besides the line
-            ComptonToy = Radix.ComptonTable([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0])
+            ComptonToy = Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0])
             mixture = Radix.Mixture(levels, [1], [0.5], [elements])
             balance = (; nₑ=1e4, nₕ=0.0, populations=[[0.7, 0.3, 0.0]])
-            hc = Radix.heating_cooling(mixture, balance, 1.0, 1e6, ComptonToy)
+            processes = Radix.standard_processes(ComptonToy)
+            hc = Radix.heating_cooling(mixture, balance, 1.0, 1e6, processes)
             e = Radix.element_heating(elements, Radix.Cell(1.0, 0.0, 1e4, 1e6), [0.7, 0.3, 0.0])
             @test hc.elements[1].cooling ≈ 0.5*e[2] && hc.elements[1].heating == 0
-            @test hc.free_free_heating == 0 && hc.compton_heating == 0
-            @test hc.bremsstrahlung_cooling ≈ Radix.bremsstrahlung_cooling(Radix.NO_RADIATION, 1.0, 1e4)
-            @test hc.cooling ≈ 0.5*e[2] + hc.bremsstrahlung_cooling + hc.compton_cooling
+            @test term(hc, Radix.FreeFree).heating == 0 && term(hc, Radix.Compton).heating == 0
+            @test length(hc.processes) == 4 && term(hc, Radix.Thomson).heating == 0 && term(hc, Radix.Thomson).cooling == 0
+            @test term(hc, Radix.Bremsstrahlung).cooling ≈ Radix.cooling(Radix.Bremsstrahlung(), Radix.NO_RADIATION, 1.0, 1e4)
+            @test hc.cooling ≈ 0.5*e[2] + term(hc, Radix.Bremsstrahlung).cooling + term(hc, Radix.Compton).cooling
             @test hc.imbalance ≈ 2*(hc.heating - hc.cooling)/(1e-37 + hc.heating + hc.cooling) && hc.imbalance < 0
         end
 
@@ -154,8 +208,9 @@ function heating_balance_tests(db)
             @info "Skipping the heating tests (coheat.dat next to atdb.fits is needed)"
             return
         end
-        compton = Radix.load_compton(coheat)
-        @test size(compton.d) == (101, 101) && compton.sx[1] == 1e-7 && compton.e[end] == 100.0
+        compton = Radix.load(Radix.Compton, coheat)
+        processes = Radix.standard_processes(compton)
+        @test size(compton.Es) == (101, 101) && compton.Te[1] == 1e-7 && compton.Eph[end] == 100.0
         mixture = Radix.Mixture(db, levels; multiplier=Dict(3 => 0.0, 4 => 0.0, 5 => 0.0))
         dir = joinpath(@__DIR__, "reference", "xstar_pow_xi2")
         spectrum = fits(joinpath(dir, "xout_cont1.fits"))[3].data
@@ -167,32 +222,32 @@ function heating_balance_tests(db)
         @testset "the Compton integrals of the real comp2" begin
             # drvcomp (test/reference/ucalc) around XSTAR's comp2 on this spectrum at T = 10⁶ K
             exact = Radix.Radiation(E, L ./ (4π*radius^2))             # (the driver's input has F = L/(4π r²), `point_source` the 12.56 of XSTAR)
-            cmp1, cmp2 = Radix.compton_integrals(compton, exact, 100.0)
+            cmp1, cmp2 = Radix.integral(compton, exact, 100.0)
             @test cmp1 ≈ 9.8459456377190043e-9 rtol=1e-6
             @test cmp2 ≈ 8.9007105172073563e-11 rtol=1e-6
         end
 
         @testset "the first zone at the temperature and electron fraction of the reference run" begin
             balance = Radix.ionization_balance(mixture, 100.0, 1e4; radiation=mapped, iterate=false)
-            hc = Radix.heating_cooling(mixture, balance, 100.0, 1e4, compton; radiation=mapped)
+            hc = Radix.heating_cooling(mixture, balance, 100.0, 1e4, processes; radiation=mapped)
             # XSTAR's table of the run with lprint=3 (xstar_pow_xi2_eq/README.md): the totals and the terms that are not elements
-            @test hc.compton_heating ≈ 2.37589869e-16 rtol=2e-3
-            @test hc.compton_cooling ≈ 1.95382798e-16 rtol=2e-3
-            @test hc.free_free_heating ≈ 2.44377767e-26 rtol=1e-3
-            @test hc.bremsstrahlung_cooling ≈ 1.99246730e-16 rtol=1e-3
+            @test term(hc, Radix.Compton).heating ≈ 2.37589869e-16 rtol=2e-3
+            @test term(hc, Radix.Compton).cooling ≈ 1.95382798e-16 rtol=2e-3
+            @test term(hc, Radix.FreeFree).heating ≈ 2.44377767e-26 rtol=1e-3
+            @test term(hc, Radix.Bremsstrahlung).cooling ≈ 1.99246730e-16 rtol=1e-3
             @test hc.heating ≈ 5.20663621e-15 rtol=1e-2           # (the database of the tree: 0.1 %, that of the package of XSTAR: 0.1 %)
             @test hc.cooling ≈ 5.77911452e-15 rtol=1e-2
             @test abs(hc.imbalance - (-0.104221974)) < 3e-3
             @test all(e -> e.heating >= 0 && e.cooling >= 0, hc.elements)
             @test hc.heating2 > 0 && hc.cooling2 > 0
             # without the mapping (the flat tail of bremsmap) the Compton terms are a third lower
-            plain = Radix.heating_cooling(mixture, balance, 100.0, 1e4, compton; radiation=incident)
-            @test plain.compton_heating ≈ hc.compton_heating/1.506 rtol=1e-3
+            plain = Radix.heating_cooling(mixture, balance, 100.0, 1e4, processes; radiation=incident)
+            @test term(plain, Radix.Compton).heating ≈ term(hc, Radix.Compton).heating/1.506 rtol=1e-3
         end
 
         @testset "thermal equilibrium of the first zone" begin
             eq = fits(joinpath(@__DIR__, "reference", "xstar_pow_xi2_eq", "xout_abund1.fits"))[2].data
-            res = Radix.thermal_equilibrium(mixture, 1e4, compton; radiation=mapped, T=100.0)
+            res = Radix.thermal_equilibrium(mixture, 1e4, processes; radiation=mapped, T=100.0)
             @test res.converged && abs(res.imbalance) <= 1e-4
             @test res.xee ≈ eq.x_e[2] rtol=1e-3
             @test res.T ≈ eq.temperature[2] rtol=6e-2             # (2e-4 with the database of the package of XSTAR)
