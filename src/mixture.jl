@@ -15,6 +15,27 @@ const temperature_iterations = 99       # at most this many evaluations of the t
 const default_T_min = 1e-3              # the lowest temperature of the iteration (10⁴ K)
 
 """
+    gas_density(ntot, T)
+
+The hydrogen density (cm⁻³) of the gas at the temperature `T` (10⁴ K): `ntot` if it is a number (constant density), or `ntot(T)` if it is a function, such as `ConstantPressure(P)`.
+"""
+gas_density(ntot::Number, T) = ntot
+gas_density(ntot, T) = ntot(T)
+
+const pressure_per_density = Float64(1.38f-12)    # `xpx = p/1.38e-12/t`: k × 10⁴ K, as a single-precision literal
+const pressure_T_floor = 1e-24
+
+"""
+    ConstantPressure(P)
+
+The hydrogen density at the constant pressure `P` (dyn cm⁻²), as a function of the temperature `T` (10⁴ K): `P/(1.38×10⁻¹² T)` (XSTAR's `lcpres=1`, in which the pressure is that of the hydrogen, `n_H k T`).
+"""
+struct ConstantPressure
+    P::Float64
+end
+(p::ConstantPressure)(T) = p.P/pressure_per_density/max(T, pressure_T_floor)
+
+"""
     Mixture(records, levels; multiplier=Dict())
 
 The elements of the database `records` (an `Elements` for each `Atom` record) with their abundances relative to
@@ -194,13 +215,14 @@ function thermal_equilibrium(mixture::Mixture, ntot, processes; radiation=NO_RAD
     neutral = 0.0
     local balance, energy
     function evaluate(t)
-        balance = ionization_balance(mixture, t, ntot; radiation, escape, xee, neutral, lfast)
-        energy = heating_cooling(mixture, balance, t, ntot, processes; radiation, escape, lfast)
+        n = gas_density(ntot, t)
+        balance = ionization_balance(mixture, t, n; radiation, escape, xee, neutral, lfast)
+        energy = heating_cooling(mixture, balance, t, n, processes; radiation, escape, lfast)
         xee, neutral = balance.xee, balance.nₕ
         energy.imbalance
     end
     t, converged, evaluations, trace = bracket_temperature(evaluate, Float64(T); tolerance, iterations, T_min)
-    (; energy..., T=t, xee=balance.xee, nₑ=balance.nₑ, nₕ=balance.nₕ, populations=balance.populations, fractions=balance.fractions,
+    (; energy..., T=t, ntot=gas_density(ntot, t), xee=balance.xee, nₑ=balance.nₑ, nₕ=balance.nₕ, populations=balance.populations, fractions=balance.fractions,
        evaluations, converged, trace)
 end
 
