@@ -85,6 +85,14 @@ function toy_balance_tests()
         # a photoionization that leaves ion 6 in its level 1 has `final` beyond the continuum of ion 5
         A = Radix.element_matrix(Radix.Elements([[toy(1, 5, 2.0, 1.0; type=7)], Radix.AbstractRate[]], two, [5, 6]), cell)
         @test A[5, 1] == 2.0 && A[1, 5] == 1.0
+        # the same for the records of the types that are ordered by the energies of their levels (all but 7 and 41): `calc_hmc_ion` takes the energy of a level beyond the ion from stale memory, so a record from a
+        # level other than the ground is not connected; the ground has the energy 0, so it is never switched (a rate type 1 record of Fe VIII to the levels 3 and 4 of Fe IX, which were left out)
+        A = Radix.element_matrix(Radix.Elements([[toy(1, 5, 2.0, 1.0; type=1)], Radix.AbstractRate[]], two, [5, 6]), cell)
+        @test A[5, 1] == 2.0 && A[1, 5] == 1.0
+        A = Radix.element_matrix(Radix.Elements([[toy(1, 5, 2.0, 1.0; type=3)], Radix.AbstractRate[]], two, [5, 6]), cell)
+        @test A[5, 1] == 2.0 && A[1, 5] == 1.0
+        A = Radix.element_matrix(Radix.Elements([[toy(2, 5, 2.0, 1.0; type=3)], Radix.AbstractRate[]], two, [5, 6]), cell)
+        @test all(iszero, A)
         A0 = Radix.element_matrix(layout, cell)
         x = Radix.level_populations(A0)
         @test sum(x) ≈ 1 && all(>=(0), x)

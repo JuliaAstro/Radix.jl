@@ -105,12 +105,12 @@ function Elements(rates, levels::Levels, ions)
         if i1 > 0 && i2 > 0 && i1 != i2 && offset[k] + max(i1, i2) <= N
             l, u = i1, i2
             if !(coef.rtype in unordered_types)
-                if max(i1, i2) <= nlev[k]            # (the energies of the next ion's levels are not at hand)
+                if max(i1, i2) <= nlev[k]
                     e1, e2 = levels[(ion, i1)].E, levels[(ion, i2)].E
                     e1/(energy_order_floor + e2) - 1 < energy_order_tolerance || ((l, u) = (i2, i1))
-                else
-                    l = u = 0
-                end
+                elseif i1 != first_level
+                    l = u = 0                        # (the energies of the next ion's levels are not at hand, `calc_hmc_ion` reads stale ones)
+                end                                  # a record from the ground level (energy 0) is never switched
             end
             l > 0 && ((l, u) = (l + offset[k], u + offset[k]))
         end

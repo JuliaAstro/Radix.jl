@@ -256,6 +256,11 @@ iteration of `dsec`. What the code does and what was found:
   database of the package every element agrees with XSTAR's table of the first zone to 0.0-0.2% in both channels (the same bias in heating and cooling,
   which comes from XSTAR's Lucy iteration, converged to 1% only) and the electron fraction and the temperature of the equilibrium
   to 10⁻⁵ and 2×10⁻⁴; with the database of the tree the temperature is 4-5% low. The Compton and bremsstrahlung terms agree to 5×10⁻⁴.
+- **Records from the ground level to a level of the next ion.** The records whose rate type is ordered by the energies of the two levels (all but 7 and 41) are put lower-first by `calc_hmc_ion`
+  with the energies of `leveltemp`, which for a level beyond the ion (`final > nlev`) are stale ones from the ion before. Radix left such records out (`l = u = 0`), but one from the ground level is never switched (its energy is 0), and the
+  `ParPhotoIonize3` of rate type 1 of Fe VII and Fe VIII (to the levels 3 and 4 of the next ion; 5% of the photoionization of the ground level of Fe VIII at log ξ = 1) are in the matrix. Without them the iron
+  of the first zone of the thick slab with the iteration of the temperature was 4-7% off in the ions (heating of iron -7%, cooling -2.4%) and T 2.9% low (8% with the database of the tree); with them the ions agree to 10⁻⁵, iron to 4×10⁻⁵
+  and T of all the zones to 0.05% (`test/reference/xstar_fe_balance`). A record from an excited level to a level of the next ion is still left out.
 - **Not included**: the escape probabilities from the optical depths (the second zone of the reference run has line trapping:
   its equilibrium temperature is 0.5% low), and the transfer.
 
