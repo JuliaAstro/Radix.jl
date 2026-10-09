@@ -216,6 +216,21 @@ function toy_transfer_tests()
             @test sum(z.Δr for z in hot.zones) ≈ 1e21/5e3 rtol=1e-6        # half the density: twice the length for the column
             @test_throws ArgumentError Radix.slab_model(hmixture, processes; column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false)
             @test Radix.source_distance_pressure(1e46, 10.0, 1e-7) ≈ sqrt(1e46/(Radix.constants().fourpi*Float64(2.99792458f10)*1e-7*10.0))
+            # a density that varies as a power of the distance from the source (`radexp`): the density of a zone is that of its inner edge, and the column adds up with it
+            d = Radix.PowerLawDensity(1e4, 1e13, -2.0)
+            @test Radix.gas_density(d, 5.0) == 1e4
+            @test Radix.gas_density(d, 5.0, 2e13) ≈ 2.5e3
+            @test Radix.gas_density(1e4, 5.0, 2e13) == 1e4
+            radial = Radix.march_slab(hmixture, d, processes, E, L; r=1e13, column=5e16, T=1.0, iterate=false, diffuse=false)        # (the column of n ∝ r⁻² from 10¹³ cm adds up to at most 6.7×10¹⁶ with the zones of r/2)
+            @test all(z -> isapprox(z.ntot, 1e4*(z.r/1e13)^-2; rtol=1e-12), radial.zones)
+            outer(z) = Radix.gas_density(d, 1.0, z.r + z.Δr)
+            @test sum(outer(z)*z.Δr for z in radial.zones) ≈ 5e16 rtol=1e-9           # (the column adds up with the density at the outer edge of each zone, as XSTAR does)
+            @test length(radial.zones) > 1
+            @test radial.zones[end].ntot < 1e4
+            model = Radix.slab_model(hmixture, processes; density=1e4, radexp=-2.0, column=1e16, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false)
+            @test model.zones[1].ntot ≈ 1e4
+            @test model.zones[end].ntot ≈ 1e4*(model.zones[end].r/model.r)^-2 rtol=1e-12
+            @test Radix.slab_model(hmixture, processes; density=1e4, radexp=0.0, column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false).zones[end].ntot == 1e4
             few = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, steps=10, T=1.0, iterate=false, diffuse=false)
             @test few.zones[2].Δr == 1e12 && length(few.zones) > length(slab.zones)
             thin = Radix.march_slab(hmixture, 1e4, processes, E, L; r=1e30, column=1e17, T=1.0, iterate=false, diffuse=false)
@@ -455,6 +470,22 @@ function transfer_balance_tests(db)
             @test cp.zones[1].T > 8 && cp.zones[1].T < 12 && 6e3 < cp.zones[1].ntot < 8e3
             @test sum(z.ntot*z.Δr for z in cp.zones) ≈ 3e20 rtol=1e-9                           # the column of the zones
             @test all(z -> z.converged && abs(z.imbalance) <= 1e-4, cp.zones)
+        end
+
+        @testset "a density that falls as a power of the distance" begin
+            # `radexp=-3` (a run of XSTAR with nsteps=3, emult=1, rlrad38=1e-2, log ξ = 1, T = 10⁵ K kept: the column of n ∝ r⁻³ from 3.16×10¹⁵ cm is limited, so that the run never ends; its log shows the rows
+            # log r = 15.50, 15.50, 15.62, 15.75, 15.87, 16.00; log N = -10, -10, 18.65, 18.84, 18.92, 18.96; log n = 4.00, 4.00, 3.63, 3.25, 2.88, 2.50): the zones of r/3 of its first rows
+            r0 = Radix.source_distance(1e-2*1e38, 10.0, 1e4)
+            @test log10(r0) ≈ 15.5 atol=0.005
+            density = Radix.PowerLawDensity(1e4, r0, -3.0)
+            zones = [(r0, 0.0), (r0, r0/3), (4r0/3, 4r0/9)]
+            rad = Radix.march_zones(mixture, density, processes, Radix.xstar_energy_grid(999), Radix.power_law(Radix.xstar_energy_grid(999), -1.0, 1e-2*1e38), zones; T=10.0,
+                iterate=false, vturb=0.0, luminous=false)
+            @test round.(log10.([z.r for z in rad.zones]); digits=2) == [15.5, 15.5, 15.62]
+            @test round.(log10.([z.ntot for z in rad.zones]); digits=2) == [4.0, 4.0, 3.63]       # (the density of the inner edge of each zone)
+            column = cumsum([Radix.gas_density(density, 10.0, z.r + z.Δr)*z.Δr for z in rad.zones])        # (added with the density of the outer edge, as XSTAR does)
+            @test round(log10(column[2]); digits=2) == 18.65
+            @test round(log10(column[3]); digits=2) == 18.84
         end
 
         @testset "optical depths of the recombination edges" begin
