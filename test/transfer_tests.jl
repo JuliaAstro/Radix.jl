@@ -457,6 +457,21 @@ function transfer_balance_tests(db)
             spectrum_table = results.spectrum
             @test length(spectrum_table.energy) == 999 && spectrum_table.transmitted == slab.transmitted && spectrum_table.emit_inward == slab.spectrum.inward_continuum
             @test all(spectrum_table.transmitted_lines .<= spectrum_table.incident .* (1 + 1e-12))
+            # the spectrum of xout_spect1: the transmitted spectrum with the lines and the emission (diffuse + the lines binned by `binemis`)
+            spect = fits(joinpath(@__DIR__, "reference", "xstar_thick_slab", "xout_spect1.fits"))[3].data
+            @test maximum(abs.(Float64.(spect.energy) ./ spectrum_table.energy .- 1)) < 1e-5
+            visible = findall(>(1e-3*maximum(Float64.(spect.transmitted))), Float64.(spect.transmitted))              # (the bins that the file has more than 4 digits of)
+            @test all(abs.(spectrum_table.transmitted_lines[visible] ./ 1e38 ./ Float64.(spect.transmitted)[visible] .- 1) .< 1e-3)
+            for (diffuse, binned, reference) in ((spectrum_table.diffuse_inward, spectrum_table.lines_inward, spect.emit_inward), (spectrum_table.diffuse_outward, spectrum_table.lines_outward, spect.emit_outward))
+                reference = Float64.(reference)
+                strong = findall(>(1e-3*maximum(reference)), reference)
+                ratio = (diffuse[strong] .+ binned[strong]) ./ 1e38 ./ reference[strong]
+                @test length(strong) > 200
+                @test abs(sort(ratio)[length(ratio) ÷ 2] - 1) < 1e-3
+                @test count(r -> abs(r - 1) < 0.06, ratio) >= 0.93*length(ratio)          # (the others are hydrogen, the database of the package, and the bins of the continuum of He II)
+            end
+            @test all(>=(0), spectrum_table.lines_inward) && all(>=(0), spectrum_table.lines_outward)
+            @test sum(spectrum_table.lines_inward .* [Radix.xstar_energy_grid(999)[1]; diff(spectrum_table.energy)]) > 0
             line_table, edge_table = results.lines, results.edges
             @test length(line_table.ion) > 1000 && length(edge_table.ion) > 500
             @test sum(line_table.emit_inward) + sum(line_table.emit_outward) + sum(edge_table.emit_inward) + sum(edge_table.emit_outward) ≈ 1e38*(edge_total + sum(sum, slab.luminosities.inward[k][j] + slab.luminosities.outward[k][j]
