@@ -380,7 +380,7 @@ Collisional ionization coefficient from level `n` for the effective charge `rz` 
 `rno` at the temperature `T` (K), by Sampson and Zhang's fit (XSTAR's `szirc`).
 """
 function szirc(n, T, rz, rno)
-    rc = Float64(trunc(Int, rno))
+    rc = Float64(fortran_int(rno))
     an, hn, rrn = n < szirc_nmax ?
         (szirc_a[n], szirc_h[n], szirc_r[n]) :
         (szirc_a[end]/n, szirc_h[end]*n, szirc_r[end])

@@ -1,6 +1,6 @@
 module Radix
 
-using LinearAlgebra: lu
+using LinearAlgebra: lu, SingularException
 using SparseArrays
 
 export Atom, AtomicLevel, AtomicLine

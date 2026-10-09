@@ -48,7 +48,7 @@ function effective_charge_rates(T, den, E, E_ion, n)
     temp = max(T, tmin)
     rno = min(sqrt(effcharge_rno1*rc/den^effcharge_rno1_exp),
         (effcharge_rno2*rc^6/2/den)^effcharge_rno2_exp)
-    trunc(Int, rno) > n || return (0.0, 0.0)
+    fortran_int(rno) > n || return (0.0, 0.0)
     cion = irc(n, temp, rc, rno)
     if T < tmin
         beta = (sqrt((100rc + 91)/(4rc + 3)) - 5)/4
