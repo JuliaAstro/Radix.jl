@@ -300,8 +300,8 @@ the depths in `calc_hmc_ion`:
   emissivity `rcem` in each bin (`rlbin` with `lopak = 0`; `line_emissivities`, the energy of the decay split by the escape probabilities as `calc_emisab_ion` makes it); only the type 50 lines
   (`AtomicLine2`) call it. `rlbin` never stores an entry whose place is the last of the list (`rank!`, which the ranking of the edges uses too). Checked against the real `linopac` and
   `voigte` (`test/reference/ucalc/drvlinopac.f90`): `voigt` is identical and the bins of four lines agree to 10⁻⁷ (the single-precision `12.9` of the thermal speed), including the quirk that the profile
-  loop never ends early (`ml1min` stays above the bin of the line, so the wings fill the grid out to 10⁴ steps). `delea` is `A × 4.136×10⁻¹⁵` eV; the records of type 41 of the database, which
-  `deleafnd` looks for first, are not read. Not ported: the Fe UTA lines (type 82), whose `delea` is its `A_auto`.
+  loop never ends early (`ml1min` stays above the bin of the line, so the wings fill the grid out to 10⁴ steps). `delea` is `A × 4.136×10⁻¹⁵` eV, unless the upper level of the line is the level of a record of rate type 41 (`IronKAuger`, K-vacancy levels of the Fe ions) of the same ion:
+  `deleafnd` takes the first such record and its third real `A_auto(k, parent)` (`auger_widths`, `line_width`; 6224 levels, and the widths of 325 thousand of the lines of the database change, to 0 for some). Not ported: the Fe UTA lines (type 82), whose `delea` is its `A_auto`.
 - **Two-photon continua** (`add_two_photon!`). The decays of type 9 (`TwoPhotonDecay`, 85 records, and the four `AtomicLine2` of rate type 9) are not lines: `ucalc` spreads the energy `A hν`
   of the decay over the bins below `hν` with the shape `E² (hν - E)` (normalized by its integral from 0, which starts at the second bin) in `rccemis`, with the population of the upper level and `ptmp` of the optically thin line (`Continuum` adds them).
   Without them the diffuse emission of the reference slab misses the 2γ continua of the H-like and He-like ions that fill the bins between the edges (a factor 6 at 588 eV).

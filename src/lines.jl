@@ -214,8 +214,31 @@ function rank!(list::AbstractVector, entry, nrank)
 end
 
 # the natural width (eV) with which the record puts its line in the bins, or nothing for the records that do not (only type 50 does)
-line_width(::AbstractRate) = nothing
-line_width(coef::AtomicLine2) = Float64(coef.A)*line_width_per_A
+line_width(::AbstractRate, widths=nothing) = nothing
+function line_width(coef::AtomicLine2, widths=nothing)
+    width = Float64(coef.A)*line_width_per_A
+    widths === nothing && return width
+    a, b = get(coef.levels, (coef.ion, coef.transition.lower), nothing), get(coef.levels, (coef.ion, coef.transition.upper), nothing)
+    (a === nothing || b === nothing) && return width
+    upper = a.E < b.E ? b.level : a.level                              # (the level `idest1` of ucalc, the higher by energy)
+    auger = get(widths, (Int(coef.ion), Int(upper)), nothing)         # deleafnd: the width of a K-vacancy level of the database
+    auger === nothing ? width : auger*line_width_per_A
+end
+
+"""
+    auger_widths(mixture)
+
+The widths `A_auto(k, parent)` (s⁻¹, the third real of the record) of the K-vacancy levels of the records of rate type 41 (`IronKAuger`) of the elements of `mixture`, as a dictionary `(ion, level) => width` which `deleafnd` consults
+for the natural width of a line whose upper level is one of them (the first record of the level, as it does).
+"""
+function auger_widths(mixture)
+    widths = Dict{Tuple{Int, Int}, Float64}()
+    for element in mixture.elements, coef in element.rates
+        coef isa IronKAuger || continue
+        get!(widths, (Int(coef.ion), Int(coef.level)), Float64(coef.A_widths[2]))
+    end
+    widths
+end
 has_line(::AbstractRate) = false
 has_line(::Union{AtomicLine2, RadiativeAPED}) = true
 
@@ -223,13 +246,12 @@ has_line(::Union{AtomicLine2, RadiativeAPED}) = true
     add_line!(opacity, radiation, coef, centre, emissivity, T; vturb=default_turbulence, lfast=2)
 
 Puts the line of the record `coef` in the bins with `add_line!`, as `ucalc` does for a line of type 50 (the other records do nothing): `centre` is the opacity at the
-line centre (`oplin`, cm⁻¹) and `emissivity` the pair of emissivities `(rcem1, rcem2)`. The natural width is the Einstein A times 4.136×10⁻¹⁵ eV s: XSTAR
-takes it from the records of type 41 of the database where there are some, which are not read here.
+line centre (`oplin`, cm⁻¹) and `emissivity` the pair of emissivities `(rcem1, rcem2)`. The natural width is the Einstein A times 4.136×10⁻¹⁵ eV s, or, for a line whose upper level is a K-vacancy level with a record of rate type 41, the width of that record (`widths` of `auger_widths`: `deleafnd`).
 """
-function add_line!(opacity::Opacity, radiation::Radiation, coef::AtomicLine2, centre, emissivity, T; vturb=default_turbulence, lfast=2)
+function add_line!(opacity::Opacity, radiation::Radiation, coef::AtomicLine2, centre, emissivity, T; vturb=default_turbulence, lfast=2, widths=nothing)
     centre > line_opacity_min || return opacity
     mass = atomic_mass(coef.levels, coef.ion)
-    add_line!(opacity, radiation, centre, emissivity[1], emissivity[2], abs(Float64(coef.λ)), vturb, T, mass, line_width(coef); lfast)
+    add_line!(opacity, radiation, centre, emissivity[1], emissivity[2], abs(Float64(coef.λ)), vturb, T, mass, line_width(coef, widths); lfast)
 end
 add_line!(opacity::Opacity, radiation::Radiation, ::AbstractRate, centre, emissivity, T; kw...) = opacity
 

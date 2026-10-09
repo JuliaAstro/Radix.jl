@@ -81,6 +81,34 @@ function lines_tests()
             end
         end
 
+        @testset "the natural width of a line" begin
+            f32 = Float32
+            lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, level, 5], f32[E, g, 1, 13.6])
+            levels = Radix.levels([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 13.6, 1)]; masses=Dict(5 => 1.0))
+            line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
+            other = Radix.AtomicLine2(Int32(4), "", Int32[3, 1, 1, 5], f32[912.0, 0.1, 1e8], levels)
+            vacancy = Radix.IronKAuger(Int32(41), "", Int32[1, 2, 26, 4, 5], f32[10.2, 1e14, 5e13, 1e9], levels)     # the level 2 is a K-vacancy level
+            second = Radix.IronKAuger(Int32(41), "", Int32[1, 2, 26, 4, 5], f32[10.2, 2e14, 9e13, 1e9], levels)      # (the first record of a level is the one that deleafnd takes)
+            mixture = Radix.Mixture(levels, [26], [1.0], [Radix.Elements([[line, other, vacancy, second]], levels, [5])])
+            widths = Radix.auger_widths(mixture)
+            @test widths == Dict((5, 2) => Float64(f32(5e13)))
+            h = Float64(4.136f-15)
+            @test Radix.line_width(line) == Float64(f32(6.265e8))*h                              # the Einstein A without the table
+            @test Radix.line_width(line, Dict{Tuple{Int, Int}, Float64}()) == Float64(f32(6.265e8))*h
+            @test Radix.line_width(line, widths) == Float64(f32(5e13))*h                         # the upper level of the line is the vacancy
+            @test Radix.line_width(other, widths) == Float64(f32(1e8))*h                         # another line keeps A
+            @test Radix.line_width(vacancy) === nothing                                          # (only the lines are put in the bins)
+            # and the profile of the line follows: the damping parameter is 10⁷ times larger, the peak of the bins lower and the wings higher
+            E = Radix.xstar_energy_grid(999)
+            rad = Radix.Radiation(E, zeros(length(E)))
+            narrow, broad = Radix.Opacity(length(E)), Radix.Opacity(length(E))
+            Radix.add_line!(narrow, rad, line, 1e-3, (0.0, 0.0), 1.0)
+            Radix.add_line!(broad, rad, line, 1e-3, (0.0, 0.0), 1.0; widths)
+            @test maximum(broad.total) < maximum(narrow.total)
+            k = argmax(narrow.total)
+            @test broad.total[k + 5] > narrow.total[k + 5]
+        end
+
         @testset "the ranking of a bin" begin
             list = Tuple{Float64, Int, Int}[]
             for (strength, j) in ((5.0, 1), (7.0, 2), (6.0, 3), (1.0, 4))
