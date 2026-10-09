@@ -22,6 +22,13 @@ The hydrogen density (cm⁻³) of the gas at the temperature `T` (10⁴ K): `nto
 gas_density(ntot::Number, T) = ntot
 gas_density(ntot, T) = ntot(T)
 
+"""
+    gas_density(ntot, T, r)
+
+The same at the distance `r` (cm) from the source: only `PowerLawDensity` depends on it.
+"""
+gas_density(ntot, T, r) = gas_density(ntot, T)
+
 const pressure_per_density = Float64(1.38f-12)    # `xpx = p/1.38e-12/t`: k × 10⁴ K, as a single-precision literal
 const pressure_T_floor = 1e-24
 
@@ -34,6 +41,19 @@ struct ConstantPressure
     P::Float64
 end
 (p::ConstantPressure)(T) = p.P/pressure_per_density/max(T, pressure_T_floor)
+
+"""
+    PowerLawDensity(n0, r0, exponent)
+
+The hydrogen density `n0 (r/r0)^exponent` at the distance `r` of the source (XSTAR's `radexp`, for the constant density option): `gas_density(d, T, r)`; without `r` it is `n0`.
+"""
+struct PowerLawDensity
+    n0::Float64
+    r0::Float64
+    exponent::Float64
+end
+gas_density(d::PowerLawDensity, T) = d.n0
+gas_density(d::PowerLawDensity, T, r) = d.n0*(r/d.r0)^d.exponent
 
 """
     Mixture(records, levels; abundances=nothing, multiplier=Dict())
