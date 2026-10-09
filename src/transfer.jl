@@ -297,7 +297,7 @@ its own radius with the radiation of the incident spectrum attenuated by the con
 `exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
 edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
 (`thermal_equilibrium`, from `T` and the `xee` of the previous zone), otherwise `T` is kept and the electron fraction iterated
-(`ionization_balance`). `attenuate=false` leaves the spectrum as it is; `lines=false` leaves the lines out of the continuum opacity (`add_line!`), `luminous=false` does not add up the luminosities of the lines and edges (`Luminosities`), with the turbulent speed `vturb` (km/s). `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
+(`ionization_balance`). `attenuate=false` leaves the spectrum as it is; `lines=false` leaves the lines out of the continuum opacity (`add_line!`), `luminous=false` does not add up the luminosities of the lines and edges (`Luminosities`), with the turbulent speed `vturb` (km/s). `passes` (odd, XSTAR's `npass`) repeats the march over the same zones: the even passes go from the outer edge inwards at the temperatures of the zones to give the optical depths of the lines and edges beyond each zone, which the odd passes use as the outward depths of the escape probabilities. `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
 opacity are those of the zones; `cfrac` is the covering fraction of the escape probabilities (give `Thomson` the same). Further keywords go to those functions.
 
 After each zone the opacities are added to the depths (`stpcut`): the lines and edges to the `OpticalDepths`, the continuum
@@ -309,8 +309,50 @@ fields `r`, `Δr`, `radiation`, `escape`, `opacity`), the final `OpticalDepths` 
 not added to the radiation.
 """
 function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
-        attenuate=true, diffuse=true, lines=true, luminous=true, vturb=default_turbulence, lfast=photoionization_lfast, kw...)
+        attenuate=true, diffuse=true, lines=true, luminous=true, vturb=default_turbulence, lfast=photoionization_lfast, passes=1, kw...)
+    isodd(passes) || throw(ArgumentError("passes must be odd: the last pass goes in the same direction as the first"))
+    result = sweep(mixture, ntot, processes, E, L, zones; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, kw...)
+    for pass in 2:passes
+        grid = [(zone.r, zone.Δr) for zone in result.zones]
+        if iseven(pass)
+            outer = backward(mixture, result, processes, E, L; cfrac, lfast, vturb, kw...)
+            result = (; result..., outer)
+        else
+            result = sweep(mixture, ntot, processes, E, L, grid; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast,
+                outer=result.outer, kw...)
+        end
+    end
+    (; result..., passes)
+end
+
+# backward: the sweep from the outer zone inwards at the temperatures and densities of the zones of `result` (XSTAR's second pass), with the
+# radiation of the incident spectrum attenuated by the continuum depth before each zone, to give the optical depths of the lines and edges
+# between it and the outer edge: the `outward` depths of each zone (before it is added), as the vectors of `OpticalDepths`
+function backward(mixture::Mixture, result, processes, E, L; cfrac, lfast, vturb, kw...)
     depths = OpticalDepths(mixture)
+    dpthc = zeros(length(E))
+    before = map(result.zones) do zone
+        previous = copy(dpthc)
+        dpthc .+= zone.opacity.total .* zone.Δr
+        previous
+    end
+    outer = Vector{Vector{Vector{Float64}}}(undef, length(result.zones))
+    for i in reverse(eachindex(result.zones))
+        zone = result.zones[i]
+        outer[i] = map(copy, depths.outward)
+        radiation = map_spectrum(point_source(E, L .* exp.(-before[i]), zone.r))
+        escape = escape_probabilities(mixture, OpticalDepths(result.inner[i], depths.outward); cfrac)
+        n = zone.ntot
+        balance = ionization_balance(mixture, zone.T, n; radiation, escape, xee=zone.xee, lfast, kw...)
+        edges = record_opacities(mixture, balance, zone.T, n; radiation, lfast, vturb)
+        add_zone!(depths, edges, zone.Δr; direction=:outward)
+    end
+    outer
+end
+
+function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, outer=nothing, kw...)
+    depths = OpticalDepths(mixture)
+    inner = Vector{Vector{Float64}}[]
     continuum_gas = Continuum(mixture, processes; lfast, vturb)
     dpthc = zeros(length(E))
     dpthcont = zeros(length(E))
@@ -324,7 +366,8 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         r, Δr = step
         incident = point_source(E, spectrum.L, r)
         radiation = map_spectrum(incident)
-        escape = escape_probabilities(mixture, depths; cfrac)
+        push!(inner, map(copy, depths.inward))
+        escape = escape_probabilities(mixture, outer === nothing ? depths : OpticalDepths(depths.inward, outer[length(results)+1]); cfrac)
         zone = if equilibrium
             thermal_equilibrium(mixture, t -> gas_density(ntot, t, r), processes; radiation, escape, T, xee, lfast, kw...)
         else
@@ -345,7 +388,7 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         dpthc .+= continuum.total .* Δr
         dpthcont .+= continuum.continuum .* Δr
     end
-    (; zones=results, depths, dpthc, dpthcont, spectrum, luminosities, vturb)
+    (; zones=results, depths, dpthc, dpthcont, spectrum, luminosities, vturb, inner, outer)
 end
 
 """

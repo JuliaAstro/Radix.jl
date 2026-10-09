@@ -66,4 +66,4 @@ What differs:
 - The atomic database of the XSTAR package (`$HEADAS/refdata/atdb.fits`) is not the one of its source tree: hydrogen has other records, and the temperatures of the tree are 3-6% lower than the package's. Use the one that you want to compare with.
 - With `vturbi > 0` XSTAR 2.59j smooths its continuum so that it is not absorbed below 20 keV (`gsmooth2`): Radix does not, and the comparisons with it use `vturbi = 0`.
 - To reproduce the rounded constants of XSTAR (`0.861707 eV` for k × 10⁴ K, 12.56 for 4π, ...) use `set_constants!(ucalc_constants())` first; the default is CODATA 2022.
-- Not done: more than one pass (`npass`).
+- `passes=3` (XSTAR's `npass`) repeats the march with the optical depths of the lines and edges between each zone and the outer edge, as the escape probabilities of the outer side. It changes the ion fractions by up to 2.5% on the thick slab and follows XSTAR's change to 0.15%. `passes` must be odd.
