@@ -402,6 +402,18 @@ function transfer_balance_tests(db)
             @test [z.r - auto.r for z in auto.zones][1:6] ≈ [0; depth[1:5]] atol=3e-4*1.8e16 rtol=1e-3
             @test round.(log10.(1e4 .* cumsum([z.Δr for z in auto.zones])[2:end]); digits=2) == [20.26, 20.56, 20.74, 20.86, 20.95, 21.0]
             @test sum(z.Δr for z in auto.zones) ≈ 1e17
+            # three passes (`npass=3`: the outward optical depths of the lines and edges of the pass back from the outer edge): the ion fractions change by
+            # 2.5% (He II in the first zone) to 0.2% and follow those of XSTAR in the change, which the escape probabilities of the outer side make
+            auto3 = Radix.slab_model(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false, passes=3)
+            pass3 = fits(joinpath(dir, "xout_abund1_npass3.fits"))[2].data
+            @test auto3.passes == 3 && length(auto3.zones) == 7
+            for k in 1:7
+                shift = auto3.zones[k].fractions[2][2]/auto.zones[k].fractions[2][2]
+                @test shift ≈ Float64(pass3.he_ii[k])/Float64(slabab.he_ii[k]) atol=1.5e-3
+                @test auto3.zones[k].fractions[2][2] ≈ Float64(pass3.he_ii[k]) rtol=4e-3
+            end
+            @test auto3.zones[1].fractions[2][2] < 0.98*auto.zones[1].fractions[2][2]
+            @test_throws ArgumentError Radix.slab_model(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, passes=2)
             for k in 2:length(zones)
                 @test thickrun.zones[k].fractions[2][2] ≈ slabab.he_ii[k + 1] rtol=1.5e-3
                 @test thickrun.zones[k].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[k + 1] rtol=3e-4

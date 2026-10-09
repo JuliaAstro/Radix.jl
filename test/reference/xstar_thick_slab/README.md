@@ -16,3 +16,6 @@ incident one between 0.15 eV and 20 keV (and Thomson scattering outside it), and
 999 points (and than the 0.16% bins of 9999 for T below 4×10⁵ K), the loop ends at the first neighbour with `exp(-earg) = 0`
 and never adds the bin itself, so the smoothed opacity and emissivity arrays are 0 below 20 keV. The continuum is then not absorbed by the
 slab at all. Radix does not do it.
+
+`xout_abund1_npass3.fits` is the same run with `npass=3` (it takes four times as long): the ion fractions of the zones
+after the pass back from the outer edge, which `passes=3` of `slab_model` reproduces.
