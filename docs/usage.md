@@ -47,13 +47,13 @@ as a model (a fit, for instance) without touching the disk. `tables` turns the r
 ```julia
 t = tables(model, run)
 t.zones       # radius, depth, thickness, ion_parameter, x_e, n_h, n_e, pressure, temperature, heating, cooling, heat_error and one column per ion (h_i, h_ii, he_i, ...)
-t.spectrum    # energy, incident, transmitted, transmitted_lines, emit_inward, emit_outward (erg/s/erg, on XSTAR's energy grid)
+t.spectrum    # energy, incident, transmitted, transmitted_lines, emit_inward, emit_outward, diffuse_inward, diffuse_outward, lines_inward, lines_outward (erg/s/erg, on XSTAR's energy grid)
 t.lines       # ion, lower, upper, wavelength, emit_inward, emit_outward (erg/s), depth_inward, depth_outward
 t.edges       # ion, level, energy, emit_inward, emit_outward (erg/s), depth_inward, depth_outward
 ```
 
 `write("model.fits", t; meta=(; DENSITY=1e4, COLUMN=1e21))` writes the four tables to one FITS file (an empty primary HDU with the `meta` keywords and the extensions `ZONES`, `SPECTRUM`, `LINES` and `EDGES`, with units); it
-passes HEASoft's `ftverify`. Nothing is written unless it is asked for. Not in the tables yet: the emission of the lines binned in the spectrum (`binemis`; the `emit` columns are the continuum), and the detailed level populations (`run.zones[k].populations`
+passes HEASoft's `ftverify`. Nothing is written unless it is asked for. The spectrum has the pieces of both spectral files of XSTAR: `xout_cont1` has `transmitted`, `emit_inward` and `emit_outward` (the continuum), and `xout_spect1` has `transmitted_lines` and the emission `diffuse + lines` (the lines binned with their Voigt profiles, `binned=false` skips them: they take 10 s). Not in the tables: the detailed level populations (`run.zones[k].populations`
 keeps them in memory).
 
 ## Agreement with XSTAR
@@ -66,4 +66,4 @@ What differs:
 - The atomic database of the XSTAR package (`$HEADAS/refdata/atdb.fits`) is not the one of its source tree: hydrogen has other records, and the temperatures of the tree are 3-6% lower than the package's. Use the one that you want to compare with.
 - With `vturbi > 0` XSTAR 2.59j smooths its continuum so that it is not absorbed below 20 keV (`gsmooth2`): Radix does not, and the comparisons with it use `vturbi = 0`.
 - To reproduce the rounded constants of XSTAR (`0.861707 eV` for k × 10⁴ K, 12.56 for 4π, ...) use `set_constants!(ucalc_constants())` first; the default is CODATA 2022.
-- Not done: more than one pass (`npass`) and the emission of the lines binned in the output spectrum (the lines are in the `lines` table, with their luminosities and depths).
+- Not done: more than one pass (`npass`).

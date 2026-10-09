@@ -345,7 +345,7 @@ function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, eq
         dpthc .+= continuum.total .* Δr
         dpthcont .+= continuum.continuum .* Δr
     end
-    (; zones=results, depths, dpthc, dpthcont, spectrum, luminosities)
+    (; zones=results, depths, dpthc, dpthcont, spectrum, luminosities, vturb)
 end
 
 """

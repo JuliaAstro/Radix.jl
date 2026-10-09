@@ -44,14 +44,14 @@ The results of `slab_model(model; ...)` as `Results`, four tables (their fields)
 
 - `zones`: one row for each zone (the state at its inner edge): `zone`, `radius` (cm), `depth` (cm, of the inner edge from the first), `thickness` (cm), `ion_parameter` (`L/(n r²)`), `x_e`, `n_h` and `n_e` (cm⁻³),
   `pressure` (dyn cm⁻²), `temperature` (10⁴ K), `heating` and `cooling` (erg cm⁻³ s⁻¹), `heat_error` (relative) and the fraction of every ion, named by its label (`h_i`, `he_ii`, ..., with the bare nuclei);
-- `spectrum`: for each energy, `energy` (eV), `incident`, `transmitted` (with the continuum opacity: the transmitted column of XSTAR), `transmitted_lines` (with the lines and free-free too, as the spectrum is attenuated along the slab) and `emit_inward` and `emit_outward`
-  (the diffuse emission of the continuum, summed over the zones), all in erg s⁻¹ erg⁻¹;
+- `spectrum`: for each energy, `energy` (eV), `incident`, `transmitted` (with the continuum opacity: the transmitted column of XSTAR's `xout_cont1`), `transmitted_lines` (with the lines and free-free too, as the spectrum is attenuated along the slab: the transmitted column of `xout_spect1`),
+  `emit_inward` and `emit_outward` (the diffuse emission of the continuum, summed over the zones: `xout_cont1`), `diffuse_inward` and `diffuse_outward` (the same with the opacity of the lines) and `lines_inward` and `lines_outward` (the emission of the lines, binned: `binemis`; `binned=false` skips it), all in erg s⁻¹ erg⁻¹. The emission of `xout_spect1` is `diffuse + lines`;
 - `lines`: the lines (rate type 4) with more than `min_fraction` of the luminosity of the source or a depth: `ion`, `lower`, `upper` (labels of the levels), `wavelength` (Å), `emit_inward` and `emit_outward` (erg s⁻¹), `depth_inward` and `depth_outward` (at the centre of the line);
 - `edges`: the same for the recombination continua (rate type 7), with the threshold `energy` (eV) in place of the wavelength.
 
 `inward` is the first direction of the escape probabilities (XSTAR's `emit_inward`). Arrays only: `write(path, results)` writes them to one file.
 """
-function tables(model::Model, run; min_fraction=results_min_fraction)
+function tables(model::Model, run; min_fraction=results_min_fraction, binned=true)
     mixture, labels = model.mixture, model.ion_labels
     K = constants()
     zones = run.zones
@@ -69,8 +69,10 @@ function tables(model::Model, run; min_fraction=results_min_fraction)
         ion_parameter=[luminosity/(z.ntot*z.r^2) for z in zones], x_e=[z.xee for z in zones], n_h=[z.ntot for z in zones], n_e=[z.nₑ for z in zones],
         pressure=[z.ntot*pressure_per_density*z.T for z in zones], temperature=[z.T for z in zones], heating=[z.heating for z in zones],
         cooling=[z.cooling for z in zones], heat_error=[z.imbalance for z in zones], fractions...)
+    emission = binned ? broaden(model, run; min_fraction) : (; inward=zeros(length(run.E)), outward=zeros(length(run.E)))
     spectrum = (; energy=run.E, incident=run.incident, transmitted=run.transmitted, transmitted_lines=run.incident .* exp.(-run.dpthc),
-        emit_inward=run.spectrum.inward_continuum, emit_outward=run.spectrum.outward_continuum)
+        emit_inward=run.spectrum.inward_continuum, emit_outward=run.spectrum.outward_continuum,
+        diffuse_inward=run.spectrum.inward, diffuse_outward=run.spectrum.outward, lines_inward=emission.inward, lines_outward=emission.outward)
     levels = mixture.levels
     label(ion, level) = String(strip(levels[(Int(ion), Int(level))].label))
     threshold = min_fraction*luminosity
@@ -96,7 +98,8 @@ end
 const column_units = Dict(:radius => "cm", :depth => "cm", :thickness => "cm", :n_h => "cm**-3", :n_e => "cm**-3", :pressure => "dyn/cm**2", :temperature => "1e4 K",
     :heating => "erg/cm**3/s", :cooling => "erg/cm**3/s", :energy => "eV", :incident => "erg/s/erg", :transmitted => "erg/s/erg", :transmitted_lines => "erg/s/erg",
     :emit_inward => "erg/s", :emit_outward => "erg/s", :wavelength => "Angstrom")
-const spectrum_units = Dict(:emit_inward => "erg/s/erg", :emit_outward => "erg/s/erg")      # (the diffuse emission of the spectrum is per unit of energy)
+const spectrum_units = Dict(:emit_inward => "erg/s/erg", :emit_outward => "erg/s/erg", :diffuse_inward => "erg/s/erg", :diffuse_outward => "erg/s/erg",
+    :lines_inward => "erg/s/erg", :lines_outward => "erg/s/erg")      # (the diffuse emission of the spectrum is per unit of energy)
 
 # a column that FITS can hold: numbers as they are, labels padded to the same length
 fits_column(v::AbstractVector{<:AbstractString}) = (width = maximum(length, v; init=1); [rpad(s, width) for s in v])

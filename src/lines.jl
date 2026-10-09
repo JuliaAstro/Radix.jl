@@ -25,17 +25,16 @@ function voigt(vs, a)
     u = a + v
     v2 = v*v
     a == voigt_a_zero && return v2 < voigt_v_exp ? exp(-v2) : zero(v2)
-    ex = v2 < voigt_v_exp ? exp(-v2) : zero(v2)
     if a <= voigt_a_small
         v >= voigt_v_far && return a*(15 + 6v2 + 4v2*v2)/(4v2*v2*v2*voigt_sqrt_pi)
-        return voigt_poly(v, v2, a, ex, 1)
+        return voigt_poly(v, v2, a, v2 < voigt_v_exp ? exp(-v2) : zero(v2), 1)
     elseif a > voigt_a_large || u > voigt_u_large
         a2 = a*a
         u = voigt_sqrt_2*(a2 + v2)
         u2 = 1/(u*u)
         return voigt_sqrt_2/voigt_sqrt_pi*a/u*(1 + u2*(3v2 - a2) + u2*u2*(15v2*v2 - 30v2*a2 + 3a2*a2))
     else
-        return voigt_poly(v, v2, a, ex, 2)
+        return voigt_poly(v, v2, a, v2 < voigt_v_exp ? exp(-v2) : zero(v2), 2)
     end
 end
 
@@ -232,12 +231,21 @@ The widths `A_auto(k, parent)` (s⁻¹, the third real of the record) of the K-v
 for the natural width of a line whose upper level is one of them (the first record of the level, as it does).
 """
 function auger_widths(mixture)
-    widths = Dict{Tuple{Int, Int}, Float64}()
+    Dict{Tuple{Int, Int}, Float64}(key => first(rates) for (key, rates) in auger_rates(mixture))
+end
+
+"""
+    auger_rates(mixture)
+
+The rates `(A_auto(k, parent), A_rad(k))` (s⁻¹, the third and fourth reals) of the first record of rate type 41 of each K-vacancy level `(ion, level)`: `auger_widths` has the first, `binemis` takes both.
+"""
+function auger_rates(mixture)
+    rates = Dict{Tuple{Int, Int}, Tuple{Float64, Float64}}()
     for element in mixture.elements, coef in element.rates
         coef isa IronKAuger || continue
-        get!(widths, (Int(coef.ion), Int(coef.level)), Float64(coef.A_widths[2]))
+        get!(rates, (Int(coef.ion), Int(coef.level)), (Float64(coef.A_widths[2]), Float64(coef.A_widths[3])))
     end
-    widths
+    rates
 end
 has_line(::AbstractRate) = false
 has_line(::Union{AtomicLine2, RadiativeAPED}) = true
@@ -308,4 +316,146 @@ function add_two_photon!(opacity::Opacity, radiation::Radiation, coef::Union{Ato
         opacity.emissivity[2, ll] += emission*ptmp[2]
     end
     opacity
+end
+
+# ---------------------------------------------------------------------------
+# the emission of the lines binned in the spectrum: binemis
+
+const broaden_velocity = Float64(1.2f1)         # binemis: the thermal speed of an atom of 1 amu at 10⁴ K (km/s; linopac has 12.9)
+const broaden_hc = Float64(12398.42f0)          # binemis: the energy of the wavelength of a line
+const broaden_light = 3e5                       # km/s
+const broaden_width = Float64(4.14f-15)         # the widths in eV of the rates in s⁻¹
+const broaden_floor = Float64(1f-36)            # added to the Doppler width in the damping parameter
+const broaden_unit = Float64(1.602197f-12)      # the profile is per erg
+const broaden_voigt_min = Float64(1f-9)         # damping parameter above which the profile is a Voigt function
+const broaden_sum_floor = 1e-24                 # the interval of the average of a bin is at least this (eV)
+const broaden_buffer = 999999                   # ncn: the points of the profile are in an array of this size
+const broaden_bin_floor = Float64(1f-34)        # added to the wavelength for the energy of the line
+
+"""
+    broaden(E, lines, T, vturb)
+
+The emission of lines on the energy grid `E` (eV), as XSTAR's `binemis` makes it: `lines` is a collection of `(wavelength, mass, inward, outward, delea, egam)` (Å, amu, the two luminosities in erg s⁻¹, the Auger width in s⁻¹ and the radiative width
+`egam` that sets the damping), `T` the temperature (10⁴ K) and `vturb` the turbulent speed (km s⁻¹; the larger of it and the thermal speed is used). Each line has a Voigt profile, calculated on a grid `ncut` times finer than the bin of the line
+and averaged in the bins of `E`, per erg. Returns `(inward, outward)`, in erg s⁻¹ erg⁻¹.
+"""
+function broaden(E::AbstractVector, lines, T, vturb)
+    K = constants()
+    n = length(E)
+    rad = Radiation(E, zeros(n))
+    inward, outward = zeros(n), zeros(n)
+    buffer = broaden_buffer
+    z1, z2 = zeros(buffer), zeros(buffer)
+    s1, s2 = zeros(n), zeros(n)               # (zrtmps: set by the bins of a line, kept for the next one as `binemis` does)
+    for (elin, mass, lum1, lum2, delea, egam) in lines
+        eline = K.hc_eVÅ_single/(broaden_bin_floor + elin)
+        nb1 = nbin(rad, eline)
+        nb1 > 2 || continue
+        vth = broaden_velocity*sqrt(T/mass)
+        vt = max(vturb, vth)
+        e0 = broaden_hc/max(elin, line_hc_floor)
+        dele = hypot(e0*(vt/broaden_light), e0*(vth/broaden_light))
+        aasmall = (delea + egam*broaden_width)/(broaden_floor + dele)/K.fourpi
+        profile(x) = (aasmall > broaden_voigt_min ? voigt(abs(x), aasmall) : exp(-x*x))/line_profile_norm/dele/broaden_unit
+        e00 = E[nb1]
+        deleepi = E[nb1 + 1] - E[nb1]
+        ncut = min(max(trunc(Int, deleepi/dele), 1), buffer ÷ 10)
+        deleused = deleepi/ncut
+        ml2 = buffer ÷ 2
+        p = profile((e00 - e0)/dele)
+        z1[ml2], z2[ml2] = lum1*p, lum2*p
+        # the points on the two sides of the centre, `binemis` goes on to 249999 steps and does nothing outside the grid
+        mlmin, mlmax = buffer, 1
+        top = E[n]
+        @inbounds for mlc in 1:buffer ÷ 2 - 1
+            etptst = e00 - mlc*deleused
+            etptst > 0 || break
+            mlm = ml2 - mlc
+            mlm > 1 || break
+            mlm < mlmin && (mlmin = mlm)
+            mlm > mlmax && (mlmax = mlm)
+            p = profile((etptst - e0)/dele)
+            z1[mlm], z2[mlm] = lum1*p, lum2*p
+        end
+        @inbounds for mlc in 1:buffer ÷ 2 - 1
+            etptst = e00 + mlc*deleused
+            etptst < top || break
+            mlm = ml2 + mlc
+            mlm < buffer || break
+            mlm < mlmin && (mlmin = mlm)
+            mlm > mlmax && (mlmax = mlm)
+            p = profile((etptst - e0)/dele)
+            z1[mlm], z2[mlm] = lum1*p, lum2*p
+        end
+        mlmin <= mlmax || continue
+        point(m) = e00 + (m - ml2)*deleused           # (the energy of a point of the profile)
+        ml1min, ml1max = nbin(rad, point(mlmin)), nbin(rad, point(mlmax))
+        ml1m = ml1min
+        mlmin, mlmax = max(mlmin, 2), min(mlmax, buffer)
+        sume = sum1 = sum2 = 0.0
+        @inbounds for mlm in mlmin + 1:mlmax
+            xm = point(mlm)
+            tmpe = abs(xm - point(mlm - 1))
+            sume += tmpe
+            sum1 += (z1[mlm] + z1[mlm - 1])*tmpe/2
+            sum2 += (z2[mlm] + z2[mlm - 1])*tmpe/2
+            if xm > E[ml1m]
+                mlm == mlmax && (ml1m = max(1, ml1m - 1))
+                if sume > broaden_sum_floor
+                    a1, a2 = sum1/sume, sum2/sume
+                    while xm > E[ml1m] && ml1m < n
+                        s1[ml1m], s2[ml1m] = a1, a2
+                        ml1m += 1
+                    end
+                end
+                sum1 = sum2 = sume = 0.0
+            end
+        end
+        z1[mlmin:mlmax] .= 0
+        z2[mlmin:mlmax] .= 0
+        for m in ml1min:ml1max
+            inward[m] += s1[m]
+            outward[m] += s2[m]
+        end
+        for m in ml1min:ml1max
+            s1[m] = s2[m] = 0.0
+        end
+    end
+    (; inward, outward)
+end
+
+"""
+    broaden(model, run; vturb=run.vturb, min_fraction=1e-15, nrank=rank_per_bin)
+
+The emission of the lines of a run (`slab_model`) binned on its energy grid (`broaden(E, lines, T, vturb)`), at the temperature of the last zone: the `nrank` lines with the largest luminosity in each bin
+(`rank!`) among those with more than `min_fraction` of the luminosity of the source. Returns `(inward, outward)` in erg s⁻¹ erg⁻¹.
+"""
+function broaden(model, run; vturb=run.vturb, min_fraction=results_min_fraction, nrank=rank_per_bin)
+    mixture = model.mixture
+    E = run.E
+    rad = Radiation(E, zeros(length(E)))
+    threshold = min_fraction*band_luminosity(E, run.incident)
+    rates = auger_rates(mixture)
+    emina, emaxa = constants().hc_eVÅ_single/E[end], constants().hc_eVÅ_single/E[1]
+    ranked = Dict{Int, Vector{Tuple{Float64, Int, Int}}}()
+    for (k, element) in enumerate(mixture.elements), j in eachindex(element.rates)
+        c = element.rates[j]
+        (c isa AtomicLine2 && c.rtype == line_data_type && element.lo[j] != 0) || continue
+        inward, outward = run.luminosities.inward[k][j]*luminosity_unit, run.luminosities.outward[k][j]*luminosity_unit
+        (inward > threshold || outward > threshold) || continue
+        elin = abs(Float64(c.λ))
+        (emina <= elin <= emaxa) || continue
+        emission = (inward + outward)/luminosity_unit
+        emission < line_rank_floor && continue
+        rank!(get!(ranked, nbin(rad, constants().hc_eVÅ_single/(line_bin_floor + elin)), Tuple{Float64, Int, Int}[]), (emission, k, j), nrank)
+    end
+    selected = NTuple{6, Float64}[]               # (a concrete type: the loop of `broaden` is type-stable and fast)
+    for bin in sort!(collect(keys(ranked))), (_, k, j) in ranked[bin]
+        c = mixture.elements[k].rates[j]
+        auger = get(rates, (Int(c.ion), Int(c.transition.upper)), nothing)
+        delea, egam = auger === nothing ? (0.0, Float64(c.A)) : (auger[1]*broaden_width, auger[2])
+        push!(selected, (abs(Float64(c.λ)), Float64(atomic_mass(c.levels, c.ion)), run.luminosities.inward[k][j]*luminosity_unit,
+            run.luminosities.outward[k][j]*luminosity_unit, delea, egam))
+    end
+    broaden(E, selected, run.zones[end].T, vturb)
 end
