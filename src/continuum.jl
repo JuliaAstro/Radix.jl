@@ -40,9 +40,10 @@ struct Continuum{M<:Mixture, P}
     nrank::Int
     lfast::Int
     vturb::Float64
+    widths::Dict{Tuple{Int, Int}, Float64}      # the Auger widths of the K-vacancy levels (`auger_widths`)
 end
 Continuum(mixture::Mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence) =
-    Continuum(mixture, processes, nrank, lfast, Float64(vturb))
+    Continuum(mixture, processes, nrank, lfast, Float64(vturb), auger_widths(mixture))
 
 # the lines in the bins: the `nrank` strongest of each bin by emissivity (rlbin with lopak = 0 over the lines of data type 4), each put in with `add_line!`
 function add_lines!(arrays, continuum::Continuum, balance, T, ntot, radiation::Radiation, edges, emissivities)
@@ -62,7 +63,7 @@ function add_lines!(arrays, continuum::Continuum, balance, T, ntot, radiation::R
     end
     for bin in sort!(collect(keys(ranked))), (_, k, j) in ranked[bin]
         coef = mixture.elements[k].rates[j]
-        add_line!(arrays, radiation, coef, edges[k][j], emissivities[k][j], T; vturb=continuum.vturb)
+        add_line!(arrays, radiation, coef, edges[k][j], emissivities[k][j], T; vturb=continuum.vturb, widths=continuum.widths)
     end
     arrays
 end
