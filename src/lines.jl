@@ -253,6 +253,16 @@ function add_line!(opacity::Opacity, radiation::Radiation, coef::AtomicLine2, ce
     mass = atomic_mass(coef.levels, coef.ion)
     add_line!(opacity, radiation, centre, emissivity[1], emissivity[2], abs(Float64(coef.λ)), vturb, T, mass, line_width(coef, widths); lfast)
 end
+
+const line_fe_opacity_min = 1e-48                 # ucalc (type 82): the lines weaker than this are not put in the bins
+
+# the Fe UTA lines (type 82): `ucalc` calls linopac with no emission and the width `rdat1(np1r-1+6)*4.14e-15` eV, the sixth real of a record that has five (the first of the next record, a wavelength: about 10⁻¹³ eV, much
+# less than the Doppler width, so that the profile is a Gaussian, which is what a width of 0 gives)
+function add_line!(opacity::Opacity, radiation::Radiation, coef::RadiativeFeDecay, centre, emissivity, T; vturb=default_turbulence, lfast=2, widths=nothing)
+    centre > line_fe_opacity_min || return opacity
+    mass = atomic_mass(coef.levels, coef.ion)
+    add_line!(opacity, radiation, centre, 0.0, 0.0, abs(Float64(coef.λ)), vturb, T, mass, 0.0; lfast)
+end
 add_line!(opacity::Opacity, radiation::Radiation, ::AbstractRate, centre, emissivity, T; kw...) = opacity
 
 # ---------------------------------------------------------------------------

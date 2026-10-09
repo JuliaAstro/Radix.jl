@@ -109,6 +109,24 @@ function lines_tests()
             @test broad.total[k + 5] > narrow.total[k + 5]
         end
 
+        @testset "the Fe UTA lines" begin
+            f32 = Float32
+            lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, level, 5], f32[E, g, 1, 13.6])
+            levels = Radix.levels([lv(1, 0.0, 2), lv(2, 10.2, 8), lv(3, 13.6, 1)]; masses=Dict(5 => 55.85))
+            uta = Radix.RadiativeFeDecay(Int32(4), "", Int32[1, 2, 5], f32[16.0, 775.0, 0.2, 1e12, 1e13], levels)
+            E = Radix.xstar_energy_grid(999)
+            rad = Radix.Radiation(E, zeros(length(E)))
+            opacity = Radix.Opacity(length(E))
+            Radix.add_line!(opacity, rad, uta, 1e-3, (0.0, 0.0), 1.0; vturb=0.0)
+            expected = Radix.Opacity(length(E))
+            Radix.add_line!(expected, rad, 1e-3, 0.0, 0.0, 16.0, 0.0, 1.0, 55.85, 0.0)
+            @test opacity.total == expected.total && count(!=(0), opacity.total) > 0           # a Gaussian line at 16 Å, with the mass of the ion and without emission
+            @test all(==(0), opacity.emissivity)
+            weak = Radix.Opacity(length(E))
+            Radix.add_line!(weak, rad, uta, 1e-49, (0.0, 0.0), 1.0)                              # (below 10⁻⁴⁸: nothing)
+            @test all(==(0), weak.total)
+        end
+
         @testset "the ranking of a bin" begin
             list = Tuple{Float64, Int, Int}[]
             for (strength, j) in ((5.0, 1), (7.0, 2), (6.0, 3), (1.0, 4))
