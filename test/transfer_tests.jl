@@ -442,6 +442,40 @@ function transfer_balance_tests(db)
                 end
             end
             @test edge_total ≈ 807150.611744286 rtol=1e-3
+            # the results as arrays and in one file
+            model = Radix.Model(mixture, processes, Dict{Int, String}(Int(k) => v for (k, v) in ionlabel))
+            results = Radix.tables(model, slab)
+            @test results isa Radix.Results && propertynames(results) == (:zones, :spectrum, :lines, :edges)
+            zone_table = results.zones
+            @test length(zone_table.zone) == length(slab.zones) == 7
+            @test zone_table.depth[1] == 0 && zone_table.thickness == [z.Δr for z in slab.zones] && issorted(zone_table.depth)
+            @test zone_table.ion_parameter[1] ≈ 10 rtol=2e-5                                  # log ξ = 1 at the first zone
+            @test zone_table.pressure ≈ zone_table.n_h .* 1.38e-12 .* zone_table.temperature rtol=1e-6
+            @test zone_table.h_i .+ zone_table.h_ii ≈ ones(7)                                      # (the bare nucleus is named by the next stage)
+            @test hasproperty(zone_table, :he_iii) && hasproperty(zone_table, :fe_xxvii) && hasproperty(zone_table, :zn_xxxi)
+            @test all(z -> abs(sum(z.fractions[findfirst(==(2), mixture.Z)]) - 1) < 1e-9, slab.zones)
+            spectrum_table = results.spectrum
+            @test length(spectrum_table.energy) == 999 && spectrum_table.transmitted == slab.transmitted && spectrum_table.emit_inward == slab.spectrum.inward_continuum
+            @test all(spectrum_table.transmitted_lines .<= spectrum_table.incident .* (1 + 1e-12))
+            line_table, edge_table = results.lines, results.edges
+            @test length(line_table.ion) > 1000 && length(edge_table.ion) > 500
+            @test sum(line_table.emit_inward) + sum(line_table.emit_outward) + sum(edge_table.emit_inward) + sum(edge_table.emit_outward) ≈ 1e38*(edge_total + sum(sum, slab.luminosities.inward[k][j] + slab.luminosities.outward[k][j]
+                for k in eachindex(mixture.elements) for j in findall(c -> c isa Radix.AtomicLine2 && c.rtype == 4, mixture.elements[k].rates))) rtol=1e-3
+            @test all(>(0), edge_table.energy)
+            @test all(>(0), line_table.wavelength)
+            @test "he_ii" in edge_table.ion && "he_ii" in line_table.ion
+            path = tempname() * ".fits"
+            write(path, results; meta=(; DENSITY=1e4, COLUMN=1e21))
+            hdus = fits(path)
+            @test length(hdus) == 5
+            names = [strip(String(c.value)) for h in hdus[2:5] for c in h.cards if c.key == "EXTNAME"]
+            @test names == ["ZONES", "SPECTRUM", "LINES", "EDGES"]
+            back = hdus[2].data
+            @test Float64.(back.temperature) ≈ zone_table.temperature rtol=1e-12
+            @test Float64.(hdus[3].data.energy) == spectrum_table.energy
+            @test strip.(hdus[4].data.ion) == line_table.ion && strip.(hdus[5].data.level) == edge_table.level
+            @test count(c -> c.key == "TUNIT1", hdus[3].cards) == 1
+            rm(path)
             table = fits(joinpath(@__DIR__, "reference", "xstar_thick_slab", "xout_lines1.fits"))[3].data
             ratios = Float64[]
             for i in eachindex(table.ion)

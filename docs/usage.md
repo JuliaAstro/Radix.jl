@@ -39,6 +39,23 @@ A named tuple:
 
 Temperatures are in units of 10⁴ K, energies in eV, as in XSTAR; the spectra are in erg s⁻¹ erg⁻¹ (XSTAR's files are in units of 10³⁸ erg s⁻¹).
 
+## Results as arrays, and one file
+
+XSTAR writes a dozen files (`xout_abund1`, `xout_cont1`, `xout_spect1`, `xout_lines1`, `xout_rrc1`, the `xo_detal` files, a log, ...). Radix returns everything in memory, as the named tuple above, so that it can be called repeatedly
+as a model (a fit, for instance) without touching the disk. `tables` turns the run into `Results`, four tables of plain arrays, one for each of the essential outputs:
+
+```julia
+t = tables(model, run)
+t.zones       # radius, depth, thickness, ion_parameter, x_e, n_h, n_e, pressure, temperature, heating, cooling, heat_error and one column per ion (h_i, h_ii, he_i, ...)
+t.spectrum    # energy, incident, transmitted, transmitted_lines, emit_inward, emit_outward (erg/s/erg, on XSTAR's energy grid)
+t.lines       # ion, lower, upper, wavelength, emit_inward, emit_outward (erg/s), depth_inward, depth_outward
+t.edges       # ion, level, energy, emit_inward, emit_outward (erg/s), depth_inward, depth_outward
+```
+
+`write("model.fits", t; meta=(; DENSITY=1e4, COLUMN=1e21))` writes the four tables to one FITS file (an empty primary HDU with the `meta` keywords and the extensions `ZONES`, `SPECTRUM`, `LINES` and `EDGES`, with units); it
+passes HEASoft's `ftverify`. Nothing is written unless it is asked for. Not in the tables yet: the emission of the lines binned in the spectrum (`binemis`; the `emit` columns are the continuum), and the detailed level populations (`run.zones[k].populations`
+keeps them in memory).
+
 ## Agreement with XSTAR
 
 Radix has been compared with XSTAR 2.59j for the rates of every record type, the ionization balance, the heating and cooling, the transfer (escape, optical depths, continuum opacity, lines, two-photon continua, diffuse emission), the thickness of the zones, the sources and constant pressure
@@ -49,4 +66,4 @@ What differs:
 - The atomic database of the XSTAR package (`$HEADAS/refdata/atdb.fits`) is not the one of its source tree: hydrogen has other records, and the temperatures of the tree are 3-6% lower than the package's. Use the one that you want to compare with.
 - With `vturbi > 0` XSTAR 2.59j smooths its continuum so that it is not absorbed below 20 keV (`gsmooth2`): Radix does not, and the comparisons with it use `vturbi = 0`.
 - To reproduce the rounded constants of XSTAR (`0.861707 eV` for k × 10⁴ K, 12.56 for 4π, ...) use `set_constants!(ucalc_constants())` first; the default is CODATA 2022.
-- Not done: more than one pass (`npass`), the density as a power of the radius (`radexp`), the spectra of the output files of XSTAR (the tables of lines and edges are in `luminosities` and `depths`).
+- Not done: more than one pass (`npass`) and the emission of the lines binned in the output spectrum (the lines are in the `lines` table, with their luminosities and depths).
