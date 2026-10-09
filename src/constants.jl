@@ -17,4 +17,7 @@ const tiny = 1e-24                    # guard against division by zero and zero 
 const expo_limit = 60.0
 expo(x) = exp(clamp(x, -expo_limit, expo_limit))
 
+# int() of Fortran for a default (32-bit) integer: a value out of range is not an error (the arm64 conversion saturates, as here)
+fortran_int(x) = trunc(Int, clamp(x, Float64(typemin(Int32)), Float64(typemax(Int32))))
+
 const Mb = 1e-18                      # cm² per Mb (cross sections are tabulated in Mb)

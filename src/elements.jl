@@ -16,6 +16,7 @@ const unconnected_tolerance = 1e-39     # msolvelud drops the levels whose rates
 const probe_temperature = 1e6           # (10⁴ K) hot enough that no record's ΔE/kT cutoff hides its levels from `index=true`
 const sparse_from = 300                 # elements with this many unknowns or more are solved with sparse matrices
 const refinement_steps = 2              # of the sparse solution
+const population_tolerance = 1e-6       # a sparse solution with populations outside [0, 1] by more than this is solved again with the dense matrix
 const first_level = 1                   # the ground level
 const photoionization_type = 1          # rate type 1 counts the photoionization of the ground level only
 const total_rate_types = (8, 15)        # rate types of the totals (recombination, ionization) that XSTAR leaves out
@@ -342,8 +343,21 @@ function level_populations(A::SparseMatrixCSC)
     x = zeros(eltype(A), n)
     b = normalisation(eltype(A), m)
     # (the sparse LU of SparseArrays is for floating-point numbers of the BLAS types only)
-    x[use] = eltype(A) <: Union{Float32, Float64} ? refined_solve(M, b) : refined_solve(Matrix(M), b)
+    x[use] = eltype(A) <: Union{Float32, Float64} ? sparse_solve(M, b) : refined_solve(Matrix(M), b)
     x
+end
+
+# the sparse solution, or the dense one when the sparse factorization fails or gives populations that cannot be right: the pivoting of the sparse LU loses all the digits of badly
+# conditioned matrices (a gas of 0.06 cm⁻³, where the collisions are rare, gave populations of ±50 for aluminium, which the dense LU solves to 10⁻¹⁶)
+function sparse_solve(M, b)
+    x = try
+        refined_solve(M, b)
+    catch error
+        error isa SingularException || rethrow()
+        nothing
+    end
+    x !== nothing && all(isfinite, x) && minimum(x) >= -population_tolerance && maximum(x) <= 1 + population_tolerance && return x
+    refined_solve(Matrix(M), b)
 end
 
 # the solution of M x = b by an LU factorization and `refinement_steps` steps of iterative refinement, which restore

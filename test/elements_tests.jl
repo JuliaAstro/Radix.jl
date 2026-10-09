@@ -107,6 +107,21 @@ function toy_balance_tests()
         @test x ≈ [5/8, 0, 3/8]
     end
 
+    @testset "the solution of the sparse matrix" begin
+        # populations outside [0, 1] by more than `population_tolerance`, or a failed factorization, send the sparse solve to the dense matrix
+        M = sparse([1.0 1.0 1.0; 2.0 -1.0 0.0; 0.0 1.0 -3.0])
+        b = [1.0, 0.0, 0.0]
+        x = Radix.sparse_solve(M, b)
+        @test x ≈ Matrix(M) \ b && sum(x) ≈ 1
+        W = sparse([1.0 1.0; 1.0 -1.0]); c = [0.2, 1.0]                  # x = [0.6, -0.4]: out of range, solved again densely (the same here)
+        @test Radix.sparse_solve(W, c) ≈ Matrix(W) \ c
+        S = sparse([1.0 1.0; 1.0 1.0])
+        @test_throws Exception Radix.sparse_solve(S, [1.0, 0.0])         # (singular for both)
+        # the int() of Fortran saturates, so that a very low density does not stop the rates of the collisional ionization
+        @test Radix.fortran_int(9.4e18) == typemax(Int32) && Radix.fortran_int(-3.7) == -3 && Radix.fortran_int(12.9) == 12 && Radix.fortran_int(-1e30) == typemin(Int32)
+        @test Radix.effective_charge_rates(1e5, 1e-6, 0.0, 13.6, 3) isa Tuple
+    end
+
     @testset "escape probabilities and radiation" begin
         line = Radix.AtomicLine2(Int32(4), "", Int32[2, 1, 1, 5], f32[1215.67, 0.4162, 6.265e8], levels)
         layout = Radix.Elements([[line]], levels, [5])
