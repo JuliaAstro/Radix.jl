@@ -79,3 +79,13 @@ Radix runs the elements of the gas in parallel, so start Julia with several thre
 
 The zones are not the same in the second row (the thickness rule of Radix gives fewer), so compare the time of a zone: 41 s for XSTAR, 20 s and 11 s for Radix. `passes=3` takes about twice as long as `passes=1`, XSTAR's `npass=3` four times.
 Most of the time is the integration of the photoionization cross sections over the radiation (once for each balance of the elements, the heating, the opacities and the emissivities of each zone).
+
+## Running the tests
+
+`Pkg.test("Radix")` runs the tests of the rates and the toy models. The comparisons with XSTAR (the level balance, heating, transfer, spectra and the whole database) need its atomic database, which is too large for the repository (875 MB): give the path of `atdb.fits` in `RADIX_ATDB` (the one of the XSTAR 2.59j package, `$HEADAS/refdata/atdb.fits`, or of its source tree: both pass) and use several threads:
+
+```
+RADIX_ATDB=$HEADAS/refdata/atdb.fits julia -t 4 --project -e 'using Pkg; Pkg.test()'
+```
+
+It takes about 7 minutes. The continuous integration downloads the database from HEASARC once (`https://heasarc.gsfc.nasa.gov/FTP/software/lheasoft/xstar/atdb.fits`) and keeps it in the cache of the workflow.

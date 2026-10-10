@@ -241,18 +241,18 @@ end
 
 # the elements of the database: the matrix reaches LTE at a high density and reproduces the neutral
 # fraction of the XSTAR reference run (test/reference/xstar_pow_xi2)
-function element_balance_tests(db)
+function element_balance_tests(db, known)
     @testset "Element level balance" begin
         levels = Radix.levels(db)
         rates = Radix.ion_rates(db, 1)
-        @test length(rates) == 550     # (the 33 levels of the ion are not rates)
+        known === nothing || @test length(rates) == known.hydrogen_rates     # (the 33 levels of the ion are not rates)
         @testset "LTE at a high density" begin
             cell = Radix.Cell(1.0, 0.0, 1e22, 1e22)
             x = Radix.level_populations(Radix.rate_matrix(rates, levels, 1, cell))
             xl = Radix.lte_populations(levels, 1, cell)
             # (the constants of XSTAR's rates are rounded differently from those of levwk: 0.5 % here, 10⁻⁵ with CODATA)
             @test x[end] ≈ xl[end] rtol=1e-2
-            @test x[2]/x[1] ≈ xl[2]/xl[1] rtol=2e-3
+            @test x[2]/x[1] ≈ xl[2]/xl[1] rtol=something(known, (; lte_rtol=2e-3)).lte_rtol      # (the package's database has other records for hydrogen: 2%)
         end
         @testset "sparse and dense matrices agree" begin
             cell = Radix.Cell(100.0, 0.0, 1e4, 1e4)

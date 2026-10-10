@@ -209,8 +209,9 @@ function heating_balance_tests(db)
     @testset "Heating and cooling of the database" begin
         levels = Radix.levels(db)
         coheat = joinpath(dirname(get(ENV, "RADIX_ATDB", "")), "coheat.dat")
+        isfile(coheat) || (coheat = joinpath(@__DIR__, "..", "data", "coheat.dat"))      # (the table of the repository is that of the XSTAR package)
         if !isfile(coheat)
-            @info "Skipping the heating tests (coheat.dat next to atdb.fits is needed)"
+            @info "Skipping the heating tests (coheat.dat is needed)"
             return
         end
         compton = Radix.load(Radix.Compton, coheat)
