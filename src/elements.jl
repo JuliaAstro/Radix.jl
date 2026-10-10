@@ -226,19 +226,46 @@ function rate_buffers(::Type{T}, n) where T
     buffers
 end
 
-function element_rates(layout::Elements, cell::Cell, ::Type{T}; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing) where T
+function element_rates(layout::Elements, cell::Cell, ::Type{T}; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing, memo=nothing) where T
     buffers = rate_buffers(T, length(layout.rates))
     for (indices, records) in layout.groups
-        group_rates!(buffers, indices, records, cell, radiation, lfast, escape)     # one dynamic dispatch for each type
+        group_rates!(buffers, indices, records, cell, radiation, lfast, escape, memo)     # one dynamic dispatch for each type
     end
     buffers
 end
 
-function group_rates!(buffers::RateBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape)
+"""
+    RatesMemo(layout)
+
+The rates of the photoionization records (`electron_scaled`) of the element `layout` at the first electron density of a series of
+cells of the same temperature, radiation and escape probabilities, as `element_matrix!` takes them (`memo`): the next cells of the series
+(the iteration of the electron fraction) take the photoionization rate as it is and the recombination rate, which is
+proportional to the electron density, scaled, instead of integrating the cross sections over the radiation again.
+"""
+struct RatesMemo
+    ans1::Vector{Float64}
+    ans2::Vector{Float64}      # per electron
+    valid::BitVector
+end
+RatesMemo(layout::Elements) = RatesMemo(zeros(length(layout.rates)), zeros(length(layout.rates)), falses(length(layout.rates)))
+
+# the records whose forward rate does not depend on the electron density and whose reverse rate is proportional to it
+electron_scaled(::AbstractRate) = false
+electron_scaled(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3}) = true
+
+function group_rates!(buffers::RateBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape, memo=nothing)
     for k in eachindex(records)
         j, coef = indices[k], records[k]
+        if memo !== nothing && electron_scaled(coef) && memo.valid[j]
+            buffers.ans1[j], buffers.ans2[j] = memo.ans1[j], memo.ans2[j]*cell.nₑ
+            continue
+        end
         ptmp = something(escape_of(escape, j, coef), optically_thin)
-        buffers.ans1[j], buffers.ans2[j] = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))
+        a1, a2 = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))
+        buffers.ans1[j], buffers.ans2[j] = a1, a2
+        if memo !== nothing && electron_scaled(coef) && cell.nₑ > 0
+            memo.ans1[j], memo.ans2[j], memo.valid[j] = a1, a2/cell.nₑ, true
+        end
     end
 end
 

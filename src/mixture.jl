@@ -120,6 +120,7 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     matrices = [el.N >= sparse_from ? sparse_matrix(el) : zeros(el.N, el.N) for el in elements]
     populations = [zeros(el.N) for el in elements]
     fractions = [zeros(length(el.ions) + 1) for el in elements]
+    memos = [RatesMemo(el) for el in elements]       # (the cross sections are integrated once for all the electron fractions)
     nₕ = Float64(neutral)
     hydrogen = findfirst(==(hydrogen_Z), mixture.Z)
 
@@ -127,7 +128,7 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     function evaluate(x)
         cell = Cell(Float64(T), nₕ, ntot*x, Float64(ntot))
         Threads.@threads for k in eachindex(elements)
-            element_matrix!(matrices[k], elements[k], cell; radiation, escape=element_escape(escape, k), lfast)
+            element_matrix!(matrices[k], elements[k], cell; radiation, escape=element_escape(escape, k), lfast, memo=memos[k])
             populations[k] = level_populations(matrices[k])
             fractions[k] = ion_fractions(populations[k], elements[k])
         end

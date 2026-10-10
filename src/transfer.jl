@@ -378,8 +378,10 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
         T, xee, n = zone.T, zone.xee, zone.ntot
         edges = record_opacities(mixture, zone, zone.T, n; radiation, lfast, vturb)
         emissivities = lines ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb) : nothing
-        luminous && add_luminosities!(luminosities, something(emissivities, line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb)),
-            edge_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast), r, Δr)
+        if luminous
+            lined = emissivities === nothing ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb) : emissivities
+            add_luminosities!(luminosities, lined, edge_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast), r, Δr)
+        end
         continuum = opacity(continuum_gas, zone, zone.T, n, radiation, edges; emissivities)
         attenuate && (spectrum = transmit(spectrum, incident, diffuse ? continuum : (; continuum..., emissivity=zero(continuum.emissivity),
             bremsstrahlung=zero(continuum.bremsstrahlung)), r, Δr; cfrac))
