@@ -1,0 +1,9 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Radix = "91324510-8a80-4dcc-8f77-32500317c0e2"
+
+[sources]
+Radix = {path = "/Users/paul/.julia/dev/Radix"}
+
+[compat]
+Documenter = "1"

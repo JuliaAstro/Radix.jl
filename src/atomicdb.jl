@@ -2,6 +2,15 @@
 
 using FITSFiles
 
+"""
+    load(io::IO)
+    load(Compton, io::IO)
+    load(Compton, path)
+
+The records of the atomic database of XSTAR (`atdb.fits`) read from the stream `io`: the levels, lines, photoionization cross sections
+and the other rate types, as the vector of records that `Model` builds the gas from. With `Compton` as the first argument it reads
+the table of the Compton heating and cooling (`coheat.dat`) instead, from a stream or a file.
+"""
 function load(io::IO)
 
     # scale=false: FITSFiles.jl (before JuliaAstro/FITSFiles.jl#50 is released)

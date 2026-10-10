@@ -4,6 +4,12 @@
 
 const AtomicLineDesc = "line data radiative: mendosa; raymond and smith"
 
+"""
+    AtomicLine
+
+A radiative line of the atomic database (XSTAR data type 4): the `transition` between a lower and an upper level, the wavelength `λ`,
+the oscillator strength `f` and the Einstein A (s⁻¹).
+"""
 struct AtomicLine{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

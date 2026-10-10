@@ -5,3 +5,5 @@
 /src/atomicDB.jl
 /src/compton.jl
 /src/lte_rates.jl
+/docs/build/
+/docs/Manifest*.toml
