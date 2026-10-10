@@ -9,7 +9,7 @@ This package is based on Tim Kallman's XSTAR program that is written in FORTRAN.
 ```julia
 using Radix
 model = Model("atdb.fits", "coheat.dat")        # the atomic data and the Compton table of an XSTAR installation
-run = slab_model(model; density=1e4, column=1e21, logξ=1.0, luminosity=1e46, equilibrium=true, T=10.0, emult=1.0, steps=3, vturb=0.0)
+run = slab(model; density=1e4, column=1e21, logξ=1.0, luminosity=1e46, equilibrium=true, T=10.0, emult=1.0, steps=3, vturb=0.0)
 [(z.T, z.xee, z.Δr) for z in run.zones]         # the zones: temperature (10⁴ K), electron fraction and thickness (cm)
 ```
 

@@ -20,13 +20,13 @@ function normalize_luminosity(E, spectrum, luminosity)
 end
 
 """
-    power_law(E, α, luminosity)
+    powerlaw(E, α, luminosity)
 
 The spectrum `E^α` on the energy grid `E` (eV) with the luminosity `luminosity` (erg s⁻¹) between 13.6 eV and 13.6 keV, in erg s⁻¹ erg⁻¹ (XSTAR's `ispec4` followed by
 `ispecgg`, the `pow` spectrum with `trad = α`): `E^α` above 0.01 eV and 10⁻²⁴ below, normalized to the luminosity in the bins
 `nbin(13.6 eV)` to `nbin(13.6 keV)` and then again in the bins of the energies in the range.
 """
-function power_law(E::AbstractVector, α, luminosity)
+function powerlaw(E::AbstractVector, α, luminosity)
     shape = [e > spectrum_cutoff ? e^α : spectrum_floor for e in E]
     spectrum = shape .* (luminosity/luminosity_unit/band_by_index(shape, E)/constants().ergsev*luminosity_unit)
     normalize_luminosity(E, spectrum, luminosity)
@@ -59,11 +59,11 @@ function blackbody(E::AbstractVector, T, luminosity)
 end
 
 """
-    thermal_bremsstrahlung(E, T, luminosity)
+    thermal(E, T, luminosity)
 
 The spectrum `e^{-E/kT}` of thermal bremsstrahlung (`spectrum=brems`, `ispec`) with `kT = 861.707 T` eV, `T` being the temperature in 10⁷ K, and the luminosity `luminosity` (erg s⁻¹) between 13.6 eV and 13.6 keV.
 """
-function thermal_bremsstrahlung(E::AbstractVector, T, luminosity)
+function thermal(E::AbstractVector, T, luminosity)
     K = constants()
     ekt = 1000*K.kT_eV*T
     shape = [expo(-e/ekt) for e in E]

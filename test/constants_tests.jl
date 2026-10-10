@@ -3,7 +3,7 @@
 
 @testset "Physical constants" begin
     K = Radix.constants()
-    U = Radix.ucalc_constants()
+    U = Radix.ucalc()
     CODATA2018 = Radix.PhysicalConstants.CODATA2018
 
     @testset "CODATA 2022 is the default" begin
@@ -89,7 +89,7 @@
         # coefficients of ucalc differ from the full ones by about that much
         for x in (0.05, 0.5, 1.0, 2.0, 10.0, 50.0)
             ref = Radix.expint(x)
-            u = Radix.with_constants(() -> Radix.expint(x), U)
+            u = Radix.constants(() -> Radix.expint(x), U)
             @test u ≈ ref rtol=5e-7
         end
         @test Radix.expint(1.0) ≈ 0.5963473623231942 rtol=1e-6     # x e^x E₁(x) at x = 1, E₁(1) = 0.2193839344
@@ -109,9 +109,9 @@
     end
 
     @testset "switching the constants" begin
-        @test Radix.with_constants(() -> Radix.constants().kT_eV, U) == Float64(0.861707f0)
+        @test Radix.constants(() -> Radix.constants().kT_eV, U) == Float64(0.861707f0)
         @test Radix.constants() === K                     # restored
-        @test_throws ErrorException Radix.with_constants(() -> error("x"), U)
+        @test_throws ErrorException Radix.constants(() -> error("x"), U)
         @test Radix.constants() === K                     # restored after an error
     end
 
@@ -121,7 +121,7 @@
         for (c, _) in Iterators.take(ucalc_cases("type98"), 60)
             coef, cell, lv = ucalc_inputs(c)
             r = Radix.rate(coef, cell)
-            u = Radix.with_constants(() -> Radix.rate(coef, cell), U)
+            u = Radix.constants(() -> Radix.rate(coef, cell), U)
             r.frate == 0 && continue
             # (the Boltzmann factor amplifies the 3e-5 difference in k by ΔE/kT)
             @test r.frate ≈ u.frate rtol=1e-2
@@ -136,7 +136,7 @@
             coef, cell, lv = ucalc_inputs(c)
             call() = Radix.rate(coef, cell; radiation=ucalc_radiation(c), abund=(c.cond[9], c.cond[10]))
             r = call()
-            u = Radix.with_constants(call, Radix.Constants(Radix.constants(); fourpi=U.fourpi, eightpi=U.eightpi))
+            u = Radix.constants(call, Radix.Constants(Radix.constants(); fourpi=U.fourpi, eightpi=U.eightpi))
             r.frate == 0 && continue
             @test r.frate ≈ u.frate rtol=1e-12
             r.irate == 0 || @test r.irate ≈ u.irate rtol=1e-2

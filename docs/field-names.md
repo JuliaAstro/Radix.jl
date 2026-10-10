@@ -161,7 +161,7 @@ the number of levels of the ion (the continuum is the last) and the atomic mass 
 `Levels`, which `levels(records)` builds from the `AtomicLevel` and `AtomicLevelFe` records (the Fe UTA
 levels, which hold only an energy and a weight, are added as levels with zero quantum numbers) and the `Atom` and
 `Ion` records (the mass of each ion's element). It behaves as the dictionary `(ion, level) => AtomicLevel` and also
-answers `nlevels(table, ion)`, `atomic_mass(table, ion)` and `level_counts(table)`.
+answers `nlevels(table, ion)`, `weight(table, ion)` and `counts(table)`.
 
 The rates that need it have a last field `levels` (a `Levels`), and the constructor of their database record takes the
 table as an extra argument. `load` builds the records of the levels, elements and ions first, makes the table from them
@@ -183,12 +183,12 @@ The rates take their physical constants from `Radix.constants()`, a `Constants` 
 from PhysicalConstants.jl with CODATA 2022 by default: k, h, c, the Rydberg, erg per eV, hc/k and
 its temperature floor ΔE/50k, Ry/k, eV/k, the proton-electron mass ratio, the line cross section
 π r_e c, the thermal speed of 1 amu at 10⁴ K, and the Maxwellian collision and Saha prefactors. Use
-another CODATA set with `set_constants!(Constants(PhysicalConstants.CODATA2018))` (also CODATA 2014),
-or temporarily with `with_constants(f, K)`; `Constants(K; field=value)` copies a set with changes.
+another CODATA set with `constants!(Constants(PhysicalConstants.CODATA2018))` (also CODATA 2014),
+or temporarily with `constants(f, K)`; `Constants(K; field=value)` copies a set with changes.
 
 XSTAR's `ucalc` rounds these differently, sometimes in different ways within one program
 (`kT_eV` = 0.861707, 8.617e-5 and 1.38066e-16 erg/K for k, three values of hc/k, 1800 for the
-proton mass). `ucalc_constants()` has its numbers, field by field; the tests that compare with
+proton mass). `ucalc()` has its numbers, field by field; the tests that compare with
 `ucalc` (`ucalc_tests.jl` and the formulas transcribed in `runtests.jl`) run with that set, and
 `constants_tests.jl` checks that the CODATA values are consistent with each other and within the
 rounding of `ucalc`'s (1e-3, 3% for the proton mass). Where `ucalc` is sensitive to the rounding (the
@@ -244,7 +244,7 @@ iteration of `dsec`. What the code does and what was found:
   `cooling(...)`, `heating_cooling(...)` (both) and `α(process, E, T)`, `σ(process, E, T)`, the absorption or scattering coefficient, since each coefficient is a function of the process (the opacity is that times the density, `opacity(process, E, T, nₑ)`); `FreeFree()` (absorption: heating and opacity),
   `Bremsstrahlung()` (emission: cooling), `Compton(Te, Eph, σ)` (heating and cooling; the energy exchanged per electron is the coefficients `heating(compton, E, T)` and `cooling(compton, E, T)`, from which the heating and cooling derive) and `Thomson(cfrac)` (an opacity, which is also in the
   continuum opacity `opakcont`: `AbstractScattering`). A process without a heating, cooling or opacity has 0. `standard_processes(compton)` makes the four
-  of XSTAR; `heating_cooling(mixture, ...)`, `thermal_equilibrium` and `march_zones` take such a collection and report the term of each
+  of XSTAR; `heating_cooling(mixture, ...)`, `thermal_equilibrium` and `march` take such a collection and report the term of each
   (`hc.processes`). The free-free terms use XSTAR's fitted coefficients (Gaunt factor 1, ion density 1.4 nₑ).
 - **Photoionization that leaves an excited level of the next ion**: ucalc reads the energy of the final level from stale memory, and
   the energy measured from the threshold is a difference of nearly equal terms (it reached 10⁵ times the cooling). These records are left
@@ -279,20 +279,20 @@ the depths in `calc_hmc_ion`:
 - **Single-precision literals in `pescl`/`pescv`**: 1.2, 1.e-5 and 1.e-12 are single precision, which makes the double-precision
   values differ by 4×10⁻⁸; checked against the real functions (`test/reference/ucalc/drvpesc.f90`) to 10⁻¹³.
 - **`trnfrc` writes the flux as `L/(12.56 r²)`, not `L/(4π r²)`**: 0.05% smaller. `point_source` uses the `fourpi` of the constants
-  in use (4π by default, 12.56 with `ucalc_constants()`), which is what the 0.1% bias between Radix and XSTAR's heating and
+  in use (4π by default, 12.56 with `ucalc()`), which is what the 0.1% bias between Radix and XSTAR's heating and
   cooling was.
 - **The reference run has two zones.** `nsteps=2` is a slab of two zones of 5×10¹² cm: the first computed at 10¹³ cm (`frac_heat_error`
   and the first row of the table of the second), the second at 1.5×10¹³ cm (the third row), and the optical depths in `xout_lines1.fits`
   (`depth_inward`) and `xout_rrc1.fits` (its `depth_outward`, which is the inward one) are their sum. This reproduces the line depths of
   all 451 lines above 10⁻⁹ to 1% (median 0.9999984, with XSTAR's constants) and the edge depths of the H-like and He-like ions
   (the others have several records with the same level and threshold and no parent level in the table to tell them apart) to 0.1-0.3%.
-- **Continuum opacity and attenuation** (`src/continuum.jl`, `Continuum`, used by `march_zones`). `calc_emis_all` starts
+- **Continuum opacity and attenuation** (`src/continuum.jl`, `Continuum`, used by `march`). `calc_emis_all` starts
   `opakc` at Thomson scattering `nₑ σ_T (1 - cfrac)` (`Thomson(cfrac)` (the coefficient `σ_T (1 - cfrac)` times `nₑ`)), adds the photoionization opacity of the records (called with the populations as
   `abund`) and then free-free (`FreeFree()` (its coefficient times `nₑ nᵢ`), only in the total, not in `opakcont`); `stpcut` adds `opakc Δr` to `dpthc`. Only the
   `nrank = 10` strongest edges of each energy bin enter (`rlbin`, ranked by the edge opacity of the zone; the bin of an edge is that
   of its edge energy, `E_grid[1] × 13.598` for type 49 and `max(0.1, E∞ - E)` of the level for the others, set once by `xstarsetup`)
   and every record of rate type 42. The transmitted spectrum of the output (`writespectra3`) is `incident × exp(-dpthcont)`, with `dpthcont` the depth of `opakcont` (Thomson and photoionization: no lines or free-free), while
-  the spectrum that passes the zones loses the `opakc` (lines and free-free included) of each (`transmit`; `march_zones` returns `dpthc` and `dpthcont` as well). Against XSTAR's slab of 10²¹ cm⁻²
+  the spectrum that passes the zones loses the `opakc` (lines and free-free included) of each (`transmit`; `march` returns `dpthc` and `dpthcont` as well). Against XSTAR's slab of 10²¹ cm⁻²
   (`test/reference/xstar_thick_slab`) the depth `dpthcont` of all 999 bins agrees to a median of 1.0004 and within 5%
   (Thomson scattering 0.1%, the He II edge 2.5%).
 - **Lines in the bins** (`src/lines.jl`, `add_line!`, `voigt`). `linopac` puts the opacity of a line (its centre opacity `oplin` times the Voigt profile of the thermal and turbulent widths
@@ -313,7 +313,7 @@ the depths in `calc_hmc_ion`:
   and are 12.56 times too high with it), so `transmit` divides it by 4π. With the XSTAR zones of the thick slab (`delta_r` of its table: five zones of 1.8×10¹⁶ to 2.8×10¹⁶ cm)
   the emission columns of 571 bins agree to a median of 1.0002 and 1.0015 (inward and outward) and 5% at worst, and the He II and O VIII fractions at the inner edges of the zones to 2×10⁻⁴-9×10⁻⁴ and 3×10⁻⁵-1×10⁻⁴ (0.7-2.7% and 0.07-0.3% without the emission). The last row of the table (the end of the slab) is not a zone:
   XSTAR's final calculation uses the field of the last zone before `heatt`, which Radix does not do. Not ported: the luminosities of the lines and edges (`elum`, `elumab`), which `heatt` also updates, and the further passes (`ldir > 0`).
-- **The thickness of the zones** (`march_slab`, `step_thickness`: XSTAR's `step`). `xstar` solves zone after zone from the distance `r` of the source until the column `xpxcol` is reached; the first zone has no
+- **The thickness of the zones** (`march`, `step_thickness`: XSTAR's `step`). `xstar` solves zone after zone from the distance `r` of the source until the column `xpxcol` is reached; the first zone has no
   thickness (it only gives `opakc`), and the thickness of the others is `min(xpxcol/xpx, r/numrec, (xpxcol - xcol)/xpx, emult/opakc)`, the last over the bins above `ectt = 1` eV whose depth `dpthc` before the zone does not exceed `taumax`
   and whose spectrum `zrems(1)` is above 10⁻¹² (10³⁸ erg s⁻¹ erg⁻¹), with the `opakc` of the zone before (lines included: the bin of the He II line at 41 eV limits the zones of the reference slab). `numrec` is `nsteps` (not a number of zones) and `emult` `emult`
   (the defaults are 0.75, `taumax = 5`). For the thick slab of 10²¹ cm⁻² (`emult = 1`, `nsteps = 3`) it reproduces the seven zones of XSTAR's log (log N = 20.26, 20.56, 20.74, 20.86, 20.95, 21.00 at their ends): their depths agree to
@@ -322,18 +322,18 @@ the depths in `calc_hmc_ion`:
   shares `ptmp₁`, `ptmp₂` of its decay energy) and half of `(cemab₁ + cemab₂) Δr 4π r²` to each of an edge, in 10³⁸ erg/s; they are the `emit_inward` and `emit_outward` of `xout_lines1.fits` and `xout_rrc1.fits`. `cemab` is made for all the edges (the records of rate
   type 7 with a level of the ion above 10⁻³⁴), not only for the ones that `rlbin` ranks. For the thick slab with the zones of XSTAR the total of the edges agrees to 3×10⁻⁵ (807126 against 807151) and the 599 lines above 100 in its table to a median of 1.0001 and 5% at worst, but for
   hydrogen: its lines are 2× (Lyα) and 20× (the 2p-3s of Hα) off because the database of the tree has other records for it than the package of XSTAR that made the table (`xout_lines1.fits` of the reference is from the package).
-- **The source and the model** (`src/spectrum.jl`, `power_law`, `source_distance`; `slab_model`). `ispec4` makes the spectrum `E^α` (`trad = α`; 10⁻²⁴ below 0.01 eV) and normalizes it to the luminosity of 1 to 1000 Ry in the bins
+- **The source and the model** (`src/spectrum.jl`, `powerlaw`, `source_distance`; `slab`). `ispec4` makes the spectrum `E^α` (`trad = α`; 10⁻²⁴ below 0.01 eV) and normalizes it to the luminosity of 1 to 1000 Ry in the bins
   `nbinc(13.6)` to `nbinc(1.36e4)`; `ispecgg` normalizes it again in the bins whose energies are in the range (with 13.6 as a single-precision literal), which is not the same bins. The result is the incident
-  spectrum of the reference runs to 5×10⁻⁶ (the precision of the files). The distance of the source follows from the ionization parameter, `r² = L/(ξ n)`. `slab_model(mixture, processes; density, column, logξ, luminosity, α, ...)` puts it all together:
-  `power_law`, `source_distance` and `march_slab`, returning the zones, the spectra and the `transmitted` spectrum `incident × exp(-dpthcont)` of the output. The turbulent speed `vturbi` only gives the widths of the lines
-  (XSTAR's `gsmooth` of the continuum for `vturbi > 0` is not done: see the next item). The other spectra are `blackbody` (`starf`: `trad` in 10⁷ K, `1/kT = 1.16×10⁻³/trad` eV⁻¹, called by `xstar` with the luminosity 1), `thermal_bremsstrahlung` (`ispec`, `kT = 861.707 trad` eV) and `tabulated` (`ispecg`: a table interpolated in the logarithms, ascending in the energy, with the units of `spectun`); the first two agree with XSTAR's incident spectra to 3×10⁻⁵ (`test/reference/xstar_sources`).
-- **Constant pressure** (`ConstantPressure`, `gas_density`, `source_distance_pressure`; `slab_model(...; pressure)`). With `lcpres=1` the hydrogen density is `xpx = p/1.38e-12/t` (T in 10⁴ K, the pressure being that of the hydrogen) and `calc_hmc_all`,
+  spectrum of the reference runs to 5×10⁻⁶ (the precision of the files). The distance of the source follows from the ionization parameter, `r² = L/(ξ n)`. `slab(mixture, processes; density, column, logξ, luminosity, α, ...)` puts it all together:
+  `powerlaw`, `source_distance` and `march`, returning the zones, the spectra and the `transmitted` spectrum `incident × exp(-dpthcont)` of the output. The turbulent speed `vturbi` only gives the widths of the lines
+  (XSTAR's `gsmooth` of the continuum for `vturbi > 0` is not done: see the next item). The other spectra are `blackbody` (`starf`: `trad` in 10⁷ K, `1/kT = 1.16×10⁻³/trad` eV⁻¹, called by `xstar` with the luminosity 1), `thermal` (`ispec`, `kT = 861.707 trad` eV) and `tabulated` (`ispecg`: a table interpolated in the logarithms, ascending in the energy, with the units of `spectun`); the first two agree with XSTAR's incident spectra to 3×10⁻⁵ (`test/reference/xstar_sources`).
+- **Constant pressure** (`ConstantPressure`, `gas_density`, `source_distance_pressure`; `slab(...; pressure)`). With `lcpres=1` the hydrogen density is `xpx = p/1.38e-12/t` (T in 10⁴ K, the pressure being that of the hydrogen) and `calc_hmc_all`,
   `calc_emis_all` and `calc_emisab_all` recompute it for the temperature they are given, so the density follows the temperature of the iteration of each zone; `rlogxi` is then the ionization parameter of the pressure, `r² = L/(4π c P Ξ)`
   (with `c = 2.99792458e10` as a single-precision literal and 12.56 for 4π). Radix takes `ntot` as a number or a function of T (`thermal_equilibrium` evaluates it at each temperature), and the column of the zones adds up with the density that each has at its
   final temperature. The reference run (`test/reference/xstar_const_pressure`, `P = 10⁻⁷`) gives r to 10⁻⁵ and the first zone (T, n, x_e) to 4×10⁻⁴, 3×10⁻⁴ and 10⁻⁵ with the database of the package. **XSTAR does not always converge the temperature**: in its
   second zone it stays at the T of the first with a heating imbalance of 0.15%, which Radix reproduces (0.154% in the same state: the physics agrees), where the iteration of `dsec` stops when the false position repeats a temperature (`testt < 2×10⁻⁹`); Radix finds the
   root there (10.71 against 10.46, 2.4%), as it does for the zone 3 (+0.4%) of the thick slab with constant density. The other `lcpres` values are not ported.
-- **A density that varies as a power of the distance** (`PowerLawDensity`, `slab_model(...; radexp)`; `lcpres=0`). The density of a zone is `xpx = xpx0 (r/r0)^radexp` at the radius of its inner edge, `r0` the radius of the first zone, but `xstar` updates it for the next zone
+- **A density that varies as a power of the distance** (`PowerLawDensity`, `slab(...; radexp)`; `lcpres=0`). The density of a zone is `xpx = xpx0 (r/r0)^radexp` at the radius of its inner edge, `r0` the radius of the first zone, but `xstar` updates it for the next zone
   before it adds the column of the zone, so **the column of a zone is `Δr` times the density at its outer edge**. Radix does this (the thickness of the next zone, `step`, uses the density at its position). For `radexp = -3`, `rlrad38 = 1e-2`
   the rows of the table of XSTAR (log r = 15.50, 15.50, 15.62; log N = 18.65, 18.84; log n = 4.00, 3.63) are reproduced (`test/transfer_tests.jl`). Such a slab has a finite column (n r⁻³ from 3×10¹⁵ cm adds to 1.6×10¹⁹ cm⁻²), and when it is asked for more, XSTAR goes on
   to 10⁵² cm until its buffer of 3999 steps is full; Radix stopped in the zones of such a run at densities of 0.06 cm⁻³ and below, which led to three changes: the sparse LU (elements of 300 levels or more) loses all the digits of the badly conditioned matrices of a gas with rare collisions
@@ -409,7 +409,7 @@ ported type (except 4, which has no `rate` method). Notes:
 ## Open items
 
 - Type 85 (`PhotoionizeFeKedge`) sums sharp resonances, so it is sensitive to the
-  last digit of the energy conversion: with `ucalc_constants()` it uses `13.605692` as the
+  last digit of the energy conversion: with `ucalc()` it uses `13.605692` as the
   single-precision literal that `ucalc` has (`Ry_eV_single`); with the double value the rates
   differ by 2e-5. `ucalc` also takes the resonance charge as the ion index minus 114 (an
   earlier ion numbering), which gives meaningless charges for the current ion
@@ -476,7 +476,7 @@ ported type (except 4, which has no `rate` method). Notes:
   1.43817e8) and a weight `2(2l + 1)` where `l` comes from numbering the first level of the record by
   shells (`level` 1 is 1s, 2 and 3 are 2s and 2p, ...), as `calt77` does with the level index. The
   temperature floor ΔE/50k, from the energies of the levels, is `T_floor_coeff` over the wavelength
-  from the single-precision 12398.4016 of `ucalc` (`hc_eVÅ_single`): with `ucalc_constants()` the
+  from the single-precision 12398.4016 of `ucalc` (`hc_eVÅ_single`): with `ucalc()` the
   factor e^{-ΔE/kT} amplifies its 2e-8 rounding to 1e-6.
 - `RadiativeAPED` (ucalc 91) is `ucalc`'s type 50 (it jumps to that code): `rate` builds the equivalent
   `AtomicLine2` and calls it, with the same keywords and results (the stored second real, 0, is not used).
@@ -506,7 +506,7 @@ ported type (except 4, which has no `rate` method). Notes:
   and 69 in eV with `eboltz = 1.160443e4` K/eV (`eV_K_ls`). The scaled energy is limited to (0.05, 77) in type 69 and
   to 77 in type 66; at 77 the fits cancel two large terms (y²/2 times `d`), which amplifies any rounding of the
   exponential integral by ~3000: `ucalc`'s `expint` has single-precision coefficients (`single_expint` of
-  `ucalc_constants()`, 2e-7 effect elsewhere), and the 66 and 69 fits differ from `ucalc` by 1e-4 without it. The
+  `ucalc()`, 2e-7 effect elsewhere), and the 66 and 69 fits differ from `ucalc` by 1e-4 without it. The
   default uses the full coefficients. `calt69` prints an error and leaves Υ unset for y < 1e-20, which the
   database does not reach.
 - `CollisionHlike1` (ucalc 60) and `CollisionHlike2` (62, which `ucalc` runs through the same code) evaluate the
@@ -558,7 +558,7 @@ ported type (except 4, which has no `rate` method). Notes:
   continuum and those of rate type 15 (a duplicate set) in level 1. Below the first grid point `ucalc` reads
   the left end of the interval from before the table (`T0`, about 10⁴, and the last `x_grid`), which makes the
   interpolation come out at about ρ(x₁); reproduced. The Saha prefactor is `saha_ci` (2.08e-22 for `ucalc`).
-  The factor `ln 2` is the single-precision `0.693147` there, and `kT_eV` of `ucalc_constants()` is now the
+  The factor `ln 2` is the single-precision `0.693147` there, and `kT_eV` of `ucalc()` is now the
   single-precision `0.861707` too, since the Boltzmann factors amplify its 3e-8 rounding.
 - `CollisionProb` (ucalc 63), transitions that change `n`: XSTAR's `ans1`/`ans2`
   put the large de-excitation-sized rate on the *upward* transition for any

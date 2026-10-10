@@ -100,11 +100,11 @@ const xstar_abundance_tables = Dict{Symbol, Vector{Float64}}(
 )
 
 """
-    abundance_table(name=:xdef)
+    composition(name=:xdef)
 
 The abundances relative to hydrogen of the elements H (1) to Zn (30) of an abundance table of XSTAR (`abundtbl`): `:xdef` (the default), `:angr` (Anders & Grevesse 1989), `:aspl` (Asplund et al. 2009),
 `:feld` (Feldman 1992), `:aneb` (Anders & Ebihara 1982), `:grsa` (Grevesse & Sauval 1998), `:wilm` (Wilms et al. 2000, with 0 for the elements it does not have), `:lodd` (Lodders 2003) and `:lgpp`, `:lgps` (Lodders et al. 2009).
 """
-abundance_table(name::Symbol=:xdef) = copy(get(xstar_abundance_tables, name) do
+composition(name::Symbol=:xdef) = copy(get(xstar_abundance_tables, name) do
     throw(ArgumentError("unknown abundance table $name: use one of $(sort!(collect(keys(xstar_abundance_tables))))"))
 end)

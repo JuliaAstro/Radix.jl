@@ -34,7 +34,7 @@ function AtomicLine2(rate::Int32, label::String, ivec::I, rvec::R, levels::Level
 end
 
 """
-    rate(coef::AtomicLine2, cell; mass=atomic_mass(coef.levels, coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
+    rate(coef::AtomicLine2, cell; mass=weight(coef.levels, coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
 
 Radiative decay and photoexcitation of an atomic line (XSTAR ucalc type 50).
 The level data and the number of levels of the ion (the continuum level is excluded) come from the
@@ -53,7 +53,7 @@ wavelength (λ = 0) and records with a level missing from the level table give n
 The line opacity that XSTAR adds to its continuum arrays (`linopac`) is not
 included.
 """
-function rate(coef::AtomicLine2, cell::Cell; mass=atomic_mass(coef.levels, coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
+function rate(coef::AtomicLine2, cell::Cell; mass=weight(coef.levels, coef.ion), vturb=1.0, pesc=1.0, radiation=nothing, cfrac=0.0, index=false)
     levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()

@@ -4,10 +4,10 @@ using LinearAlgebra: lu, SingularException
 using SparseArrays
 
 export Atom, AtomicLevel, AtomicLine
-export load, levels, level_counts, Levels, nlevels, atomic_mass, Radiation, Opacity
-export Constants, ucalc_constants, constants, set_constants!, with_constants
-export Model, slab_model, tables, march_slab, march_zones, ConstantPressure, abundance_table
-export power_law, blackbody, thermal_bremsstrahlung, tabulated
+export load, levels, counts, Levels, nlevels, weight, Radiation, Opacity
+export Constants, ucalc, constants, constants!
+export Model, slab, tables, march, ConstantPressure, composition
+export powerlaw, blackbody, thermal, tabulated
 
 
 include("constants.jl")

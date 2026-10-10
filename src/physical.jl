@@ -10,7 +10,7 @@ import PhysicalConstants.CODATA2022
 
 The physical constants and the derived combinations the rates use, in the units of the rates (cgs, eV,
 Å, K). `Constants()` (or `Constants(PhysicalConstants.CODATA2018)`, ...) evaluates them from a CODATA
-set of PhysicalConstants.jl, `Constants(K; kT_eV=...)` copies `K` with some fields changed, `ucalc_constants()` has the rounded values written in XSTAR's source.
+set of PhysicalConstants.jl, `Constants(K; kT_eV=...)` copies `K` with some fields changed, `ucalc()` has the rounded values written in XSTAR's source.
 
 `ucalc` rounds the same constant differently in different routines (its k is 8.617e-5, 0.861707e-4
 and 1.38066e-16 in places), so some physical constants have more than one field, one per use; they
@@ -157,12 +157,12 @@ function Constants(codata::Module=CODATA2022)
 end
 
 """
-    ucalc_constants()
+    ucalc()
 
 The values XSTAR's `ucalc` uses, rounded and not always consistent with each other. Reproduces its
-numbers to about 1e-6; see `with_constants`.
+numbers to about 1e-6; see `constants`.
 """
-ucalc_constants() = Constants((;
+ucalc() = Constants((;
     ergsev=1.602176634e-12, ergsev_bremsint=1.602197e-12, ergsev_decay=Float64(1.602197f-12),
     kB_cgs=1.380649e-16, kB_szirc=Float64(1.38066f-16), kB_eV=8.617e-5, kB_keV=Float64(8.617385f-8), kT_eV=Float64(0.861707f0),
     Ry_eV=13.605692, Ry_eV_single=Float64(13.605692f0), Ry_eV_coarse=Float64(13.6f0), Ry_erg=2.17896e-11,
@@ -190,19 +190,19 @@ The set of constants the rates are using (CODATA 2022 unless changed).
 constants() = CURRENT_CONSTANTS[]
 
 """
-    set_constants!(K::Constants)
+    constants!(K::Constants)
 
-Make `K` the constants of all the rates, e.g. `set_constants!(Constants(PhysicalConstants.CODATA2018))`.
-Returns `K`. This is global state: use `with_constants` for a temporary change.
+Make `K` the constants of all the rates, e.g. `constants!(Constants(PhysicalConstants.CODATA2018))`.
+Returns `K`. This is global state: use `constants` for a temporary change.
 """
-set_constants!(K::Constants) = (CURRENT_CONSTANTS[] = K)
+constants!(K::Constants) = (CURRENT_CONSTANTS[] = K)
 
 """
-    with_constants(f, K::Constants)
+    constants(f, K::Constants)
 
 Call `f()` with `K` as the constants of the rates, restoring the previous set afterwards.
 """
-function with_constants(f, K::Constants)
+function constants(f, K::Constants)
     old = CURRENT_CONSTANTS[]
     CURRENT_CONSTANTS[] = K
     try

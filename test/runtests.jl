@@ -3,7 +3,7 @@ using Test
 
 # The comparisons with XSTAR's ucalc (and the formulas transcribed from it below) need the rounded
 # constants of its source: the rates use CODATA 2022 unless told otherwise.
-Radix.set_constants!(Radix.ucalc_constants())
+Radix.constants!(Radix.ucalc())
 include("ucalc_tests.jl")
 include("elements_tests.jl")
 include("mixture_tests.jl")
@@ -452,7 +452,7 @@ struct UnportedRate <: Radix.AbstractRate end
     end
 end
 
-Radix.set_constants!(Radix.Constants())
+Radix.constants!(Radix.Constants())
 include("forwarddiff_tests.jl")
 include("constants_tests.jl")
 include("levels_tests.jl")
