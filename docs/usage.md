@@ -67,3 +67,15 @@ What differs:
 - With `vturbi > 0` XSTAR 2.59j smooths its continuum so that it is not absorbed below 20 keV (`gsmooth2`): Radix does not, and the comparisons with it use `vturbi = 0`.
 - To reproduce the rounded constants of XSTAR (`0.861707 eV` for k × 10⁴ K, 12.56 for 4π, ...) use `set_constants!(ucalc_constants())` first; the default is CODATA 2022.
 - `passes=3` (XSTAR's `npass`) repeats the march with the optical depths of the lines and edges between each zone and the outer edge, as the escape probabilities of the outer side. It changes the ion fractions by up to 2.5% on the thick slab and follows XSTAR's change to 0.15%. `passes` must be odd.
+
+## Speed
+
+Radix runs the elements of the gas in parallel, so start Julia with several threads (`julia -t auto`): the default is one. Wall times on an Apple M-series laptop with the database of the XSTAR source tree (the first call also compiles):
+
+| model | XSTAR 2.59j | Radix, 1 thread | Radix, 8 threads |
+|---|---|---|---|
+| thick slab at log ξ = 1, T and x_e kept, 7 zones, with the emission of all lines and edges | 148 s | 51 s | 28 s |
+| slab of 10¹⁹ cm⁻² at log ξ = 2, T iterated | 411 s (10 zones) | 137 s (7 zones) | 78 s (7 zones) |
+
+The zones are not the same in the second row (the thickness rule of Radix gives fewer), so compare the time of a zone: 41 s for XSTAR, 20 s and 11 s for Radix. `passes=3` takes about twice as long as `passes=1`, XSTAR's `npass=3` four times.
+Most of the time is the integration of the photoionization cross sections over the radiation (once for each balance of the elements, the heating, the opacities and the emissivities of each zone).
