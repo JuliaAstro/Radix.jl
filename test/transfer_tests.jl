@@ -226,6 +226,7 @@ function toy_transfer_tests()
             outer(z) = Radix.gas_density(d, 1.0, z.r + z.Δr)
             @test sum(outer(z)*z.Δr for z in radial.zones) ≈ 5e16 rtol=1e-9           # (the column adds up with the density at the outer edge of each zone, as XSTAR does)
             @test length(radial.zones) > 1
+            @test_throws ArgumentError Radix.march_slab(hmixture, d, processes, E, L; r=1e13, column=6.7e16, T=1.0, iterate=false, diffuse=false)      # (out of reach: the zones are at most r/2 thick and the density falls as r⁻²)
             @test radial.zones[end].ntot < 1e4
             model = Radix.slab_model(hmixture, processes; density=1e4, radexp=-2.0, column=1e16, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false)
             @test model.zones[1].ntot ≈ 1e4

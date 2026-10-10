@@ -235,6 +235,7 @@ const step_opacity_floor = 1e-49
 const step_default_emult = 0.75         # emult: the optical depth that a zone is allowed to have in the bin of the largest opacity
 const step_default_taumax = 5.0         # taumax: the bins that are more opaque than this before the zone do not limit it
 const step_energy_min = 1.0             # ectt: the lowest energy (eV) that limits the zone
+const step_progress_min = 1e-12         # the column that a zone adds, as a fraction of the column of the slab, below which the column is taken as out of reach
 const step_default_steps = 2            # numrec: nsteps of XSTAR, its largest zone is `r/numrec`
 
 # the zones of `march_zones`: a vector of (r, Δr) or a function of the zones so far (the results, the continuum depth and the `Transmitted`) that gives the next (r, Δr) or nothing
@@ -415,11 +416,16 @@ function march_slab(mixture::Mixture, ntot, processes, E, L; r, column, emult=st
         ectt=step_energy_min, steps=step_default_steps, kw...)
     position, depth, last = float(r), 0.0, nothing
     source = function (results, dpthc, spectrum)
+        added = 0.0
         if last !== nothing
             position += last
-            depth += gas_density(ntot, results[end].T, position)*last     # (`xstar` updates the density of a power law before it adds the column: the one at the outer edge)
+            added = gas_density(ntot, results[end].T, position)*last      # (`xstar` updates the density of a power law before it adds the column: the one at the outer edge)
+            depth += added
         end
         depth < column || return nothing
+        # a density that falls faster than the zones grow (at most r/steps each) never reaches the column: the zones go on to densities of 10⁻³⁰⁰ and numbers that are not
+        length(results) > 2 && added < step_progress_min*column && column - depth > step_progress_min*column &&
+            throw(ArgumentError("the column of $column cm⁻² is out of reach: the last zone added $added cm⁻², and the zones are at most r/steps = r/$steps thick while the density falls (try a lower column or more steps)"))
         thickness = isempty(results) ? 0.0 :
             step_thickness(results[end].opacity.total, E, spectrum.L, dpthc, position, depth, gas_density(ntot, results[end].T, position), column, emult, taumax, ectt, steps)
         last = thickness
