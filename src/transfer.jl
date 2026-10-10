@@ -51,6 +51,15 @@ end
 OpticalDepths(mixture::Mixture) = OpticalDepths([zeros(length(el.rates)) for el in mixture.elements],
     [zeros(length(el.rates)) for el in mixture.elements])
 
+# the results of `f(k)` for every element `k` of `mixture`, one task for each (the elements are independent and of similar sizes)
+function elementwise(f, mixture::Mixture)
+    results = Vector{Base.promote_op(f, Int)}(undef, length(mixture.elements))
+    Threads.@threads for k in eachindex(results)
+        results[k] = f(k)
+    end
+    results
+end
+
 # the opacity (cm⁻¹) of record j: the centre of a line (its cross section times the density of its lower level) or the edge of a
 # recombination continuum (ucalc's opakab with the populations of its two levels); 0 for the other records
 function record_opacity(coef::AbstractRate, cell::Cell, density, abund, radiation, lfast; vturb=default_turbulence)
@@ -79,7 +88,7 @@ density `ntot × abundance × population` of its lower level; an edge the opacit
 """
 function record_opacities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, lfast=photoionization_lfast, vturb=default_turbulence)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
-    map(eachindex(mixture.elements)) do k
+    elementwise(mixture) do k
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
         opacity = zeros(length(el.rates))
         for (indices, records) in el.groups
@@ -104,7 +113,7 @@ The emissivity of the lines (the records of type 4, `line_data_type`) of every e
 function line_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast,
         vturb=default_turbulence)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
-    map(eachindex(mixture.elements)) do k
+    elementwise(mixture) do k
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
         emissivity = fill((0.0, 0.0), length(el.rates))
         for (indices, records) in el.groups
@@ -132,7 +141,7 @@ The emission of the recombination continua (the records of rate type 7, `edge_ra
 """
 function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
-    map(eachindex(mixture.elements)) do k
+    elementwise(mixture) do k
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
         emissivity = fill((0.0, 0.0), length(el.rates))
         for (indices, records) in el.groups
