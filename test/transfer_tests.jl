@@ -320,7 +320,7 @@ end
 
 # the reference run of XSTAR (test/reference/xstar_pow_xi2): two zones of 5×10¹² cm at 10¹³ and 1.5×10¹³ cm, the second the one of the
 # table of ion fractions. Its files give the optical depths of the lines (depth_inward) and of the recombination edges.
-function transfer_balance_tests(db)
+function transfer_balance_tests(db, known=nothing)
     @testset "Transfer of the database" begin
         levels = Radix.levels(db)
         coheat = joinpath(dirname(get(ENV, "RADIX_ATDB", "")), "coheat.dat")
@@ -520,6 +520,33 @@ function transfer_balance_tests(db)
             @test length(ratios) > 500
             @test abs(sort(ratios)[length(ratios) ÷ 2] - 1) < 1e-3
             @test all(r -> abs(r - 1) < 6e-2, ratios)
+        end
+
+        @testset "three passes with the temperature iterated" begin
+            # test/reference/xstar_thick_slab/xout_abund1_T_npass{1,3}.fits: the thick slab of the run above with niter=99 (T and x_e iterated), npass=1 and 3. The zones are those of
+            # XSTAR (its rows are the states at the inner edges: the first zone is row 1 and the others the row after their number). XSTAR's own temperatures are those of
+            # the database of its package (the one of the tree has other hydrogen records: 3-6% in T), so this is for that database only. The three passes raise the temperature of
+            # the zones by 0.9% (4.5513 to 4.5927 in the first), and XSTAR's `dsec` leaves its first rows of one pass at 4.5513 (not converged), which Radix does not
+            if known !== nothing && known.name == "package"
+                dir = joinpath(@__DIR__, "reference", "xstar_thick_slab")
+                table = fits(joinpath(dir, "xout_abund1_T_npass3.fits"))[2].data
+                depth = Float64.(table.delta_r)[2:end]
+                r0 = 3.16228e20
+                zones = [(r0 + depth[k], depth[k + 1] - depth[k]) for k in 1:length(depth) - 1]
+                E = Radix.xstar_energy_grid(999)
+                three = Radix.march(mixture, 1e4, processes, E, Radix.powerlaw(E, -1.0, 1e8*1e38), zones; T=10.0, equilibrium=true, vturb=0.0, luminous=false, passes=3)
+                rows = [1; 3:8]
+                T = Float64.(table.temperature)[rows]
+                @test [z.T for z in three.zones[1:7]] ≈ T rtol=2e-3
+                he_ii, o_viii = Float64.(table.he_ii)[rows], Float64.(table.o_viii)[rows]
+                @test [z.fractions[2][2] for z in three.zones[1:7]] ≈ he_ii rtol=1.5e-2
+                o = findfirst(==(8), mixture.Z)
+                @test [z.fractions[o][8] for z in three.zones[1:7]] ≈ o_viii rtol=5e-3
+                one = Float64.(fits(joinpath(dir, "xout_abund1_T_npass1.fits"))[2].data.temperature)
+                @test all(three.zones[k].T > one[k + 1] for k in 4:7)                # (the passes raise the temperature)
+            else
+                @info "Skipping the test of three passes with the temperature iterated (it is for the database of the XSTAR package)"
+            end
         end
 
         @testset "a slab at constant pressure" begin

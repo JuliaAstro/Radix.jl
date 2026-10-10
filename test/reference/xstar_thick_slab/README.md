@@ -19,3 +19,7 @@ slab at all. Radix does not do it.
 
 `xout_abund1_npass3.fits` is the same run with `npass=3` (it takes four times as long): the ion fractions of the zones
 after the pass back from the outer edge, which `passes=3` of `slab_model` reproduces.
+
+`xout_abund1_T_npass1.fits` and `xout_abund1_T_npass3.fits` are the same slab with `niter=99` (the temperature and the electron fraction iterated: `temperature=10`, the others as above) and `npass=1` and `npass=3` (6 and 21 minutes), run with the package database (`$HEADAS/refdata/atdb.fits`). With
+`npass=3` the temperatures of the zones are 0.9% higher (4.5513 to 4.5927 in the first). XSTAR's `dsec` leaves four of the rows of the one-pass run at the temperature
+of the first (4.5513), which is not the equilibrium.
