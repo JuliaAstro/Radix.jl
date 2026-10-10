@@ -14,10 +14,10 @@
         @test length(table) == 6 && haskey(table, (7, 2)) && table[(7, 2)].g == 8     # a dictionary of levels
         @test get(table, (7, 9), nothing) === nothing
         @test nlevels(table, 7) == 3 && nlevels(table, 8) == 3 && nlevels(table, 99) == 0
-        @test level_counts(table) == Dict(7 => 3, 8 => 3)
-        @test atomic_mass(table, 7) == Float64(f32(55.85))                          # from the Atom and Ion records
-        @test_throws ArgumentError atomic_mass(table, 8)                            # ion 8 has no element record
-        @test atomic_mass(Radix.levels(records; masses=Dict(8 => 16.0)), 8) == 16.0
+        @test counts(table) == Dict(7 => 3, 8 => 3)
+        @test weight(table, 7) == Float64(f32(55.85))                          # from the Atom and Ion records
+        @test_throws ArgumentError weight(table, 8)                            # ion 8 has no element record
+        @test weight(Radix.levels(records; masses=Dict(8 => 16.0)), 8) == 16.0
     end
 
     @testset "construction" begin

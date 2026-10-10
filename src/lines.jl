@@ -258,7 +258,7 @@ line centre (`oplin`, cm⁻¹) and `emissivity` the pair of emissivities `(rcem1
 """
 function add_line!(opacity::Opacity, radiation::Radiation, coef::AtomicLine2, centre, emissivity, T; vturb=default_turbulence, lfast=2, widths=nothing)
     centre > line_opacity_min || return opacity
-    mass = atomic_mass(coef.levels, coef.ion)
+    mass = weight(coef.levels, coef.ion)
     add_line!(opacity, radiation, centre, emissivity[1], emissivity[2], abs(Float64(coef.λ)), vturb, T, mass, line_width(coef, widths); lfast)
 end
 
@@ -268,7 +268,7 @@ const line_fe_opacity_min = 1e-48                 # ucalc (type 82): the lines w
 # less than the Doppler width, so that the profile is a Gaussian, which is what a width of 0 gives)
 function add_line!(opacity::Opacity, radiation::Radiation, coef::RadiativeFeDecay, centre, emissivity, T; vturb=default_turbulence, lfast=2, widths=nothing)
     centre > line_fe_opacity_min || return opacity
-    mass = atomic_mass(coef.levels, coef.ion)
+    mass = weight(coef.levels, coef.ion)
     add_line!(opacity, radiation, centre, 0.0, 0.0, abs(Float64(coef.λ)), vturb, T, mass, 0.0; lfast)
 end
 add_line!(opacity::Opacity, radiation::Radiation, ::AbstractRate, centre, emissivity, T; kw...) = opacity
@@ -427,7 +427,7 @@ end
 """
     broaden(model, run; vturb=run.vturb, min_fraction=1e-15, nrank=rank_per_bin)
 
-The emission of the lines of a run (`slab_model`) binned on its energy grid (`broaden(E, lines, T, vturb)`), at the temperature of the last zone: the `nrank` lines with the largest luminosity in each bin
+The emission of the lines of a run (`slab`) binned on its energy grid (`broaden(E, lines, T, vturb)`), at the temperature of the last zone: the `nrank` lines with the largest luminosity in each bin
 (`rank!`) among those with more than `min_fraction` of the luminosity of the source. Returns `(inward, outward)` in erg s⁻¹ erg⁻¹.
 """
 function broaden(model, run; vturb=run.vturb, min_fraction=results_min_fraction, nrank=rank_per_bin)
@@ -454,7 +454,7 @@ function broaden(model, run; vturb=run.vturb, min_fraction=results_min_fraction,
         c = mixture.elements[k].rates[j]
         auger = get(rates, (Int(c.ion), Int(c.transition.upper)), nothing)
         delea, egam = auger === nothing ? (0.0, Float64(c.A)) : (auger[1]*broaden_width, auger[2])
-        push!(selected, (abs(Float64(c.λ)), Float64(atomic_mass(c.levels, c.ion)), run.luminosities.inward[k][j]*luminosity_unit,
+        push!(selected, (abs(Float64(c.λ)), Float64(weight(c.levels, c.ion)), run.luminosities.inward[k][j]*luminosity_unit,
             run.luminosities.outward[k][j]*luminosity_unit, delea, egam))
     end
     broaden(E, selected, run.zones[end].T, vturb)

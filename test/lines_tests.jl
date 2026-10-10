@@ -40,7 +40,7 @@ function lines_tests()
         end
 
         @testset "linopac" begin
-            Radix.with_constants(Radix.ucalc_constants()) do
+            Radix.constants(Radix.ucalc()) do
                 rad = Radix.Radiation(E, zeros(n))
                 for (i, (optpp, rcem1, rcem2, elin, vturb, T, mass, delea, lfast)) in enumerate(lines)
                     opacity = Radix.Opacity(n)
@@ -55,7 +55,7 @@ function lines_tests()
 
         @testset "the total opacity of a line" begin
             # the bins add up to the integral of the profile, `optpp × width`, when the line is well inside the grid
-            Radix.with_constants(Radix.ucalc_constants()) do
+            Radix.constants(Radix.ucalc()) do
                 rad = Radix.Radiation(E, zeros(n))
                 optpp, elin, T, mass = 1e-3, 12398.4016/1500.0, 1.0, 56.0
                 for delea in (1e-8, 1e-3)

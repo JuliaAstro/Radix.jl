@@ -10,21 +10,21 @@ using Radix
 
 model = Model("atdb.fits", "coheat.dat")                  # the elements and processes (abundances = :xdef, the default table of XSTAR)
 
-run = slab_model(model;
+run = slab(model;
     density = 1e4,                # cm⁻³ (or `pressure = 1e-7` dyn cm⁻² for constant pressure)
     column = 1e21,                # cm⁻²: the zones go on until this hydrogen column
     logξ = 1.0,                   # log of L/(n r²) (of L/(4π c P r²) for the pressure)
     luminosity = 1e46,            # erg s⁻¹ between 13.6 eV and 13.6 keV
-    α = -1.0,                     # the source is E^α (or `spectrum = (E, L) -> blackbody(E, 0.5, L)`, `thermal_bremsstrahlung`, `tabulated`)
+    α = -1.0,                     # the source is E^α (or `spectrum = (E, L) -> blackbody(E, 0.5, L)`, `thermal`, `tabulated`)
     equilibrium = true,           # iterate the temperature of each zone to the thermal equilibrium (`false` keeps `T`)
     T = 10.0, xee = 1.0,          # the first guess, in 10⁴ K, and of the electron fraction
     emult = 1.0, taumax = 5.0, steps = 3,    # the thickness of the zones (XSTAR's `emult`, `taumax` and `nsteps`)
     vturb = 0.0)                  # km s⁻¹: the widths of the lines
 ```
 
-`Model(atdb, coheat; abundances, multiplier, exclude, cfrac)` takes an abundance table (`abundance_table(:angr)`, ... or a vector for the elements 1 to 30),
+`Model(atdb, coheat; abundances, multiplier, exclude, cfrac)` takes an abundance table (`composition(:angr)`, ... or a vector for the elements 1 to 30),
 `multiplier = Dict(26 => 2.0)` for factors, `exclude` for the elements that are left out (Li, Be and B by default, as the atomic data of XSTAR has no data for them) and the covering fraction.
-Under the hood `slab_model` is `power_law` (the source), `source_distance`, `march_slab` (the zones) and `march_zones` (the transfer); they can be called on their own, and `march_zones` takes the zones (`(r, Δr)`) as well.
+Under the hood `slab` is `powerlaw` (the source), `source_distance`, `march` (the zones) and `march` (the transfer); they can be called on their own, and `march` takes the zones (`(r, Δr)`) as well.
 
 ## What comes back
 
@@ -65,7 +65,7 @@ What differs:
 - XSTAR ends its temperature iteration early in some zones (its `dsec` stops when the false position repeats a temperature): Radix finds the equilibrium, which is 0.4% to 2% from XSTAR's temperature in those zones.
 - The atomic database of the XSTAR package (`$HEADAS/refdata/atdb.fits`) is not the one of its source tree: hydrogen has other records, and the temperatures of the tree are 3-6% lower than the package's. Use the one that you want to compare with.
 - With `vturbi > 0` XSTAR 2.59j smooths its continuum so that it is not absorbed below 20 keV (`gsmooth2`): Radix does not, and the comparisons with it use `vturbi = 0`.
-- To reproduce the rounded constants of XSTAR (`0.861707 eV` for k × 10⁴ K, 12.56 for 4π, ...) use `set_constants!(ucalc_constants())` first; the default is CODATA 2022.
+- To reproduce the rounded constants of XSTAR (`0.861707 eV` for k × 10⁴ K, 12.56 for 4π, ...) use `constants!(ucalc())` first; the default is CODATA 2022.
 - `passes=3` (XSTAR's `npass`) repeats the march with the optical depths of the lines and edges between each zone and the outer edge, as the escape probabilities of the outer side. It changes the ion fractions by up to 2.5% on the thick slab and follows XSTAR's change to 0.15%. `passes` must be odd.
 
 ## Speed

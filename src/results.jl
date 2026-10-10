@@ -40,7 +40,7 @@ end
 """
     tables(model, run; min_fraction=1e-15)
 
-The results of `slab_model(model; ...)` as `Results`, four tables (their fields), each a named tuple of columns (vectors; units below):
+The results of `slab(model; ...)` as `Results`, four tables (their fields), each a named tuple of columns (vectors; units below):
 
 - `zones`: one row for each zone (the state at its inner edge): `zone`, `radius` (cm), `depth` (cm, of the inner edge from the first), `thickness` (cm), `ion_parameter` (`L/(n r²)`), `x_e`, `n_h` and `n_e` (cm⁻³),
   `pressure` (dyn cm⁻²), `temperature` (10⁴ K), `heating` and `cooling` (erg cm⁻³ s⁻¹), `heat_error` (relative) and the fraction of every ion, named by its label (`h_i`, `he_ii`, ..., with the bare nuclei);

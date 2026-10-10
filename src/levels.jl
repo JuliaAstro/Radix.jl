@@ -5,7 +5,7 @@
 
 The atomic data the rates need besides their own coefficients: the levels of every ion (energies, weights and
 quantum numbers, as `AtomicLevel`s keyed by `(ion, level)`), the number of levels of each ion (`nlevels`: the highest
-index, the continuum level) and the atomic mass of the element of each ion (`atomic_mass`). It behaves as the
+index, the continuum level) and the atomic mass of the element of each ion (`weight`). It behaves as the
 dictionary of levels. `load` builds one and passes it to the constructor of every rate that needs it (the field `levels`).
 """
 struct Levels{K, V} <: AbstractDict{K, V}
@@ -30,22 +30,22 @@ The number of levels of `ion` in a `Levels`: its highest level index, the contin
 nlevels(levels::Levels, ion) = get(levels.nlev, Int(ion), 0)
 
 """
-    atomic_mass(levels, ion)
+    weight(levels, ion)
 
 The atomic mass (amu) of the element of `ion` in a `Levels`.
 """
-function atomic_mass(levels::Levels, ion)
+function weight(levels::Levels, ion)
     haskey(levels.mass, Int(ion)) || throw(ArgumentError("no atomic mass for ion $ion in the level table"))
     levels.mass[Int(ion)]
 end
 
 """
-    level_counts(levels)
+    counts(levels)
 
 Dictionary `ion => number of levels` (the highest level index, the continuum
 level) from a `levels`.
 """
-level_counts(levels::Levels) = copy(levels.nlev)
+counts(levels::Levels) = copy(levels.nlev)
 
 """
     needs_levels(T)

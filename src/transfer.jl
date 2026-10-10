@@ -238,7 +238,7 @@ const step_energy_min = 1.0             # ectt: the lowest energy (eV) that limi
 const step_progress_min = 1e-12         # the column that a zone adds, as a fraction of the column of the slab, below which the column is taken as out of reach
 const step_default_steps = 2            # numrec: nsteps of XSTAR, its largest zone is `r/numrec`
 
-# the zones of `march_zones`: a vector of (r, Δr) or a function of the zones so far (the results, the continuum depth and the `Transmitted`) that gives the next (r, Δr) or nothing
+# the zones of `march`: a vector of (r, Δr) or a function of the zones so far (the results, the continuum depth and the `Transmitted`) that gives the next (r, Δr) or nothing
 function zone_source(zones::AbstractVector)
     index = 0
     (results, dpthc, spectrum) -> (index += 1; index <= length(zones) ? zones[index] : nothing)
@@ -299,10 +299,10 @@ function transmit(spectrum::Transmitted, radiation::Radiation, continuum, r, Δr
 end
 
 """
-    march_zones(mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, diffuse=true, lines=true, vturb=default_turbulence, kw...)
+    march(mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0, attenuate=true, diffuse=true, lines=true, vturb=default_turbulence, kw...)
 
 The zones of a slab, one after the other, for a point source of the spectrum `L` (erg s⁻¹ erg⁻¹, 10³⁸ erg/s × the XSTAR file) on the
-energy grid `E`: `zones` is a vector of `(r, Δr)`, the distance of the zone from the source and its thickness (cm) (or a function of the results, `dpthc` and `Transmitted` so far that gives the next, `march_slab`), each solved at
+energy grid `E`: `zones` is a vector of `(r, Δr)`, the distance of the zone from the source and its thickness (cm) (or a function of the results, `dpthc` and `Transmitted` so far that gives the next, `march`), each solved at
 its own radius with the radiation of the incident spectrum attenuated by the continuum depth of the zones before it,
 `exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
 edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
@@ -318,7 +318,7 @@ Returns the named tuples of the zones (the result of `thermal_equilibrium` or `i
 fields `r`, `Δr`, `radiation`, `escape`, `opacity`), the final `OpticalDepths` and the continuum depths `dpthc` and `dpthcont`. The diffuse emission is
 not added to the radiation.
 """
-function march_zones(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
+function march(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
         attenuate=true, diffuse=true, lines=true, luminous=true, vturb=default_turbulence, lfast=photoionization_lfast, passes=1, kw...)
     isodd(passes) || throw(ArgumentError("passes must be odd: the last pass goes in the same direction as the first"))
     result = sweep(mixture, ntot, processes, E, L, zones; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, kw...)
@@ -404,15 +404,15 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
 end
 
 """
-    march_slab(mixture, ntot, processes, E, L; r, column, emult=0.75, taumax=5.0, ectt=1.0, steps=2, kw...)
+    march(mixture, ntot, processes, E, L; r, column, emult=0.75, taumax=5.0, ectt=1.0, steps=2, kw...)
 
 The zones of a slab of the hydrogen column density `column` (cm⁻²) and the constant density `ntot` (cm⁻³) starting at the distance `r` (cm) of the source, with the thickness of the zones chosen
-as XSTAR's `step` does, and each solved as in `march_zones` (to which `kw` goes). The first zone has no thickness. The thickness of each of the others is the smallest of `r/steps`,
+as XSTAR's `step` does, and each solved as in `march` (to which `kw` goes). The first zone has no thickness. The thickness of each of the others is the smallest of `r/steps`,
 the column that is left and `emult/κ` for the bins above `ectt` eV whose depth `dpthc` before the zone is not above `taumax` and whose spectrum
 is above 10⁻¹² (in 10³⁸ erg s⁻¹ erg⁻¹), with `κ` the opacity of the zone before (lines included). The zones go on while the column of those so far is below `column`.
-Returns what `march_zones` does.
+Returns what `march` does.
 """
-function march_slab(mixture::Mixture, ntot, processes, E, L; r, column, emult=step_default_emult, taumax=step_default_taumax,
+function march(mixture::Mixture, ntot, processes, E, L; r, column, emult=step_default_emult, taumax=step_default_taumax,
         ectt=step_energy_min, steps=step_default_steps, kw...)
     position, depth, last = float(r), 0.0, nothing
     source = function (results, dpthc, spectrum)
@@ -431,7 +431,7 @@ function march_slab(mixture::Mixture, ntot, processes, E, L; r, column, emult=st
         last = thickness
         (position, thickness)
     end
-    march_zones(mixture, ntot, processes, E, L, source; kw...)
+    march(mixture, ntot, processes, E, L, source; kw...)
 end
 
 # step: the thickness of the next zone from the opacity of the one before
@@ -447,23 +447,23 @@ function step_thickness(opacity, E, L, dpthc, r, depth, ntot, column, emult, tau
 end
 
 """
-    slab_model(mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> power_law(E, α, L), ncn2=999, kw...)
-    slab_model(mixture, processes; pressure, column, logξ, luminosity, ...)
-    slab_model(mixture, processes; density, radexp, ...)
+    slab(mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> powerlaw(E, α, L), ncn2=999, kw...)
+    slab(mixture, processes; pressure, column, logξ, luminosity, ...)
+    slab(mixture, processes; density, radexp, ...)
 
-A slab of gas of the `density` (cm⁻³) at the source distance, constant or `density (r/r₀)^radexp` for `radexp ≠ 0` (XSTAR's `radexp`), or the constant `pressure` (dyn cm⁻², `ConstantPressure`, XSTAR's `lcpres=1`: the density of each zone is `P/(k T)` at its temperature, `logξ` is then the logarithm of the ionization parameter of the pressure `Ξ`) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `power_law(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
-of `ncn2` points (or the spectrum `spectrum(E, luminosity)`, e.g. `(E, L) -> blackbody(E, 0.5, L)`), at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `march_slab` solves (its keywords
-`T` and `xee` of the first zone, `equilibrium`, `emult`, `taumax`, `steps` (`nsteps`), `vturb`, `lines`, ... go to it). Returns what `march_slab` does and the energies `E`, the incident spectrum
+A slab of gas of the `density` (cm⁻³) at the source distance, constant or `density (r/r₀)^radexp` for `radexp ≠ 0` (XSTAR's `radexp`), or the constant `pressure` (dyn cm⁻², `ConstantPressure`, XSTAR's `lcpres=1`: the density of each zone is `P/(k T)` at its temperature, `logξ` is then the logarithm of the ionization parameter of the pressure `Ξ`) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `powerlaw(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
+of `ncn2` points (or the spectrum `spectrum(E, luminosity)`, e.g. `(E, L) -> blackbody(E, 0.5, L)`), at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `march` solves (its keywords
+`T` and `xee` of the first zone, `equilibrium`, `emult`, `taumax`, `steps` (`nsteps`), `vturb`, `lines`, ... go to it). Returns what `march` does and the energies `E`, the incident spectrum
 `incident`, the distance `r` and the `transmitted` spectrum of XSTAR's output, `incident × exp(-dpthcont)`.
 """
-function slab_model(mixture::Mixture, processes; density=nothing, pressure=nothing, radexp=0.0, column, logξ, luminosity, α=-1.0,
-        spectrum=(E, L) -> power_law(E, α, L), ncn2=999, kw...)
+function slab(mixture::Mixture, processes; density=nothing, pressure=nothing, radexp=0.0, column, logξ, luminosity, α=-1.0,
+        spectrum=(E, L) -> powerlaw(E, α, L), ncn2=999, kw...)
     (density === nothing) == (pressure === nothing) && throw(ArgumentError("give the density (constant density) or the pressure (constant pressure)"))
     E = xstar_energy_grid(ncn2)
     incident = spectrum(E, luminosity)
     ntot, r = density !== nothing ? (density, source_distance(luminosity, 10^logξ, density)) :
         (ConstantPressure(pressure), source_distance_pressure(luminosity, 10^logξ, pressure))
     iszero(radexp) || density === nothing || (ntot = PowerLawDensity(density, r, radexp))
-    result = march_slab(mixture, ntot, processes, E, incident; r, column, kw...)
+    result = march(mixture, ntot, processes, E, incident; r, column, kw...)
     (; result..., E, incident, r, transmitted=incident .* exp.(-result.dpthcont))
 end

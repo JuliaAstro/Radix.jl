@@ -59,7 +59,7 @@ gas_density(d::PowerLawDensity, T, r) = d.n0*(r/d.r0)^d.exponent
     Mixture(records, levels; abundances=nothing, multiplier=Dict())
 
 The elements of the database `records` (an `Elements` for each `Atom` record) with their abundances relative to
-hydrogen, the `abundance` of the record (or `abundances[Z]`, a table of the elements 1 to 30 such as `abundance_table(:angr)`) times `multiplier[Z]` (1 if missing; XSTAR's `habund`, `heabund`, ...). Elements
+hydrogen, the `abundance` of the record (or `abundances[Z]`, a table of the elements 1 to 30 such as `composition(:angr)`) times `multiplier[Z]` (1 if missing; XSTAR's `habund`, `heabund`, ...). Elements
 whose abundance is below `minimum_abundance` (0 for instance) are left out, as in XSTAR. `levels` is `levels(records)`.
 """
 struct Mixture{L<:Levels}
