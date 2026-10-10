@@ -41,3 +41,40 @@ jobs:
       - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+  database:
+    # the comparisons with XSTAR need its atomic database (875 MB, not in the repository): it is downloaded once and cached
+    name: Julia 1 - the atomic database of XSTAR
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: write
+      contents: read
+    env:
+      ATDB_URL: https://heasarc.gsfc.nasa.gov/FTP/software/lheasoft/xstar/atdb.fits
+      ATDB_BYTES: 874736640
+      JULIA_NUM_THREADS: 4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - name: Cache the atomic database
+        id: atdb
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/atdb
+          key: atdb-xstar-2.59j-${{ env.ATDB_BYTES }}
+      - name: Download the atomic database
+        if: steps.atdb.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/atdb"
+          curl --fail --location --retry 5 --retry-delay 20 --output "$RUNNER_TEMP/atdb/atdb.fits" "$ATDB_URL"
+      - name: Check the atomic database
+        run: |
+          test "$(stat -c %s "$RUNNER_TEMP/atdb/atdb.fits")" = "$ATDB_BYTES"
+          sha256sum "$RUNNER_TEMP/atdb/atdb.fits"
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        env:
+          RADIX_ATDB: ${{ runner.temp }}/atdb/atdb.fits

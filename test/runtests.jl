@@ -255,9 +255,16 @@ struct UnportedRate <: Radix.AbstractRate end
     # Slow (~35 s, 870 MB): opt in with RADIX_ATDB=/path/to/atdb.fits
     atdb = get(ENV, "RADIX_ATDB", "")
     if isfile(atdb)
+        # the two databases that the numbers below are for: the one of the XSTAR source tree and the one of the 2.59j package (they differ in the records of
+        # hydrogen and the collisions); the counts are checked for these two only
+        known = get(Dict(
+            871061760 => (; name="tree", counts="atdb_counts_tree.txt", impact=87231, impact_none=188, probabilities=6015, hydrogen_rates=550, lte_rtol=2e-3),
+            874736640 => (; name="package", counts="atdb_counts_package.txt", impact=83310, impact_none=177, probabilities=5902, hydrogen_rates=531, lte_rtol=3e-2)),
+            filesize(atdb), nothing)
+        known === nothing && @warn "the database is not one that the tests know (the XSTAR tree or package): its record counts are not checked"
         @testset "atdb.fits parsing" begin
             expected = Dict{String,Int}()
-            for line in eachline(joinpath(@__DIR__, "reference", "atdb_counts.txt"))
+            for line in eachline(joinpath(@__DIR__, "reference", something(known, (; counts="atdb_counts_tree.txt")).counts))
                 startswith(line, "#") && continue
                 k, v = split(line)
                 expected[k] = parse(Int, v)
@@ -268,7 +275,7 @@ struct UnportedRate <: Radix.AbstractRate end
                 k = String(nameof(typeof(r)))
                 got[k] = get(got, k, 0) + 1
             end
-            @test got == expected
+            known === nothing || @test got == expected
 
             # levels: the reals must be read from the right place (FITSFiles
             # work-around in load); every level has a positive weight
@@ -326,8 +333,8 @@ struct UnportedRate <: Radix.AbstractRate end
                     ok || (nbad += 1)
                 end
             end
-            @test nrec == 87231
-            @test nnone == 188
+            known === nothing || @test nrec == known.impact
+            known === nothing || @test nnone == known.impact_none
             @test nbad == 0
 
             # ElectronCollision: finite and obeying detailed balance with the
@@ -384,7 +391,7 @@ struct UnportedRate <: Radix.AbstractRate end
                     (isfinite(x.frate) && isfinite(x.irate) && x.frate >= 0 && x.irate >= 0) || (nbad += 1)
                 end
             end
-            @test nrec == 6015
+            known === nothing || @test nrec == known.probabilities
             @test nbad == 0
 
             # every type of rate can be called with just a coefficient and a cell (the level data is in the coefficient)
@@ -442,7 +449,7 @@ struct UnportedRate <: Radix.AbstractRate end
             @test nbad == 0
             @test all(>(0), values(kinds))
             @test kinds[Radix.PhotoionizeSuper] > 0 && kinds[Radix.PhotoRecombX] > 0
-            element_balance_tests(db)
+            element_balance_tests(db, known)
             mixture_balance_tests(db)
             heating_balance_tests(db)
             transfer_balance_tests(db)
