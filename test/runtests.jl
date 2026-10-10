@@ -452,7 +452,7 @@ struct UnportedRate <: Radix.AbstractRate end
             element_balance_tests(db, known)
             mixture_balance_tests(db)
             heating_balance_tests(db)
-            transfer_balance_tests(db)
+            transfer_balance_tests(db, known)
         end
     else
         @info "Skipping atdb.fits parsing test (set RADIX_ATDB to enable)"
