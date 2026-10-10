@@ -59,7 +59,7 @@ keeps them in memory).
 ## Agreement with XSTAR
 
 Radix has been compared with XSTAR 2.59j for the rates of every record type, the ionization balance, the heating and cooling, the transfer (escape, optical depths, continuum opacity, lines, two-photon continua, diffuse emission), the thickness of the zones, the sources and constant pressure
-(`docs/field-names.md` has the details and the numbers, `test/reference/` the reference output). For the thick slab at log ξ = 1 it reproduces the zones of XSTAR (depths to 10⁻⁴), the temperatures to 0.05%, the ion fractions to 10⁻³ or better and the diffuse emission to 5%.
+([the field notes](field-names.md) have the details and the numbers, `test/reference/` the reference output). For the thick slab at log ξ = 1 it reproduces the zones of XSTAR (depths to 10⁻⁴), the temperatures to 0.05%, the ion fractions to 10⁻³ or better and the diffuse emission to 5%.
 What differs:
 
 - XSTAR ends its temperature iteration early in some zones (its `dsec` stops when the false position repeats a temperature): Radix finds the equilibrium, which is 0.4% to 2% from XSTAR's temperature in those zones.

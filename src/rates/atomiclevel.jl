@@ -7,6 +7,13 @@
 
 const AtomicLevelDesc = "level data"
 
+"""
+    AtomicLevel
+
+A level of an ion in the atomic database (XSTAR data type 6): its quantum numbers (`n`, `spin_mult`, `L`), the atomic number `Z`, the
+indices of the `level` and its `ion`, the energy `E` (eV), the statistical weight `g`, the effective quantum number `n_eff` and the
+ionization energy `E_inf` of the level (eV).
+"""
 struct AtomicLevel{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
