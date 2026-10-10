@@ -34,16 +34,37 @@ edges of each energy bin (by the edge energy of `rank_energy`) enter, and every 
 Returns `(; total, continuum, emissivity, bremsstrahlung, edges)`: the two arrays of the opacity, `emissivity` (`rccemis`, 2 × n, per steradian: the recombination
 continua of the records called), `bremsstrahlung` (`brcems`: the `emissivity` of the processes, in all directions) and the number of records called.
 """
-struct Continuum{M<:Mixture, P}
+struct Continuum{M<:Mixture, P, C<:NamedTuple}
     mixture::M
     processes::P
     nrank::Int
     lfast::Int
     vturb::Float64
     widths::Dict{Tuple{Int, Int}, Float64}      # the Auger widths of the K-vacancy levels (`auger_widths`)
+    catalog::C                                   # the records that the zones rank, in the order of the records (`record_catalog`)
 end
 Continuum(mixture::Mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence) =
-    Continuum(mixture, processes, nrank, lfast, Float64(vturb), auger_widths(mixture))
+    Continuum(mixture, processes, nrank, lfast, Float64(vturb), auger_widths(mixture), record_catalog(mixture))
+
+# the records that every zone ranks, found once (there are a million of them in the records, and a few hundred thousand of these):
+# `edges` the photoionization records with their edge energy (k, j, eth), `lines` the lines with their wavelength (k, j, λ), `two_photon` the two-photon decays (k, j)
+# and `rated` for each element the (j, always) of the records that can be called, with `always` for the records of rate type 42
+function record_catalog(mixture::Mixture)
+    edges, lines, two_photon = Tuple{Int, Int, Float64}[], Tuple{Int, Int, Float64}[], Tuple{Int, Int}[]
+    rated = [Tuple{Int, Bool}[] for _ in mixture.elements]
+    for k in eachindex(mixture.elements), (indices, records) in mixture.elements[k].groups, i in eachindex(records)
+        coef, j = records[i], indices[i]
+        if coef.rtype == edge_rate_type && coef isa opacity_edge_types
+            push!(edges, (k, j, rank_energy(coef)))
+            push!(rated[k], (j, false))
+        elseif coef isa PhotoionizeDamp && coef.rtype == damp_rate_type
+            push!(rated[k], (j, true))
+        end
+        coef.rtype == line_data_type && hasproperty(coef, :λ) && push!(lines, (k, j, abs(Float64(coef.λ))))
+        coef isa Union{AtomicLine2, TwoPhotonDecay} && coef.rtype == two_photon_data_type && push!(two_photon, (k, j))
+    end
+    (; edges, lines, two_photon, rated)
+end
 
 # the lines in the bins: the `nrank` strongest of each bin by emissivity (rlbin with lopak = 0 over the lines of data type 4), each put in with `add_line!`
 function add_lines!(arrays, continuum::Continuum, balance, T, ntot, radiation::Radiation, edges, emissivities)
@@ -51,12 +72,9 @@ function add_lines!(arrays, continuum::Continuum, balance, T, ntot, radiation::R
     hc = constants().hc_eVÅ_single
     λmin, λmax = hc/E[end], hc/E[1]
     ranked = Dict{Int, Vector{Tuple{Float64, Int, Int}}}()
-    for k in eachindex(mixture.elements), (indices, records) in mixture.elements[k].groups, i in eachindex(records)
-        coef, j = records[i], indices[i]
-        (coef.rtype == line_data_type && hasproperty(coef, :λ)) || continue
+    for (k, j, elin) in continuum.catalog.lines
         emissivity = sum(emissivities[k][j])
         (edges[k][j] < line_rank_floor && emissivity < line_rank_floor) && continue
-        elin = abs(Float64(coef.λ))
         (λmin <= elin <= λmax) || continue
         list = get!(ranked, nbin(radiation, hc/(line_bin_floor + elin)), Tuple{Float64, Int, Int}[])
         rank!(list, (emissivity, k, j), continuum.nrank)
@@ -69,14 +87,11 @@ function add_lines!(arrays, continuum::Continuum, balance, T, ntot, radiation::R
 end
 
 # the continua of the two-photon decays (the records of type 9), which `calc_emis_ion` calls with the lines optically thin
-function add_two_photon_continua!(arrays, mixture::Mixture, balance, ntot, radiation::Radiation)
-    for k in eachindex(mixture.elements)
-        el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
-        for (indices, records) in el.groups, i in eachindex(records)
-            coef = records[i]
-            (coef isa Union{AtomicLine2, TwoPhotonDecay} && coef.rtype == two_photon_data_type) || continue
-            add_two_photon!(arrays, radiation, coef, x[el.up[indices[i]]]*ntot*abundance, optically_thin)
-        end
+function add_two_photon_continua!(arrays, continuum::Continuum, balance, ntot, radiation::Radiation)
+    mixture = continuum.mixture
+    for (k, j) in continuum.catalog.two_photon
+        el = mixture.elements[k]
+        add_two_photon!(arrays, radiation, el.rates[j], balance.populations[k][el.up[j]]*ntot*mixture.abundance[k], optically_thin)
     end
     arrays
 end
@@ -94,28 +109,26 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
 
     # the strongest `nrank` edges of each bin, in the order of the records (a later record of equal strength ranks lower)
     ranked = Dict{Int, Vector{Tuple{Float64, Int, Int}}}()
-    for k in eachindex(mixture.elements), (indices, records) in mixture.elements[k].groups, i in eachindex(records)
-        coef = records[i]
-        (coef.rtype == edge_rate_type && coef isa opacity_edge_types) || continue
-        j = indices[i]
+    for (k, j, eth) in continuum.catalog.edges
         strength = edges[k][j]
         strength < rank_floor && continue
-        eth = rank_energy(coef)
         (E[1] < eth < E[end]) || continue
         list = get!(ranked, nbin(radiation, eth), Tuple{Float64, Int, Int}[])
         rank!(list, (strength, k, j), nrank)
     end
+    chosen = [falses(length(el.rates)) for el in mixture.elements]
+    for list in values(ranked), (_, k, j) in list
+        chosen[k][j] = true
+    end
     emissivities === nothing || add_lines!(arrays, continuum, balance, T, ntot, radiation, edges, emissivities)
-    add_two_photon_continua!(arrays, mixture, balance, ntot, radiation)
+    add_two_photon_continua!(arrays, continuum, balance, ntot, radiation)
     called = 0
     for k in eachindex(mixture.elements)
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
-        selected = Set(j for list in values(ranked) for (_, kk, j) in list if kk == k)
-        for (indices, records) in el.groups, i in eachindex(records)
-            coef, j = records[i], indices[i]
-            (j in selected || (coef isa PhotoionizeDamp && coef.rtype == damp_rate_type)) || continue
+        for (j, always) in continuum.catalog.rated[k]
+            (always || chosen[k][j]) || continue
             abund = (x[el.lo[j]]*abundance, x[el.up[j]]*abundance)
-            rate(coef, cell; radiation, abund, lfast, ptmp=optically_thin, opacity=arrays)
+            rate(el.rates[j], cell; radiation, abund, lfast, ptmp=optically_thin, opacity=arrays)
             called += 1
         end
     end
