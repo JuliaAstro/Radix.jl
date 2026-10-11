@@ -9,3 +9,13 @@ The incident spectra (the `incident` column of `xout_cont1.fits`, in 10³⁸ erg
 - `bbody_0.5.fits`: `spectrum=bbody trad=0.5` (kT = 431 eV);
 - `bbody_0.0003.fits`: `spectrum=bbody trad=0.0003`, for which x = E/kT is above 150 in most of the grid (the tail 1/E of `starf`, with the luminosity 1 that `xstar` gives it);
 - `brems_0.1.fits`: `spectrum=brems trad=0.1` (kT = 86.2 eV).
+
+The `thin_*` and `thick_*` files are the zone tables (`xout_abund1.fits`) of runs with the temperature and the electron fraction iterated, from the same source
+at `rlogxi=2` and `density=1e4` with the package database, `modelname=src nsteps=2 niter=99 lwrite=0 lprint=0 lstep=0 taumax=5 xeemin=0.1 critf=1e-7 vturbi=0
+radexp=0 ncn2=999 loopcontrol=0 npass=1 mode=h cfrac=0 temperature=100 lcpres=0 pressure=0.03 abundtbl=xdef rlrad38=1e-3` and:
+
+- `thin_{bbody,brems}`: `column=1e17 emult=0.5` (a zone of 10¹³ cm and the end of the slab; `trad=0.5` and `0.1`);
+- `thick_{bbody,brems}`: `column=1e19 emult=1` (five or six zones; the blackbody one ends in a thermal front, where the temperature falls from 7.6 to 1.8×10⁴ K in one zone and
+  XSTAR needs 20-30 iterations per zone);
+- `thick_bbody_emult04`: the blackbody run with `emult=0.4` (21 rows, 25 minutes): XSTAR's temperature at r - r₀ = 7.51×10¹⁴ cm is 1.835 (against 1.818 with `emult=1`).
+  Radix, too, changes by 0.8% in T at the end of the slab between the two steps.
