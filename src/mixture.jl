@@ -120,7 +120,7 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     matrices = [el.N >= sparse_from ? sparse_matrix(el) : zeros(el.N, el.N) for el in elements]
     populations = [zeros(el.N) for el in elements]
     fractions = [zeros(length(el.ions) + 1) for el in elements]
-    memos = [RatesMemo(el) for el in elements]       # (the cross sections are integrated once for all the electron fractions)
+    memos = [PhotoMemo(length(el.rates)) for el in elements]       # (the cross sections are integrated once for all the electron fractions, and for the heating and the emissivities)
     nₕ = Float64(neutral)
     hydrogen = findfirst(==(hydrogen_Z), mixture.Z)
 
@@ -143,7 +143,7 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     if iterate && !converged
         xee, elcter, iterations, converged = bracket_electron_fraction(evaluate, xee, elcter; tolerance)
     end
-    (; xee, nₑ=ntot*xee, electrons=xee - elcter, nₕ, populations, fractions, iterations, converged)
+    (; xee, nₑ=ntot*xee, electrons=xee - elcter, nₕ, populations, fractions, iterations, converged, memos)
 end
 
 # dsec's iteration of the electron fraction: `evaluate(x)` is x minus the electrons that the balance at x gives. A negative
@@ -197,12 +197,15 @@ Returns a named tuple with `heating` and `cooling` (the radiative energy that th
 the energy of the electrons), `processes`, a vector with the `process`, its `heating` and its `cooling`, and `elements`, the `heating`, `cooling`,
 `heating2` and `cooling2` of each element weighted by its abundance, in the order of `mixture.Z`.
 """
+# the integrals that the ionization balance kept for element k (its cell has the same temperature, radiation and escape probabilities)
+memo_of_balance(balance, k) = hasproperty(balance, :memos) ? balance.memos[k] : nothing
+
 function heating_cooling(mixture::Mixture, balance, T, ntot, processes; radiation=NO_RADIATION, escape=nothing,
         lfast=photoionization_lfast, cfrac=0.0)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     elements = Vector{NTuple{4, Float64}}(undef, length(mixture.elements))
     Threads.@threads for k in eachindex(mixture.elements)
-        elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape=element_escape(escape, k), lfast, cfrac)
+        elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape=element_escape(escape, k), lfast, cfrac, memo=memo_of_balance(balance, k))
     end
     weighted = [mixture.abundance[k] .* elements[k] for k in eachindex(elements)]
     terms = [process_term(process, radiation, T, balance.nₑ) for process in processes]
@@ -245,7 +248,7 @@ function thermal_equilibrium(mixture::Mixture, ntot, processes; radiation=NO_RAD
     end
     t, converged, evaluations, trace = bracket_temperature(evaluate, Float64(T); tolerance, iterations, T_min)
     (; energy..., T=t, ntot=gas_density(ntot, t), xee=balance.xee, nₑ=balance.nₑ, nₕ=balance.nₕ, populations=balance.populations, fractions=balance.fractions,
-       evaluations, converged, trace)
+       evaluations, converged, trace, memos=balance.memos)
 end
 
 # dsec's iteration of the temperature: `evaluate(t)` is the relative imbalance of the heating and cooling at the temperature t,

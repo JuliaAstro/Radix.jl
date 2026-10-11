@@ -210,6 +210,47 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
         piht2=sumh2*K.ergsev, rrcl2=sumc2*K.ergsev, opakab=opakab)
 end
 
+# what the integrals of a photoionization record give, kept for a series of cells of the same temperature, radiation, escape probabilities and
+# speed switch (the iteration of the electron fraction of the ionization balance, then the heating and the emissivities of the edges): the
+# photoionization terms do not depend on the electron density and the recombination terms are proportional to it (the Saha factor), so the
+# record is evaluated once, for the first cell with electrons, and the others are scaled. `kind` is 0 for a record that has not been
+# evaluated, 1 for one that gives nothing, 2 for the fits of types 49 and 53, and 3 and 4 for type 59 with and without recombination
+struct PhotoMemo
+    kind::Vector{UInt8}
+    vals::Matrix{Float64}      # nₑ, init, final, pirt, rrrt, piht, rrcl, piht2, rrcl2, opakab, threshold energy (erg), energy of the transition (erg)
+end
+PhotoMemo(n::Integer) = PhotoMemo(zeros(UInt8, n), zeros(12, n))
+
+const photo_none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0., fenergy2=0., ienergy2=0., opacity=0.)
+
+# the result of a record that the memo has: the recombination terms scaled to the electron density `nₑ`
+function memo_get(memo::PhotoMemo, slot, nₑ)
+    kind = memo.kind[slot]
+    kind == 0 && return nothing
+    kind == 1 && return photo_none
+    v = view(memo.vals, :, slot)
+    s = nₑ/v[1]
+    init, final = Int(v[2]), Int(v[3])
+    pirt, rrrt, piht, rrcl, piht2, rrcl2, opakab = v[4], v[5]*s, v[6], v[7]*s, v[8], v[9]*s, v[10]
+    if kind == 2
+        eth, dE = v[11], v[12]
+        fenergy2 = piht2*(piht - dE*pirt)/max(heat_floor, piht - eth*pirt)
+        ienergy2 = rrcl2*(rrcl - dE*rrrt)/max(heat_floor, rrcl - eth*rrrt)
+        return (; init, final, frate=pirt, irate=rrrt, fenergy=piht, ienergy=rrcl, fenergy2, ienergy2, opacity=opakab)
+    end
+    recomb = kind == 3
+    (; init, final, frate=pirt, irate=recomb ? rrrt : 0., fenergy=piht, ienergy=recomb ? rrcl : 0., fenergy2=piht2, ienergy2=recomb ? rrcl2 : 0., opacity=opakab)
+end
+
+memo_none!(memo, slot, opacity, index, result) = (memo !== nothing && opacity === nothing && !index && (memo.kind[slot] = 0x01); result)
+function memo_put!(memo::PhotoMemo, slot, nₑ, kind, init, final, r, eth, dE)
+    nₑ > 0 || return nothing
+    memo.vals[:, slot] .= (nₑ, init, final, r.pirt, r.rrrt, r.piht, r.rrcl, r.piht2, r.rrcl2, r.opakab, eth, dE)
+    memo.kind[slot] = kind
+    nothing
+end
+memo_put!(::Nothing, args...) = nothing
+
 const saha_T_exp = -1.5
 const min_g = 1e-24                    # statistical weights below this are ignored
 const rnisseu_floor = 1e-37
@@ -242,7 +283,11 @@ memory; here it is the continuum energy plus the energy of the parent level.
 """
 function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     ptmp=(0.5, 0.5), abund=(0.0, 0.0), lfast=1, opacity=nothing, index=false,
-    extrapolate=false, shifted=false, parent=true, rates_only=false)
+    extrapolate=false, shifted=false, parent=true, rates_only=false, cache=nothing, slot=0)
+    if cache !== nothing && opacity === nothing && !index
+        hit = memo_get(cache, slot, cell.nₑ)
+        hit === nothing || return hit
+    end
     K = constants()
     levels = coef.levels
     nlev = nlevels(levels, coef.ion)
@@ -251,14 +296,14 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
         fenergy2=0., ienergy2=0., opacity=0.)
     idest1 = Int(coef.level)
     idest2 = parent ? nlev + max(0, Int(coef.parent.level)) - 1 : nlev
-    (idest1 >= nlev || idest1 <= 0) && return none
-    isempty(coef.E_grid) && return none                  # no cross-section table
+    (idest1 >= nlev || idest1 <= 0) && return memo_none!(cache, slot, opacity, index, none)
+    isempty(coef.E_grid) && return memo_none!(cache, slot, opacity, index, none)                  # no cross-section table
     index && return (; none..., init=idest1, final=idest2)
     lo = get(levels, (coef.ion, idest1), nothing)
     cont = get(levels, (coef.ion, nlev), nothing)
-    (lo === nothing || cont === nothing) && return none
+    (lo === nothing || cont === nothing) && return memo_none!(cache, slot, opacity, index, none)
     eth = Float64(lo.E_inf) - Float64(lo.E)
-    eth <= 0 && return none
+    eth <= 0 && return memo_none!(cache, slot, opacity, index, none)
 
     buffers = photo_buffers()
     ε = copyto!(resize!(buffers.ε, length(coef.E_grid)), coef.E_grid)
@@ -270,16 +315,16 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     e2 = Float64(cont.E)
     if idest2 > nlev
         par = get(levels, (coef.parent.ion, Int(coef.parent.level)), nothing)
-        par === nothing && return none
+        par === nothing && return memo_none!(cache, slot, opacity, index, none)
         ggup = Float64(par.g)
         e2 += Float64(par.E)
         shifted && (eth += Float64(par.E))
     end
-    ggup <= min_g && return none
+    ggup <= min_g && return memo_none!(cache, slot, opacity, index, none)
     ε0 = ε[1]
     if extrapolate
         ε, σ = phextrap!(ε, σ, eth, length(radiation.E))
-        isempty(ε) && return none
+        isempty(ε) && return memo_none!(cache, slot, opacity, index, none)
     end
 
     T = cell.T
@@ -296,6 +341,8 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     dE = abs(e2 - Float64(lo.E))
     fenergy2 = r.piht2*(r.piht - dE*K.ergsev*r.pirt)/max(heat_floor, r.piht - eth*K.ergsev*r.pirt)
     ienergy2 = r.rrcl2*(r.rrcl - dE*K.ergsev*r.rrrt)/max(heat_floor, r.rrcl - eth*K.ergsev*r.rrrt)
+    cache !== nothing && opacity === nothing && !index &&
+        memo_put!(cache, slot, cell.nₑ, 0x02, idest1, idest2, r, eth*K.ergsev, dE*K.ergsev)
     (; init=idest1, final=idest2, frate=r.pirt, irate=r.rrrt, fenergy=r.piht,
         ienergy=r.rrcl, fenergy2=fenergy2, ienergy2=ienergy2, opacity=r.opakab)
 end
