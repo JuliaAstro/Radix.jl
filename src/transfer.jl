@@ -372,9 +372,11 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
     luminosities = Luminosities(mixture)
     results = NamedTuple[]
     next_zone = zone_source(zones)
+    final_r = nothing
     while true
         step = next_zone(results, dpthc, spectrum)
         step === nothing && break
+        step isa NamedTuple && (final_r = step.final; break)
         r, Δr = step
         incident = point_source(E, spectrum.L, r)
         radiation = map_spectrum(incident)
@@ -402,14 +404,13 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
         dpthc .+= continuum.total .* Δr
         dpthcont .+= continuum.continuum .* Δr
     end
-    final = isempty(results) ? nothing : final_zone(mixture, ntot, processes, results[end], depths; lfast, cfrac, kw...)
+    final = isempty(results) ? nothing : final_zone(mixture, ntot, processes, results[end], depths, something(final_r, results[end].r + results[end].Δr); lfast, cfrac, kw...)
     (; zones=results, final, depths, dpthc, dpthcont, spectrum, luminosities, vturb, inner, outer)
 end
 
 # final_zone: XSTAR's final calculation at the end of the slab, a zone of no thickness at the distance where the last zone ends with its temperature and electron
 # fraction (nothing is iterated), the radiation that fell on the last zone and the escape probabilities of the depths of all the zones
-function final_zone(mixture::Mixture, ntot, processes, last, depths; lfast, cfrac, kw...)
-    r = last.r + last.Δr
+function final_zone(mixture::Mixture, ntot, processes, last, depths, r; lfast, cfrac, kw...)
     T, xee = last.T, last.xee
     n = gas_density(ntot, T, r)
     radiation = last.radiation
@@ -429,17 +430,25 @@ Returns what `iterate` does.
 """
 function Base.iterate(mixture::Mixture, ntot, processes, E, L; r, column, emult=step_default_emult, taumax=step_default_taumax,
         ectt=step_energy_min, steps=step_default_steps, kw...)
-    position, depth, last = float(r), 0.0, nothing
+    table = ntot isa DensityTable
+    position, depth, last, node = table ? ntot.r[1] : float(r), 0.0, nothing, 1
     source = function (results, dpthc, spectrum)
         added = 0.0
         if last !== nothing
-            position += last
-            added = gas_density(ntot, results[end].T, position)*last      # (`xstar` updates the density of a power law before it adds the column: the one at the outer edge)
+            if table                                  # (XSTAR reads the next line of the file: the zone is at its distance, whatever the thickness of the step, and the column grows by its density times the distance from the zone before)
+                node += 1
+                node > length(ntot.r) && return (; final=position)
+                added = ntot.n[node]*(ntot.r[node] - position)
+                position = ntot.r[node]
+            else
+                position += last
+                added = gas_density(ntot, results[end].T, position)*last      # (`xstar` updates the density of a power law before it adds the column: the one at the outer edge)
+            end
             depth += added
         end
-        depth < column || return nothing
+        depth < column || return (; final=position)
         # a density that falls faster than the zones grow (at most r/steps each) never reaches the column: the zones go on to densities of 10⁻³⁰⁰ and numbers that are not
-        length(results) > 2 && added < step_progress_min*column && column - depth > step_progress_min*column &&
+        !table && length(results) > 2 && added < step_progress_min*column && column - depth > step_progress_min*column &&
             throw(ArgumentError("the column of $column cm⁻² is out of reach: the last zone added $added cm⁻², and the zones are at most r/steps = r/$steps thick while the density falls (try a lower column or more steps)"))
         thickness = isempty(results) ? 0.0 :
             step_thickness(results[end].opacity.total, E, spectrum.L, dpthc, position, depth, gas_density(ntot, results[end].T, position), column, emult, taumax, ectt, steps)
@@ -465,18 +474,21 @@ end
     slab(mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> powerlaw(E, α, L), ncn2=999, kw...)
     slab(mixture, processes; pressure, column, logξ, luminosity, ...)
     slab(mixture, processes; density, radexp, ...)
+    slab(mixture, processes; density=DensityTable(path), column, luminosity, ...)
 
-A slab of gas of the `density` (cm⁻³) at the source distance, constant or `density (r/r₀)^radexp` for `radexp ≠ 0` (XSTAR's `radexp`), or the constant `pressure` (dyn cm⁻², `ConstantPressure`, XSTAR's `lcpres=1`: the density of each zone is `P/(k T)` at its temperature, `logξ` is then the logarithm of the ionization parameter of the pressure `Ξ`) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `powerlaw(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
+A slab of gas of the `density` (cm⁻³) at the source distance, constant or `density (r/r₀)^radexp` for `radexp ≠ 0` (XSTAR's `radexp`), or a `DensityTable` (or the path of its file: XSTAR's `radexp < -99`, whose zones are at the distances of the table, the first at `r[1]` and `logξ` not needed), or the constant `pressure` (dyn cm⁻², `ConstantPressure`, XSTAR's `lcpres=1`: the density of each zone is `P/(k T)` at its temperature, `logξ` is then the logarithm of the ionization parameter of the pressure `Ξ`) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `powerlaw(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
 of `ncn2` points (or the spectrum `spectrum(E, luminosity)`, e.g. `(E, L) -> blackbody(E, 0.5, L)`), at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `iterate` solves (its keywords
 `T` and `xee` of the first zone, `equilibrium`, `emult`, `taumax`, `steps` (`nsteps`), `vturb`, `lines`, ... go to it). Returns what `iterate` does and the energies `E`, the incident spectrum
 `incident`, the distance `r` and the `transmitted` spectrum of XSTAR's output, `incident × exp(-dpthcont)`.
 """
-function slab(mixture::Mixture, processes; density=nothing, pressure=nothing, radexp=0.0, column, logξ, luminosity, α=-1.0,
+function slab(mixture::Mixture, processes; density=nothing, pressure=nothing, radexp=0.0, column, logξ=nothing, luminosity, α=-1.0,
         spectrum=(E, L) -> powerlaw(E, α, L), ncn2=999, kw...)
     (density === nothing) == (pressure === nothing) && throw(ArgumentError("give the density (constant density) or the pressure (constant pressure)"))
+    density isa AbstractString && (density = DensityTable(density))
+    density isa DensityTable || logξ !== nothing || throw(ArgumentError("give the ionization parameter `logξ` (only a `DensityTable` has the distance of its own)"))
     E = xstar_energy_grid(ncn2)
     incident = spectrum(E, luminosity)
-    ntot, r = density !== nothing ? (density, source_distance(luminosity, 10^logξ, density)) :
+    ntot, r = density isa DensityTable ? (density, density.r[1]) : density !== nothing ? (density, source_distance(luminosity, 10^logξ, density)) :
         (ConstantPressure(pressure), source_distance_pressure(luminosity, 10^logξ, pressure))
     iszero(radexp) || density === nothing || (ntot = PowerLawDensity(density, r, radexp))
     result = iterate(mixture, ntot, processes, E, incident; r, column, kw...)

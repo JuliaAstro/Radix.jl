@@ -6,7 +6,7 @@ using SparseArrays
 export Atom, AtomicLevel, AtomicLine
 export load, levels, counts, Levels, nlevels, weight, Radiation, Opacity
 export Constants, ucalc, constants, constants!
-export Model, slab, tables, ConstantPressure, composition
+export Model, slab, tables, ConstantPressure, DensityTable, composition
 export powerlaw, blackbody, thermal, tabulated
 
 

@@ -407,8 +407,8 @@ function transfer_balance_tests(db, known=nothing)
             # the final calculation of XSTAR, the last row of its table: a zone of no thickness at the end of the slab, with the temperature and electron fraction of the last zone
             @test (auto.final.r - auto.r) ≈ 1e17 rtol=1e-6
             @test auto.final.Δr == 0 && auto.final.T == auto.zones[end].T
-            @test auto.final.fractions[2][2] ≈ Float64(slabab.he_ii[end]) rtol=4e-3
-            @test auto.final.fractions[findfirst(==(8), mixture.Z)][8] ≈ Float64(slabab.o_viii[end]) rtol=1e-3
+            @test auto.zones[end].fractions[2][2] ≈ Float64(slabab.he_ii[end]) rtol=4e-3      # (the fractions of the last row of XSTAR's table are those of the last zone)
+            @test auto.zones[end].fractions[findfirst(==(8), mixture.Z)][8] ≈ Float64(slabab.o_viii[end]) rtol=1e-3
             # three passes (`npass=3`: the outward optical depths of the lines and edges of the pass back from the outer edge): the ion fractions change by
             # 2.5% (He II in the first zone) to 0.2% and follow those of XSTAR in the change, which the escape probabilities of the outer side make
             auto3 = Radix.slab(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false, passes=3)
@@ -548,6 +548,45 @@ function transfer_balance_tests(db, known=nothing)
             end
         end
 
+        @testset "the density from a file" begin
+            # test/reference/xstar_density: XSTAR's `radexp=-100` (a line of r and n for each zone) at T = 10⁶ K. The zones are at the distances of the denseFile and the denseRun ends at the column or the end of the denseFile
+            if known !== nothing && known.name == "package"
+                denseDir = joinpath(@__DIR__, "reference", "xstar_density")
+                denseFile = joinpath(denseDir, "density.dat")
+                denseTable = Radix.DensityTable(denseFile)
+                @test length(denseTable.r) == 40 && denseTable.n[1] == 7000.0 && Radix.gas_density(denseTable, 1.0) == 7000.0
+                @test Radix.gas_density(denseTable, 1.0, denseTable.r[6]) == denseTable.n[6]
+                @test Radix.gas_density(denseTable, 1.0, (denseTable.r[6] + denseTable.r[7])/2) ≈ (denseTable.n[6] + denseTable.n[7])/2
+                @test_throws ArgumentError Radix.DensityTable([2.0, 1.0], [1.0, 1.0])
+                denseO = findfirst(==(8), mixture.Z)
+                denseKw = (; luminosity=1e-3*1e38, α=-1.0, steps=2, emult=1.0, T=100.0, iterate=false, vturb=0.0, luminous=false)
+                # the column of 10¹⁸ cm⁻²: five zones, and the final calculation at the sixth line
+                denseRef = fits(joinpath(denseDir, "xout_abund1_column.fits"))[2].data
+                denseRun = Radix.slab(mixture, processes; density=denseFile, column=1e18, denseKw...)
+                @test length(denseRun.zones) == 6 && denseRun.r == denseTable.r[1]
+                @test [z.r - denseRun.r for z in denseRun.zones[1:5]] ≈ Float64.(denseRef.delta_r)[1:5] rtol=1e-5 atol=1e8
+                @test (denseRun.final.r - denseRun.r) ≈ Float64(denseRef.delta_r[6]) rtol=1e-5
+                @test denseRun.final.ntot == denseTable.n[7]
+                @test [z.ntot for z in denseRun.zones[1:5]] ≈ Float64.(denseRef.n_p)[1:5] rtol=1e-5
+                for k in 1:6          # (the last row has the fractions of the last zone)
+                    @test denseRun.zones[k].fractions[2][2] ≈ Float64(denseRef.he_ii[k]) rtol=5e-3
+                    @test denseRun.zones[k].fractions[denseO][8] ≈ Float64(denseRef.o_viii[k]) rtol=5e-3
+                end
+                # the final calculation (T and x_e of the last zone, its radiation, the density and distance of the line): the heating and cooling of the photons in XSTAR's denseTable
+                @test denseRun.final.heating ≈ 1.14746613e-15 rtol=3e-3
+                @test denseRun.final.cooling ≈ 1.26292604e-15 rtol=3e-3
+                # the column of 10¹⁹ cm⁻² is more than the file has: the zones are its lines, and the end of the slab is the last
+                denseRef = fits(joinpath(denseDir, "xout_abund1_table.fits"))[2].data
+                denseRun = Radix.slab(mixture, processes; density=denseFile, column=1e19, denseKw...)
+                @test length(denseRun.zones) == 40 && denseRun.final.r == denseTable.r[end]
+                @test [z.r - denseRun.r for z in denseRun.zones] ≈ Float64.(denseRef.delta_r) rtol=1e-5 atol=1e8
+                @test [z.fractions[2][2] for z in denseRun.zones] ≈ Float64.(denseRef.he_ii) rtol=5e-3
+                @test [z.fractions[denseO][8] for z in denseRun.zones] ≈ Float64.(denseRef.o_viii) rtol=5e-3
+            else
+                @info "Skipping the test of the density from a file (it is for the database of the XSTAR package)"
+            end
+        end
+
         @testset "the thermal sources with the temperature iterated" begin
             # test/reference/xstar_sources: a blackbody (kT = 431 eV) and thermal bremsstrahlung (kT = 86 eV) at log ξ = 2, 10⁴ cm⁻³, 10³⁵ erg/s, T and x_e iterated (a column of
             # 10¹⁷ cm⁻²: the first zone and the end of the slab; the rows of the table are the first zone, again the first zone, and the end). For the database of the package only
@@ -589,7 +628,7 @@ function transfer_balance_tests(db, known=nothing)
                     if front
                         @test sourcestates[5].T ≈ Float64(sourcetable.temperature[5]) rtol=5e-3
                         @test sourcestates[end].T ≈ Float64(sourcetable.temperature[end]) rtol=2e-2
-                        @test sourcestates[end].fractions[2][2] ≈ Float64(sourcetable.he_ii[end]) rtol=1e-2
+                        @test sourcerun.zones[end].fractions[2][2] ≈ Float64(sourcetable.he_ii[end]) rtol=1e-2      # (the fractions of the last row are the last zone's)
                     end
                 end
             else

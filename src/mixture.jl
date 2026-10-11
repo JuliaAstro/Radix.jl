@@ -56,6 +56,39 @@ gas_density(d::PowerLawDensity, T) = d.n0
 gas_density(d::PowerLawDensity, T, r) = d.n0*(r/d.r0)^d.exponent
 
 """
+    DensityTable(r, n)
+    DensityTable(path)
+
+The hydrogen density `n` (cm⁻³) at the distances `r` (cm, not decreasing) from the source, XSTAR's density file (`radexp < -99`, `density.dat`): a line of `r n` for each zone. `path` is such a
+file (the numbers separated by blanks or commas). The zones of `iterate` are at the distances of the table (the first is at `r[1]`, the others as far apart as the table says), with its densities: `gas_density(d, T, r)`
+interpolates linearly in between.
+"""
+struct DensityTable
+    r::Vector{Float64}
+    n::Vector{Float64}
+    function DensityTable(r, n)
+        length(r) == length(n) > 0 || throw(ArgumentError("the table needs the same number (at least one) of distances and densities"))
+        issorted(r) || throw(ArgumentError("the distances of the table must not decrease (XSTAR stops with a radius error)"))
+        all(>(0), n) || throw(ArgumentError("the densities of the table must be positive"))
+        new(Float64.(r), Float64.(n))
+    end
+end
+
+function DensityTable(path::AbstractString)
+    rows = [parse.(Float64, split(line, r"[\s,]+"; keepempty=false)) for line in eachline(path) if !isempty(strip(line))]
+    all(==(2) ∘ length, rows) || throw(ArgumentError("each line of $path must have two numbers: the distance and the density"))
+    DensityTable([row[1] for row in rows], [row[2] for row in rows])
+end
+
+gas_density(d::DensityTable, T) = d.n[1]
+function gas_density(d::DensityTable, T, r)
+    k = searchsortedlast(d.r, r)
+    (k < 1 || r <= d.r[1]) && return d.n[1]
+    (k >= length(d.r) || d.r[k] == r) && return d.n[min(k, end)]
+    d.n[k] + (d.n[k + 1] - d.n[k])*(r - d.r[k])/(d.r[k + 1] - d.r[k])
+end
+
+"""
     Mixture(records, levels; abundances=nothing, multiplier=Dict())
 
 The elements of the database `records` (an `Elements` for each `Atom` record) with their abundances relative to
