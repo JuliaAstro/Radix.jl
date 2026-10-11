@@ -192,7 +192,7 @@ function toy_transfer_tests()
             processes = Radix.standard_processes(Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0]))
             E = Radix.xstar_energy_grid(999)
             L = 1e30 ./ E
-            slab = Radix.march(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, T=1.0, iterate=false, diffuse=false)
+            slab = Radix.iterate(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, T=1.0, iterate=false, diffuse=false)
             # a thin gas (Thomson scattering at about 10⁻²⁰ cm⁻¹): zones of the largest size, r/steps, the first of no thickness, the last ends at the column
             Δ = [z.Δr for z in slab.zones]
             @test Δ[1] == 0 && Δ[2] == 1e13/2                                      # (steps = 2)
@@ -208,10 +208,10 @@ function toy_transfer_tests()
             @test Radix.ConstantPressure(pressure)(4.0) ≈ 2.5e3 rtol=1e-6
             @test Radix.gas_density(5.0, 2.0) == 5.0
             @test Radix.gas_density(Radix.ConstantPressure(pressure), 2.0) ≈ 5e3 rtol=1e-6
-            cp = Radix.march(hmixture, Radix.ConstantPressure(pressure), processes, E, L; r=1e13, column=1e21, T=1.0, iterate=false, diffuse=false)
+            cp = Radix.iterate(hmixture, Radix.ConstantPressure(pressure), processes, E, L; r=1e13, column=1e21, T=1.0, iterate=false, diffuse=false)
             @test all(z -> isapprox(z.ntot, 1e4; rtol=1e-6) && z.T == 1.0, cp.zones)
             @test isapprox([z.Δr for z in cp.zones], [z.Δr for z in slab.zones]; rtol=1e-5)          # (the same as the constant density of 10⁴ at the same temperature)
-            hot = Radix.march(hmixture, Radix.ConstantPressure(pressure), processes, E, L; r=1e13, column=1e21, T=2.0, iterate=false, diffuse=false)
+            hot = Radix.iterate(hmixture, Radix.ConstantPressure(pressure), processes, E, L; r=1e13, column=1e21, T=2.0, iterate=false, diffuse=false)
             @test all(z -> isapprox(z.ntot, 5e3; rtol=1e-6), hot.zones)
             @test sum(z.Δr for z in hot.zones) ≈ 1e21/5e3 rtol=1e-6        # half the density: twice the length for the column
             @test_throws ArgumentError Radix.slab(hmixture, processes; column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false)
@@ -221,20 +221,20 @@ function toy_transfer_tests()
             @test Radix.gas_density(d, 5.0) == 1e4
             @test Radix.gas_density(d, 5.0, 2e13) ≈ 2.5e3
             @test Radix.gas_density(1e4, 5.0, 2e13) == 1e4
-            radial = Radix.march(hmixture, d, processes, E, L; r=1e13, column=5e16, T=1.0, iterate=false, diffuse=false)        # (the column of n ∝ r⁻² from 10¹³ cm adds up to at most 6.7×10¹⁶ with the zones of r/2)
+            radial = Radix.iterate(hmixture, d, processes, E, L; r=1e13, column=5e16, T=1.0, iterate=false, diffuse=false)        # (the column of n ∝ r⁻² from 10¹³ cm adds up to at most 6.7×10¹⁶ with the zones of r/2)
             @test all(z -> isapprox(z.ntot, 1e4*(z.r/1e13)^-2; rtol=1e-12), radial.zones)
             outer(z) = Radix.gas_density(d, 1.0, z.r + z.Δr)
             @test sum(outer(z)*z.Δr for z in radial.zones) ≈ 5e16 rtol=1e-9           # (the column adds up with the density at the outer edge of each zone, as XSTAR does)
             @test length(radial.zones) > 1
-            @test_throws ArgumentError Radix.march(hmixture, d, processes, E, L; r=1e13, column=6.7e16, T=1.0, iterate=false, diffuse=false)      # (out of reach: the zones are at most r/2 thick and the density falls as r⁻²)
+            @test_throws ArgumentError Radix.iterate(hmixture, d, processes, E, L; r=1e13, column=6.7e16, T=1.0, iterate=false, diffuse=false)      # (out of reach: the zones are at most r/2 thick and the density falls as r⁻²)
             @test radial.zones[end].ntot < 1e4
             model = Radix.slab(hmixture, processes; density=1e4, radexp=-2.0, column=1e16, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false)
             @test model.zones[1].ntot ≈ 1e4
             @test model.zones[end].ntot ≈ 1e4*(model.zones[end].r/model.r)^-2 rtol=1e-12
             @test Radix.slab(hmixture, processes; density=1e4, radexp=0.0, column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false).zones[end].ntot == 1e4
-            few = Radix.march(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, steps=10, T=1.0, iterate=false, diffuse=false)
+            few = Radix.iterate(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, steps=10, T=1.0, iterate=false, diffuse=false)
             @test few.zones[2].Δr == 1e12 && length(few.zones) > length(slab.zones)
-            thin = Radix.march(hmixture, 1e4, processes, E, L; r=1e30, column=1e17, T=1.0, iterate=false, diffuse=false)
+            thin = Radix.iterate(hmixture, 1e4, processes, E, L; r=1e30, column=1e17, T=1.0, iterate=false, diffuse=false)
             @test [z.Δr for z in thin.zones] == [0.0, 1e13]                          # a thin slab: the column left
         end
 
@@ -291,7 +291,7 @@ function toy_transfer_tests()
             processes = Radix.standard_processes(Radix.Compton([1e-4, 1.0], [1e-3, 1.0], [1.0 2.0; 3.0 4.0]))
             E = Radix.xstar_energy_grid(999)
             L = 1e30 ./ E
-            run = Radix.march(hmixture, 1e4, processes, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false, diffuse=false)
+            run = Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false, diffuse=false)
             @test length(run.zones) == 2
             @test [z.r for z in run.zones] == [1e13, 2e13] && [z.Δr for z in run.zones] == [1e12, 3e12]
             @test run.zones[1].radiation.F == Radix.map_spectrum(Radix.point_source(E, L, 1e13)).F
@@ -299,19 +299,19 @@ function toy_transfer_tests()
             @test all(z -> z.T == 1.0 && z.xee == 1.0, run.zones)
             @test run.depths.inward == [[0.0]] && run.zones[1].escape == [[(0.5, 0.5)]]
             # the continuum is attenuated by the depth of the zones before (here Thomson scattering): exp(-Σ opacity Δr)
-            thick = Radix.march(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, diffuse=false)
+            thick = Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, diffuse=false)
             thomson = thick.zones[1].nₑ*Radix.constants().sigma_thomson
             @test thick.zones[1].opacity.total[10] ≈ thomson + Radix.opacity(Radix.FreeFree(), E, 1.0, thick.zones[1].nₑ)[10]
             @test thick.zones[2].radiation.F[10] ≈ thick.zones[1].radiation.F[10]*exp(-thick.zones[1].opacity.total[10]*1e17) rtol=1e-6      # (`heatt` steps linearly in a thin zone)
             @test thick.dpthc[10] ≈ 2*thick.zones[1].opacity.total[10]*1e17
             @test thick.dpthcont[10] ≈ 2*thomson*1e17                                      # (free-free is not in the continuum)
             @test thick.dpthc[10] > thick.dpthcont[10]
-            @test Radix.march(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, diffuse=false, lines=false).dpthc == thick.dpthc    # (no lines here)
+            @test Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, diffuse=false, lines=false).dpthc == thick.dpthc    # (no lines here)
             # the diffuse emission (here the bremsstrahlung of the zone) adds to the spectrum that the next zone has
-            emitting = Radix.march(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false)
+            emitting = Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false)
             @test emitting.zones[2].radiation.F[10] > thick.zones[2].radiation.F[10]
             @test emitting.spectrum.inward_continuum[10] > 0 && emitting.spectrum.L[10] > thick.spectrum.L[10]
-            flat = Radix.march(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
+            flat = Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
             @test flat.zones[2].radiation.F == flat.zones[1].radiation.F
             @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
         end
@@ -334,7 +334,7 @@ function transfer_balance_tests(db, known=nothing)
         edges = fits(joinpath(dir, "xout_rrc1.fits"))[3].data
         abundances = fits(joinpath(dir, "xout_abund1.fits"))[2].data
         E, L = Float64.(spectrum.energy), Float64.(spectrum.incident)*1e38
-        run = Radix.march(mixture, 1e4, processes, E, L, [(1e13, 5e12), (1.5e13, 5e12)]; T=100.0, iterate=false)
+        run = Radix.iterate(mixture, 1e4, processes, E, L, [(1e13, 5e12), (1.5e13, 5e12)]; T=100.0, iterate=false)
         ionlabel = Dict(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion)
         label(ion, level) = strip(levels[(Int(ion), Int(level))].label)
 
@@ -382,7 +382,7 @@ function transfer_balance_tests(db, known=nothing)
             r0 = 3.16228e20
             depth = Float64.(slabab.delta_r)[2:end]
             zones = [(r0 + depth[k], depth[k + 1] - depth[k]) for k in 1:length(depth) - 1]
-            thickrun = Radix.march(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false, vturb=0.0, luminous=false)
+            thickrun = Radix.iterate(mixture, 1e4, processes, Es, Is*1e38, zones; T=10.0, iterate=false, vturb=0.0, luminous=false)
             τx = -log.(Ts ./ Is)
             ratio = thickrun.dpthcont ./ τx
             @test all(τx .> 6e-4)
@@ -404,6 +404,11 @@ function transfer_balance_tests(db, known=nothing)
             @test [z.r - auto.r for z in auto.zones][1:6] ≈ [0; depth[1:5]] atol=3e-4*1.8e16 rtol=1e-3
             @test round.(log10.(1e4 .* cumsum([z.Δr for z in auto.zones])[2:end]); digits=2) == [20.26, 20.56, 20.74, 20.86, 20.95, 21.0]
             @test sum(z.Δr for z in auto.zones) ≈ 1e17
+            # the final calculation of XSTAR, the last row of its table: a zone of no thickness at the end of the slab, with the temperature and electron fraction of the last zone
+            @test (auto.final.r - auto.r) ≈ 1e17 rtol=1e-6
+            @test auto.final.Δr == 0 && auto.final.T == auto.zones[end].T
+            @test auto.final.fractions[2][2] ≈ Float64(slabab.he_ii[end]) rtol=4e-3
+            @test auto.final.fractions[findfirst(==(8), mixture.Z)][8] ≈ Float64(slabab.o_viii[end]) rtol=1e-3
             # three passes (`npass=3`: the outward optical depths of the lines and edges of the pass back from the outer edge): the ion fractions change by
             # 2.5% (He II in the first zone) to 0.2% and follow those of XSTAR in the change, which the escape probabilities of the outer side make
             auto3 = Radix.slab(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false, passes=3)
@@ -531,7 +536,7 @@ function transfer_balance_tests(db, known=nothing)
                 depth = Float64.(table.delta_r)[2:end]
                 zones = [(r0 + depth[k], depth[k + 1] - depth[k]) for k in 1:length(depth) - 1]
                 E = Radix.xstar_energy_grid(999)
-                half = Radix.march(mixture, 1e4, Radix.standard_processes(Radix.load(Radix.Compton, coheat); cfrac=0.5), E, Radix.powerlaw(E, -1.0, 1e-2*1e38), zones; T=100.0, equilibrium=true,
+                half = Radix.iterate(mixture, 1e4, Radix.standard_processes(Radix.load(Radix.Compton, coheat); cfrac=0.5), E, Radix.powerlaw(E, -1.0, 1e-2*1e38), zones; T=100.0, equilibrium=true,
                     vturb=0.0, luminous=false, cfrac=0.5)
                 rows = [1, 3]
                 @test [z.T for z in half.zones] ≈ Float64.(table.temperature)[rows] rtol=2e-3
@@ -555,7 +560,7 @@ function transfer_balance_tests(db, known=nothing)
                 r0 = 3.16228e20
                 zones = [(r0 + depth[k], depth[k + 1] - depth[k]) for k in 1:length(depth) - 1]
                 E = Radix.xstar_energy_grid(999)
-                three = Radix.march(mixture, 1e4, processes, E, Radix.powerlaw(E, -1.0, 1e8*1e38), zones; T=10.0, equilibrium=true, vturb=0.0, luminous=false, passes=3)
+                three = Radix.iterate(mixture, 1e4, processes, E, Radix.powerlaw(E, -1.0, 1e8*1e38), zones; T=10.0, equilibrium=true, vturb=0.0, luminous=false, passes=3)
                 rows = [1; 3:8]
                 T = Float64.(table.temperature)[rows]
                 @test [z.T for z in three.zones[1:7]] ≈ T rtol=2e-3
@@ -590,7 +595,7 @@ function transfer_balance_tests(db, known=nothing)
             @test log10(r0) ≈ 15.5 atol=0.005
             density = Radix.PowerLawDensity(1e4, r0, -3.0)
             zones = [(r0, 0.0), (r0, r0/3), (4r0/3, 4r0/9)]
-            rad = Radix.march(mixture, density, processes, Radix.xstar_energy_grid(999), Radix.powerlaw(Radix.xstar_energy_grid(999), -1.0, 1e-2*1e38), zones; T=10.0,
+            rad = Radix.iterate(mixture, density, processes, Radix.xstar_energy_grid(999), Radix.powerlaw(Radix.xstar_energy_grid(999), -1.0, 1e-2*1e38), zones; T=10.0,
                 iterate=false, vturb=0.0, luminous=false)
             @test round.(log10.([z.r for z in rad.zones]); digits=2) == [15.5, 15.5, 15.62]
             @test round.(log10.([z.ntot for z in rad.zones]); digits=2) == [4.0, 4.0, 3.63]       # (the density of the inner edge of each zone)
