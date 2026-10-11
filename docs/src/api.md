@@ -2,10 +2,11 @@
 
 ## Models and results
 
+The zones of a slab are `iterate(mixture, ntot, processes, E, L; ...)` (an extension of `Base.iterate`, documented under Internals).
+
 ```@docs
 Model
 slab
-march
 tables
 ConstantPressure
 composition

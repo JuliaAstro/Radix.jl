@@ -24,7 +24,7 @@ run = slab(model;
 
 `Model(atdb, coheat; abundances, multiplier, exclude, cfrac)` takes an abundance table (`composition(:angr)`, ... or a vector for the elements 1 to 30),
 `multiplier = Dict(26 => 2.0)` for factors, `exclude` for the elements that are left out (Li, Be and B by default, as the atomic data of XSTAR has no data for them) and the covering fraction.
-Under the hood `slab` is `powerlaw` (the source), `source_distance`, `march` (the zones) and `march` (the transfer); they can be called on their own, and `march` takes the zones (`(r, Δr)`) as well.
+Under the hood `slab` is `powerlaw` (the source), `source_distance`, `Base.iterate` of a mixture (the zones and the transfer); they can be called on their own, and it takes the zones (`(r, Δr)`) as well.
 
 ## What comes back
 
