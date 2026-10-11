@@ -548,6 +548,55 @@ function transfer_balance_tests(db, known=nothing)
             end
         end
 
+        @testset "the thermal sources with the temperature iterated" begin
+            # test/reference/xstar_sources: a blackbody (kT = 431 eV) and thermal bremsstrahlung (kT = 86 eV) at log ξ = 2, 10⁴ cm⁻³, 10³⁵ erg/s, T and x_e iterated (a column of
+            # 10¹⁷ cm⁻²: the first zone and the end of the slab; the rows of the table are the first zone, again the first zone, and the end). For the database of the package only
+            if known !== nothing && known.name == "package"
+                oxygen = findfirst(==(8), mixture.Z)
+                for (name, spectrum, tolerance) in (("bbody", (E, L) -> Radix.blackbody(E, 0.5, L), 2e-3), ("brems", (E, L) -> Radix.thermal(E, 0.1, L), 6e-3))
+                    sourcetable = fits(joinpath(@__DIR__, "reference", "xstar_sources", "thin_$(name)_abund1.fits"))[2].data
+                    sourcerun = Radix.slab(mixture, processes; density=1e4, column=1e17, logξ=2.0, luminosity=1e-3*1e38, spectrum, steps=2, emult=0.5, T=100.0, equilibrium=true, vturb=0.0, luminous=false)
+                    sourcezone = sourcerun.zones[1]
+                    @test sourcezone.T ≈ Float64(sourcetable.temperature[1]) rtol=tolerance
+                    @test sourcezone.xee ≈ Float64(sourcetable.x_e[1]) rtol=1e-4
+                    @test sourcezone.fractions[2][2] ≈ Float64(sourcetable.he_ii[1]) rtol=4e-3
+                    @test sourcezone.fractions[oxygen][8] ≈ Float64(sourcetable.o_viii[1]) rtol=4e-3
+                    @test sourcezone.fractions[1][1] ≈ Float64(sourcetable.h_i[1]) rtol=4e-3
+                end
+            else
+                @info "Skipping the test of the thermal sources (it is for the database of the XSTAR package)"
+            end
+        end
+
+        @slow "the thermal sources through a slab" begin
+            # the same sources through 10¹⁹ cm⁻² (emult = 1: the zones of the table are those of Radix, which agree to 10⁻⁴ in r). The first four rows (T from 11.8 to 7.6 in 10⁴ K for the
+            # blackbody) agree to 4×10⁻³ in T and 1% in the fractions, and the brems slab (to 3.4) throughout. The blackbody slab ends in a thermal front, where T falls to 1.8 within
+            # one zone and the trace ions of C to Fe change by factors (XSTAR's own are not converged there: its T depends by 1% on the steps): T agrees to 5×10⁻³ and 2×10⁻² at the end
+            if known !== nothing && known.name == "package"
+                oxygen = findfirst(==(8), mixture.Z)
+                for (name, spectrum, rows, tolerance, front) in (("bbody", (E, L) -> Radix.blackbody(E, 0.5, L), 1:4, 4e-3, true), ("brems", (E, L) -> Radix.thermal(E, 0.1, L), 1:5, 7e-3, false))
+                    sourcetable = fits(joinpath(@__DIR__, "reference", "xstar_sources", "thick_$(name)_abund1.fits"))[2].data
+                    sourcerun = Radix.slab(mixture, processes; density=1e4, column=1e19, logξ=2.0, luminosity=1e-3*1e38, spectrum, steps=2, emult=1.0, T=100.0, equilibrium=true, vturb=0.0, luminous=false)
+                    sourcestates = [sourcerun.zones[1:end - 1]..., sourcerun.final]            # (XSTAR's table has no row for the last zone, the final calculation is its last)
+                    @test length(sourcestates) == length(sourcetable.temperature)
+                    @test [z.r - sourcerun.r for z in sourcestates] ≈ Float64.(sourcetable.delta_r) rtol=2e-4 atol=1e10
+                    for k in rows
+                        @test sourcestates[k].T ≈ Float64(sourcetable.temperature[k]) rtol=tolerance
+                        @test sourcestates[k].fractions[2][2] ≈ Float64(sourcetable.he_ii[k]) rtol=1e-2
+                        @test sourcestates[k].fractions[oxygen][8] ≈ Float64(sourcetable.o_viii[k]) rtol=1e-2
+                        @test sourcestates[k].fractions[1][1] ≈ Float64(sourcetable.h_i[k]) rtol=1.5e-2
+                    end
+                    if front
+                        @test sourcestates[5].T ≈ Float64(sourcetable.temperature[5]) rtol=5e-3
+                        @test sourcestates[end].T ≈ Float64(sourcetable.temperature[end]) rtol=2e-2
+                        @test sourcestates[end].fractions[2][2] ≈ Float64(sourcetable.he_ii[end]) rtol=1e-2
+                    end
+                end
+            else
+                @info "Skipping the test of the thermal sources through a slab (it is for the database of the XSTAR package)"
+            end
+        end
+
         @slow "three passes with the temperature iterated" begin
             # test/reference/xstar_thick_slab/xout_abund1_T_npass{1,3}.fits: the thick slab of the run above with niter=99 (T and x_e iterated), npass=1 and 3. The zones are those of
             # XSTAR (its rows are the states at the inner edges: the first zone is row 1 and the others the row after their number). XSTAR's own temperatures are those of
