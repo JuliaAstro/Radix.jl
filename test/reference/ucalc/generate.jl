@@ -25,6 +25,8 @@ const CONDITIONS = (            # t [1e4 K], xpx [cm⁻³], xee, xh0/xpx, xh1/xp
 
 # TEMPS=t1,t2,t3,t4 replaces the temperatures (in 10⁴ K) of the four conditions
 function conditions()
+    # CONDITION=t,xpx,xee,xh0/xpx,xh1/xpx replaces the four conditions by one
+    haskey(ENV, "CONDITION") && return (Tuple(parse.(Float64, split(ENV["CONDITION"], ","))),)
     haskey(ENV, "TEMPS") || return CONDITIONS
     ts = parse.(Float64, split(ENV["TEMPS"], ","))
     ntuple(i -> (ts[i], CONDITIONS[i][2:end]...), length(CONDITIONS))
@@ -109,7 +111,7 @@ function main(path, outdir, type, nrec = 25, tag = "", selection = "")
                     end
                 end
                 norm = type in RADIATION_TYPES ? 1e16 : 0.0
-                lfast = type in RADIATION_TYPES ? LFAST[mod1(ci, length(LFAST))] : 1
+                lfast = type in RADIATION_TYPES ? (haskey(ENV, "LFAST") ? parse(Int, ENV["LFAST"]) : LFAST[mod1(ci, length(LFAST))]) : 1      # (LFAST=2 sets it for all)
                 println(io, join((0.1, 0.0015, 1.0, norm, kpar, gpar, epar, lfast), " "))
                 # nlev, then only the levels the record refers to
                 # (the superlevel types use the highest real level at most: nlev - 1)
