@@ -45,17 +45,17 @@ function energies_of(coef::AbstractRate, cell::Cell, given::NamedTuple)
     ucalc_energies(coef, r)
 end
 
-function group_energies!(buffers::EnergyBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape)
+function group_energies!(buffers::EnergyBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape, cfrac=0.0)
     for k in eachindex(records)
         j, coef = indices[k], records[k]
         ptmp = something(escape_of(escape, j, coef), optically_thin)
         buffers.ans3[j], buffers.ans4[j], buffers.ans5[j], buffers.ans6[j] =
-            energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))
+            energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))
     end
 end
 
 """
-    element_heating(elements, cell, populations; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+    element_heating(elements, cell, populations; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast, cfrac=0.0)
 
 The heating and cooling of the element of `elements` with the level `populations` in `cell`, per unit abundance
 (erg cm⁻³ s⁻¹ for an abundance of 1 relative to hydrogen: the density of an ion is `cell.ntot` times its population),
@@ -63,10 +63,10 @@ as `(heating, cooling, heating2, cooling2)`. They are the sums over the records 
 `cooling`) and of the electrons (`heating2`, `cooling2`) that each exchanges at the levels of its transition, XSTAR's
 `msolvelud`: the energy of a record at a level is `energy × population`, a heating if it is negative, a cooling if positive.
 """
-function element_heating(layout::Elements, cell::Cell, populations; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+function element_heating(layout::Elements, cell::Cell, populations; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast, cfrac=0.0)
     buffers = energy_buffers(length(layout.rates))
     for (indices, records) in layout.groups
-        group_energies!(buffers, indices, records, cell, radiation, lfast, escape)
+        group_energies!(buffers, indices, records, cell, radiation, lfast, escape, cfrac)
     end
     ht = cl = ht2 = cl2 = 0.0
     xpx = cell.ntot

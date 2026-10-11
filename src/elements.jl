@@ -31,7 +31,8 @@ ucalc_rates(coef::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}, r) = (r.i
 # of the photoionization integrals and the escape probabilities (the lines take their sum, `pesc`, the others the
 # pair `ptmp`). Listed by type because several rates forward their keywords (`kw...`) and would accept any.
 balance_keywords(::AbstractRate) = ()
-balance_keywords(::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}) = (:radiation, :pesc)
+balance_keywords(::AtomicLine2) = (:radiation, :pesc, :cfrac)           # (ucalc type 50 reduces the photoexcitation by the covering fraction)
+balance_keywords(::Union{RadiativeAPED, RadiativeFeDecay}) = (:radiation, :pesc)
 balance_keywords(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoionizeDamp, PhotoionizeFeKedge,
     PhotoRecombX, PhotoionizeSuper}) = (:radiation, :lfast, :ptmp)
 balance_keywords(::PhotoionizeDelta) = (:radiation,)
@@ -226,10 +227,10 @@ function rate_buffers(::Type{T}, n) where T
     buffers
 end
 
-function element_rates(layout::Elements, cell::Cell, ::Type{T}; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing, memo=nothing) where T
+function element_rates(layout::Elements, cell::Cell, ::Type{T}; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing, memo=nothing, cfrac=0.0) where T
     buffers = rate_buffers(T, length(layout.rates))
     for (indices, records) in layout.groups
-        group_rates!(buffers, indices, records, cell, radiation, lfast, escape, memo)     # one dynamic dispatch for each type
+        group_rates!(buffers, indices, records, cell, radiation, lfast, escape, memo, cfrac)     # one dynamic dispatch for each type
     end
     buffers
 end
@@ -253,7 +254,7 @@ RatesMemo(layout::Elements) = RatesMemo(zeros(length(layout.rates)), zeros(lengt
 electron_scaled(::AbstractRate) = false
 electron_scaled(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3}) = true
 
-function group_rates!(buffers::RateBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape, memo=nothing)
+function group_rates!(buffers::RateBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape, memo=nothing, cfrac=0.0)
     for k in eachindex(records)
         j, coef = indices[k], records[k]
         if memo !== nothing && electron_scaled(coef) && memo.valid[j]
@@ -261,7 +262,7 @@ function group_rates!(buffers::RateBuffers, indices, records::AbstractVector, ce
             continue
         end
         ptmp = something(escape_of(escape, j, coef), optically_thin)
-        a1, a2 = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))
+        a1, a2 = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))
         buffers.ans1[j], buffers.ans2[j] = a1, a2
         if memo !== nothing && electron_scaled(coef) && cell.nₑ > 0
             memo.ans1[j], memo.ans2[j], memo.valid[j] = a1, a2/cell.nₑ, true
@@ -276,10 +277,10 @@ forward_rate(layout::Elements, buffers::RateBuffers, j) = layout.zero_forward[j]
 # The keywords of `rate` that the record takes (`balance_keywords`) are selected from
 # the full set by its concrete type, so that the call is type-stable: building them from a list kept for each record
 # would allocate and dispatch at run time, which took two thirds of the time of the matrix of iron.
-function record_rates(layout::Elements, j, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing)
+function record_rates(layout::Elements, j, cell::Cell; radiation=NO_RADIATION, lfast=photoionization_lfast, escape=nothing, cfrac=0.0)
     coef = layout.rates[j]
     ptmp = something(escape_of(escape, j, coef), optically_thin)
-    ans1, ans2 = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))
+    ans1, ans2 = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))
     layout.zero_forward[j] && (ans1 = zero(ans1))
     ans1, ans2
 end
