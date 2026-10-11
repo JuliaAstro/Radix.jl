@@ -9,6 +9,7 @@ Model
 slab
 tables
 ConstantPressure
+DensityTable
 composition
 ```
 
