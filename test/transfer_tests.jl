@@ -321,7 +321,7 @@ end
 # the reference run of XSTAR (test/reference/xstar_pow_xi2): two zones of 5×10¹² cm at 10¹³ and 1.5×10¹³ cm, the second the one of the
 # table of ion fractions. Its files give the optical depths of the lines (depth_inward) and of the recombination edges.
 function transfer_balance_tests(db, known=nothing)
-    @testset "Transfer of the database" begin
+    @testset verbose=true "Transfer of the database" begin
         levels = Radix.levels(db)
         coheat = joinpath(dirname(get(ENV, "RADIX_ATDB", "")), "coheat.dat")
         isfile(coheat) || (coheat = joinpath(@__DIR__, "..", "data", "coheat.dat"))      # (the table of the repository is that of the XSTAR package)
@@ -372,7 +372,7 @@ function transfer_balance_tests(db, known=nothing)
             @test abs(sort(ratios)[length(ratios) ÷ 2] - 1) < 2e-3                           # the median
         end
 
-        @testset "the continuum depth and the emission of a thick slab" begin
+        @slow "the continuum depth and the emission of a thick slab" begin
             # test/reference/xstar_thick_slab: 10²¹ cm⁻² at log ξ = 1, T = 10⁵ K, without the vturb of XSTAR (see its README). The zones are those of XSTAR: the rows
             # of its table are the states at their inner edges (`delta_r`), the last being the end of the slab
             dir = joinpath(@__DIR__, "reference", "xstar_thick_slab")
@@ -437,7 +437,7 @@ function transfer_balance_tests(db, known=nothing)
             @test count(==(1), Float64.(smoothed.transmitted) ./ Float64.(smoothed.incident)) > 700
         end
 
-        @testset "the luminosities of the lines and the recombination edges of the thick slab" begin
+        @slow "the luminosities of the lines and the recombination edges of the thick slab" begin
             # the zones of `slab` (the seven of XSTAR) with its table of the lines (`xout_lines1.fits`: emit_inward + emit_outward in 10³⁸ erg/s, for the lines above 10²) and the total of
             # its table of the recombination edges (`xout_rrc1.fits`, 6 MB, not kept): 807150.6. The run of the table has the hydrogen of the database of the package of XSTAR
             slab = Radix.slab(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
@@ -522,7 +522,28 @@ function transfer_balance_tests(db, known=nothing)
             @test all(r -> abs(r - 1) < 6e-2, ratios)
         end
 
-        @testset "three passes with the temperature iterated" begin
+        @slow "a covering fraction of one half" begin
+            # test/reference/xstar_cfrac: log ξ = 2 at 10⁴ cm⁻³ with the temperature iterated. The covering fraction cuts the photoexcitation of the lines, which XSTAR does in the balance and
+            # the heating (the temperature of the first zone 4% lower: 18.081); the rows of its table are the first zone, again the first zone, and the states at the inner edges of the others
+            if known !== nothing && known.name == "package"
+                table = fits(joinpath(@__DIR__, "reference", "xstar_cfrac", "xout_abund1.fits"))[2].data
+                r0 = Float64(table.radius[1])
+                depth = Float64.(table.delta_r)[2:end]
+                zones = [(r0 + depth[k], depth[k + 1] - depth[k]) for k in 1:length(depth) - 1]
+                E = Radix.xstar_energy_grid(999)
+                half = Radix.march(mixture, 1e4, Radix.standard_processes(Radix.load(Radix.Compton, coheat); cfrac=0.5), E, Radix.powerlaw(E, -1.0, 1e-2*1e38), zones; T=100.0, equilibrium=true,
+                    vturb=0.0, luminous=false, cfrac=0.5)
+                rows = [1, 3]
+                @test [z.T for z in half.zones] ≈ Float64.(table.temperature)[rows] rtol=2e-3
+                o = findfirst(==(8), mixture.Z)
+                @test [z.fractions[o][8] for z in half.zones] ≈ Float64.(table.o_viii)[rows] rtol=5e-3
+                @test [z.fractions[2][2] for z in half.zones] ≈ Float64.(table.he_ii)[rows] rtol=1e-2
+            else
+                @info "Skipping the test of the covering fraction (it is for the database of the XSTAR package)"
+            end
+        end
+
+        @slow "three passes with the temperature iterated" begin
             # test/reference/xstar_thick_slab/xout_abund1_T_npass{1,3}.fits: the thick slab of the run above with niter=99 (T and x_e iterated), npass=1 and 3. The zones are those of
             # XSTAR (its rows are the states at the inner edges: the first zone is row 1 and the others the row after their number). XSTAR's own temperatures are those of
             # the database of its package (the one of the tree has other hydrogen records: 3-6% in T), so this is for that database only. The three passes raise the temperature of

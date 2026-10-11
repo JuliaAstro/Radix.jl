@@ -66,6 +66,8 @@ What differs:
 - The atomic database of the XSTAR package (`$HEADAS/refdata/atdb.fits`) is not the one of its source tree: hydrogen has other records, and the temperatures of the tree are 3-6% lower than the package's. Use the one that you want to compare with.
 - With `vturbi > 0` XSTAR 2.59j smooths its continuum so that it is not absorbed below 20 keV (`gsmooth2`): Radix does not, and the comparisons with it use `vturbi = 0`.
 - To reproduce the rounded constants of XSTAR (`0.861707 eV` for k × 10⁴ K, 12.56 for 4π, ...) use `constants!(ucalc())` first; the default is CODATA 2022.
+- The covering fraction `cfrac` cuts the photoexcitation of the lines, the escape probabilities and Thomson scattering, as in XSTAR (it agrees to 0.1% in temperature for `cfrac = 0.5`).
+- At a density of 10⁹ cm⁻³ the temperature of a zone at log ξ = 2 is 1.2% below XSTAR's (19.74 against 19.98, in the zone where the heating and cooling of XSTAR balance to 5×10⁻⁵); at 10⁴ cm⁻³ the same case agrees to 0.02%. This has not been traced.
 - `passes=3` (XSTAR's `npass`) repeats the march with the optical depths of the lines and edges between each zone and the outer edge, as the escape probabilities of the outer side. It changes the ion fractions by up to 2.5% on the thick slab and follows XSTAR's change to 0.15%. `passes` must be odd.
 
 ## Speed
@@ -88,4 +90,4 @@ Most of the time is the integration of the photoionization cross sections over t
 RADIX_ATDB=$HEADAS/refdata/atdb.fits julia -t 4 --project -e 'using Pkg; Pkg.test()'
 ```
 
-It takes about 7 minutes. The continuous integration downloads the database from HEASARC once (`https://heasarc.gsfc.nasa.gov/FTP/software/lheasoft/xstar/atdb.fits`) and keeps it in the cache of the workflow.
+It takes about 7 minutes with 8 threads. `RADIX_QUICK=1` skips the five tests that take minutes (the thermal equilibrium of zones, the thick slab with its emission lines, the three passes with the temperature iterated and the model loaded from the files): the rest take about 3 minutes. The continuous integration runs that quick suite: it downloads the database from HEASARC once (`https://heasarc.gsfc.nasa.gov/FTP/software/lheasoft/xstar/atdb.fits`) and keeps it in the cache of the workflow, and the whole suite is run locally.
