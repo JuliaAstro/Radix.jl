@@ -144,6 +144,7 @@ function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
     elementwise(mixture) do k
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
         emissivity = fill((0.0, 0.0), length(el.rates))
+        memo = memo_of_balance(balance, k)
         for (indices, records) in el.groups
             for i in eachindex(records)
                 coef, j = records[i], indices[i]
@@ -152,7 +153,8 @@ function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
                 abund1, abund2 = x[lo]*abundance, x[up]*abundance
                 (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
                 ptmp = something(escape_of(element_escape(escape, k), j, coef), optically_thin)
-                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))[1]
+                cache, slot = memo_of(memo, coef, j)
+                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac, cache, slot))[1]
                 emissivity[j] = (ptmp[1]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot, ptmp[2]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot)
             end
         end
@@ -395,7 +397,7 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
         continuum = opacity(continuum_gas, zone, zone.T, n, radiation, edges; emissivities)
         attenuate && (spectrum = transmit(spectrum, incident, diffuse ? continuum : (; continuum..., emissivity=zero(continuum.emissivity),
             bremsstrahlung=zero(continuum.bremsstrahlung)), r, Δr; cfrac))
-        push!(results, (; zone..., r, Δr, radiation, escape, opacity=continuum))
+        push!(results, (; Base.structdiff(zone, (; memos=nothing))..., r, Δr, radiation, escape, opacity=continuum))   # (the integrals of the balance are not kept)
         add_zone!(depths, edges, Δr)
         dpthc .+= continuum.total .* Δr
         dpthcont .+= continuum.continuum .* Δr

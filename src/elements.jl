@@ -33,8 +33,8 @@ ucalc_rates(coef::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}, r) = (r.i
 balance_keywords(::AbstractRate) = ()
 balance_keywords(::AtomicLine2) = (:radiation, :pesc, :cfrac)           # (ucalc type 50 reduces the photoexcitation by the covering fraction)
 balance_keywords(::Union{RadiativeAPED, RadiativeFeDecay}) = (:radiation, :pesc)
-balance_keywords(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoionizeDamp, PhotoionizeFeKedge,
-    PhotoRecombX, PhotoionizeSuper}) = (:radiation, :lfast, :ptmp)
+balance_keywords(::Union{PhotoionizeDamp, PhotoionizeFeKedge, PhotoRecombX, PhotoionizeSuper}) = (:radiation, :lfast, :ptmp)
+balance_keywords(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3}) = (:radiation, :lfast, :ptmp, :cache, :slot)    # (their integrals are kept: `PhotoMemo`)
 balance_keywords(::PhotoionizeDelta) = (:radiation,)
 balance_keywords(::RadiativeSuper) = (:ptmp,)
 
@@ -235,38 +235,17 @@ function element_rates(layout::Elements, cell::Cell, ::Type{T}; radiation=NO_RAD
     buffers
 end
 
-"""
-    RatesMemo(layout)
-
-The rates of the photoionization records (`electron_scaled`) of the element `layout` at the first electron density of a series of
-cells of the same temperature, radiation and escape probabilities, as `element_matrix!` takes them (`memo`): the next cells of the series
-(the iteration of the electron fraction) take the photoionization rate as it is and the recombination rate, which is
-proportional to the electron density, scaled, instead of integrating the cross sections over the radiation again.
-"""
-struct RatesMemo
-    ans1::Vector{Float64}
-    ans2::Vector{Float64}      # per electron
-    valid::BitVector
-end
-RatesMemo(layout::Elements) = RatesMemo(zeros(length(layout.rates)), zeros(length(layout.rates)), falses(length(layout.rates)))
-
-# the records whose forward rate does not depend on the electron density and whose reverse rate is proportional to it
+# the records whose integrals are kept in a `PhotoMemo`: the forward rate does not depend on the electron density and the reverse rate is proportional to it
 electron_scaled(::AbstractRate) = false
 electron_scaled(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3}) = true
+memo_of(memo, coef, j) = memo !== nothing && electron_scaled(coef) ? (memo, j) : (nothing, 0)
 
 function group_rates!(buffers::RateBuffers, indices, records::AbstractVector, cell, radiation, lfast, escape, memo=nothing, cfrac=0.0)
     for k in eachindex(records)
         j, coef = indices[k], records[k]
-        if memo !== nothing && electron_scaled(coef) && memo.valid[j]
-            buffers.ans1[j], buffers.ans2[j] = memo.ans1[j], memo.ans2[j]*cell.nₑ
-            continue
-        end
         ptmp = something(escape_of(escape, j, coef), optically_thin)
-        a1, a2 = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))
-        buffers.ans1[j], buffers.ans2[j] = a1, a2
-        if memo !== nothing && electron_scaled(coef) && cell.nₑ > 0
-            memo.ans1[j], memo.ans2[j], memo.valid[j] = a1, a2/cell.nₑ, true
-        end
+        cache, slot = memo_of(memo, coef, j)
+        buffers.ans1[j], buffers.ans2[j] = rates_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac, cache, slot))
     end
 end
 
@@ -285,8 +264,9 @@ function record_rates(layout::Elements, j, cell::Cell; radiation=NO_RADIATION, l
     ans1, ans2
 end
 
+const no_cache = (; cache=nothing, slot=0)
 function rates_of(coef::AbstractRate, cell::Cell, given::NamedTuple)
-    r = rate(coef, cell; NamedTuple{balance_keywords(coef)}(given)...)
+    r = rate(coef, cell; NamedTuple{balance_keywords(coef)}(merge(no_cache, given))...)
     ucalc_rates(coef, r)
 end
 
