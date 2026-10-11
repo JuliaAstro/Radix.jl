@@ -85,7 +85,7 @@ end
 # all the elements of the database: the electrons per hydrogen nucleus and the ion fractions of the XSTAR reference run
 # (test/reference/xstar_pow_xi2), which keeps the electron fraction at 1
 function mixture_balance_tests(db)
-    @testset "Mixture of the database" begin
+    @testset verbose=true "Mixture of the database" begin
         levels = Radix.levels(db)
         mixture = Radix.Mixture(db, levels; multiplier=Dict(3 => 0.0, 4 => 0.0, 5 => 0.0))     # (the reference run has no Li, Be or B)
         @test length(mixture.Z) == 27 && !any(in(mixture.Z), (3, 4, 5))

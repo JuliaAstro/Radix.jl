@@ -144,6 +144,11 @@ function toy_balance_tests()
         @test excitation(Radix.element_matrix(layout, cell; radiation=rad)) > 0
         @test excitation(Radix.element_matrix(layout, cell; radiation=Radix.Radiation(E, 2 .* rad.F))) ≈
             2*excitation(Radix.element_matrix(layout, cell; radiation=rad))
+        # the covering fraction reduces the photoexcitation (ucalc type 50) and not the decay; the balance, the heating and the ionization balance of the mixture all take it
+        @test excitation(Radix.element_matrix(layout, cell; radiation=rad, cfrac=0.5)) ≈ 0.5*excitation(Radix.element_matrix(layout, cell; radiation=rad))
+        @test decay(Radix.element_matrix(layout, cell; radiation=rad, cfrac=0.5)) == decay(Radix.element_matrix(layout, cell; radiation=rad))
+        populations = [1.0, 0.0]
+        @test sum(Radix.element_heating(layout, cell, populations; radiation=rad, cfrac=0.5)) != sum(Radix.element_heating(layout, cell, populations; radiation=rad))
     end
 
     @testset "a grid of cells" begin
@@ -242,7 +247,7 @@ end
 # the elements of the database: the matrix reaches LTE at a high density and reproduces the neutral
 # fraction of the XSTAR reference run (test/reference/xstar_pow_xi2)
 function element_balance_tests(db, known)
-    @testset "Element level balance" begin
+    @testset verbose=true "Element level balance" begin
         levels = Radix.levels(db)
         rates = Radix.ion_rates(db, 1)
         known === nothing || @test length(rates) == known.hydrogen_rates     # (the 33 levels of the ion are not rates)

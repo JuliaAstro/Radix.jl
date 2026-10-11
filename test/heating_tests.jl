@@ -206,7 +206,7 @@ end
 # the reference run of XSTAR (test/reference/xstar_pow_xi2 and xstar_pow_xi2_eq) for all the elements: the heating and cooling of its
 # first zone at T = 10⁶ K, and the temperature that it reaches when it iterates
 function heating_balance_tests(db)
-    @testset "Heating and cooling of the database" begin
+    @testset verbose=true "Heating and cooling of the database" begin
         levels = Radix.levels(db)
         coheat = joinpath(dirname(get(ENV, "RADIX_ATDB", "")), "coheat.dat")
         isfile(coheat) || (coheat = joinpath(@__DIR__, "..", "data", "coheat.dat"))      # (the table of the repository is that of the XSTAR package)
@@ -218,7 +218,7 @@ function heating_balance_tests(db)
         processes = Radix.standard_processes(compton)
         @test size(compton.Es) == (101, 101) && compton.Te[1] == 1e-7 && compton.Eph[end] == 100.0
         mixture = Radix.Mixture(db, levels; multiplier=Dict(3 => 0.0, 4 => 0.0, 5 => 0.0))
-        @testset "the model from the files" begin
+        @slow "the model from the files" begin
             model = Radix.Model(db, compton)                                         # (`Model(atdb, coheat)` loads the two files, which takes minutes)
             @test model.mixture.Z == mixture.Z
             @test model.mixture.abundance ≈ mixture.abundance rtol=1e-6              # (the table of XSTAR in double precision, the records in single)
@@ -286,7 +286,7 @@ function heating_balance_tests(db)
             @test term(hc, Radix.Bremsstrahlung).cooling ≈ 4.14848716e-17 rtol=1e-4
         end
 
-        @testset "thermal equilibrium of the first zone" begin
+        @slow "thermal equilibrium of the first zone" begin
             eq = fits(joinpath(@__DIR__, "reference", "xstar_pow_xi2_eq", "xout_abund1.fits"))[2].data
             res = Radix.thermal_equilibrium(mixture, 1e4, processes; radiation=mapped, T=100.0)
             @test res.converged && abs(res.imbalance) <= 1e-4

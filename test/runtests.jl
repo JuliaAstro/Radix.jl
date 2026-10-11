@@ -4,6 +4,8 @@ using Test
 # The comparisons with XSTAR's ucalc (and the formulas transcribed from it below) need the rounded
 # constants of its source: the rates use CODATA 2022 unless told otherwise.
 Radix.constants!(Radix.ucalc())
+
+include("slow.jl")
 include("ucalc_tests.jl")
 include("elements_tests.jl")
 include("mixture_tests.jl")
@@ -20,7 +22,7 @@ const ucalc_kT = Float64(0.861707f0)
 
 struct UnportedRate <: Radix.AbstractRate end
 
-@testset "Radix.jl" begin
+@testset verbose=true "Radix.jl" begin
     f32 = Float32
     T, nh, ne = 1.5, 1e3, 2e3
     cell = Radix.Cell(T, nh, ne, 1e4)
@@ -262,7 +264,7 @@ struct UnportedRate <: Radix.AbstractRate end
             874736640 => (; name="package", counts="atdb_counts_package.txt", impact=83310, impact_none=177, probabilities=5902, hydrogen_rates=531, lte_rtol=3e-2)),
             filesize(atdb), nothing)
         known === nothing && @warn "the database is not one that the tests know (the XSTAR tree or package): its record counts are not checked"
-        @testset "atdb.fits parsing" begin
+        @testset verbose=true "atdb.fits parsing" begin
             expected = Dict{String,Int}()
             for line in eachline(joinpath(@__DIR__, "reference", something(known, (; counts="atdb_counts_tree.txt")).counts))
                 startswith(line, "#") && continue

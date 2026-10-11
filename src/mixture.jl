@@ -115,7 +115,7 @@ neutral hydrogen density `nₕ`, the `populations` and the ion `fractions` of ea
 `mixture.Z`), the number of evaluations `iterations` and whether it `converged`.
 """
 function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, escape=nothing, xee=1.0, iterate=true,
-        neutral=0.0, lfast=photoionization_lfast, tolerance=electron_tolerance)
+        neutral=0.0, lfast=photoionization_lfast, tolerance=electron_tolerance, cfrac=0.0)
     elements = mixture.elements
     matrices = [el.N >= sparse_from ? sparse_matrix(el) : zeros(el.N, el.N) for el in elements]
     populations = [zeros(el.N) for el in elements]
@@ -128,7 +128,7 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     function evaluate(x)
         cell = Cell(Float64(T), nₕ, ntot*x, Float64(ntot))
         Threads.@threads for k in eachindex(elements)
-            element_matrix!(matrices[k], elements[k], cell; radiation, escape=element_escape(escape, k), lfast, memo=memos[k])
+            element_matrix!(matrices[k], elements[k], cell; radiation, escape=element_escape(escape, k), lfast, memo=memos[k], cfrac)
             populations[k] = level_populations(matrices[k])
             fractions[k] = ion_fractions(populations[k], elements[k])
         end
@@ -198,11 +198,11 @@ the energy of the electrons), `processes`, a vector with the `process`, its `hea
 `heating2` and `cooling2` of each element weighted by its abundance, in the order of `mixture.Z`.
 """
 function heating_cooling(mixture::Mixture, balance, T, ntot, processes; radiation=NO_RADIATION, escape=nothing,
-        lfast=photoionization_lfast)
+        lfast=photoionization_lfast, cfrac=0.0)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     elements = Vector{NTuple{4, Float64}}(undef, length(mixture.elements))
     Threads.@threads for k in eachindex(mixture.elements)
-        elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape=element_escape(escape, k), lfast)
+        elements[k] = element_heating(mixture.elements[k], cell, balance.populations[k]; radiation, escape=element_escape(escape, k), lfast, cfrac)
     end
     weighted = [mixture.abundance[k] .* elements[k] for k in eachindex(elements)]
     terms = [process_term(process, radiation, T, balance.nₑ) for process in processes]
@@ -232,14 +232,14 @@ Returns the named tuple of `heating_cooling` for the last temperature with the a
 and `trace`, the temperatures tried with their imbalance.
 """
 function thermal_equilibrium(mixture::Mixture, ntot, processes; radiation=NO_RADIATION, escape=nothing, T=1.0,
-        xee=1.0, T_min=default_T_min, lfast=photoionization_lfast, tolerance=imbalance_tolerance, iterations=temperature_iterations)
+        xee=1.0, T_min=default_T_min, lfast=photoionization_lfast, tolerance=imbalance_tolerance, iterations=temperature_iterations, cfrac=0.0)
     xee = Float64(xee)
     neutral = 0.0
     local balance, energy
     function evaluate(t)
         n = gas_density(ntot, t)
-        balance = ionization_balance(mixture, t, n; radiation, escape, xee, neutral, lfast)
-        energy = heating_cooling(mixture, balance, t, n, processes; radiation, escape, lfast)
+        balance = ionization_balance(mixture, t, n; radiation, escape, xee, neutral, lfast, cfrac)
+        energy = heating_cooling(mixture, balance, t, n, processes; radiation, escape, lfast, cfrac)
         xee, neutral = balance.xee, balance.nₕ
         energy.imbalance
     end

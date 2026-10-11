@@ -78,3 +78,5 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         env:
           RADIX_ATDB: ${{ runner.temp }}/atdb/atdb.fits
+          # the tests that take minutes with the database are skipped here (they are run locally: see docs/src/usage.md)
+          RADIX_QUICK: '1'

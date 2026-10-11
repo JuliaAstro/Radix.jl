@@ -104,14 +104,14 @@ function record_opacities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIA
 end
 
 """
-    line_emissivities(mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast, vturb=default_turbulence)
+    line_emissivities(mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast, vturb=default_turbulence, cfrac=0.0)
 
 The emissivity of the lines (the records of type 4, `line_data_type`) of every element in the zone, as the pairs `(rcem1, rcem2)` (erg s⁻¹ cm⁻³ outward and inward) of
 `calc_emisab_ion`, in vectors aligned with the records: the energy that the population of the upper level of the record radiates in the decay,
 `-abund₂ ans3` split by the escape probabilities `escape` (`escape_probabilities`; the lines are optically thin without it). The other records have 0.
 """
 function line_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast,
-        vturb=default_turbulence)
+        vturb=default_turbulence, cfrac=0.0)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     elementwise(mixture) do k
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
@@ -124,7 +124,7 @@ function line_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
                 abund1, abund2 = x[lo]*ntot*abundance, x[up]*ntot*abundance
                 (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
                 ptmp = something(escape_of(element_escape(escape, k), j, coef), optically_thin)
-                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))[1]
+                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))[1]
                 emissivity[j] = (-abund2*ans3*ptmp[1]/(ptmp[1] + ptmp[2]), -abund2*ans3*ptmp[2]/(ptmp[1] + ptmp[2]))
             end
         end
@@ -133,13 +133,13 @@ function line_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
 end
 
 """
-    edge_emissivities(mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+    edge_emissivities(mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast, cfrac=0.0)
 
 The emission of the recombination continua (the records of rate type 7, `edge_rate_type`) of every element in the zone as the pairs `(cemab1, cemab2)` (erg s⁻¹ cm⁻³ in the two directions) of
 `calc_emisab_ion`, in vectors aligned with the records: the energy `|ans3|` that the population of the upper level radiates in the recombination, split by the escape probabilities `escape`
 (`pescv` of the depths of the edges, `escape_probabilities`; without it the edges are optically thin). The other records have 0.
 """
-function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast)
+function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIATION, escape=nothing, lfast=photoionization_lfast, cfrac=0.0)
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
     elementwise(mixture) do k
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
@@ -152,7 +152,7 @@ function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
                 abund1, abund2 = x[lo]*abundance, x[up]*abundance
                 (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
                 ptmp = something(escape_of(element_escape(escape, k), j, coef), optically_thin)
-                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp))[1]
+                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))[1]
                 emissivity[j] = (ptmp[1]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot, ptmp[2]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot)
             end
         end
@@ -353,7 +353,7 @@ function backward(mixture::Mixture, result, processes, E, L; cfrac, lfast, vturb
         radiation = map_spectrum(point_source(E, L .* exp.(-before[i]), zone.r))
         escape = escape_probabilities(mixture, OpticalDepths(result.inner[i], depths.outward); cfrac)
         n = zone.ntot
-        balance = ionization_balance(mixture, zone.T, n; radiation, escape, xee=zone.xee, lfast, kw...)
+        balance = ionization_balance(mixture, zone.T, n; radiation, escape, xee=zone.xee, lfast, cfrac, kw...)
         edges = record_opacities(mixture, balance, zone.T, n; radiation, lfast, vturb)
         add_zone!(depths, edges, zone.Δr; direction=:outward)
     end
@@ -379,18 +379,18 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
         push!(inner, map(copy, depths.inward))
         escape = escape_probabilities(mixture, outer === nothing ? depths : OpticalDepths(depths.inward, outer[length(results)+1]); cfrac)
         zone = if equilibrium
-            thermal_equilibrium(mixture, t -> gas_density(ntot, t, r), processes; radiation, escape, T, xee, lfast, kw...)
+            thermal_equilibrium(mixture, t -> gas_density(ntot, t, r), processes; radiation, escape, T, xee, lfast, cfrac, kw...)
         else
             n = gas_density(ntot, T, r)
-            balance = ionization_balance(mixture, T, n; radiation, escape, xee, lfast, kw...)
-            (; heating_cooling(mixture, balance, T, n, processes; radiation, escape, lfast)..., T=Float64(T), ntot=n, balance...)
+            balance = ionization_balance(mixture, T, n; radiation, escape, xee, lfast, cfrac, kw...)
+            (; heating_cooling(mixture, balance, T, n, processes; radiation, escape, lfast, cfrac)..., T=Float64(T), ntot=n, balance...)
         end
         T, xee, n = zone.T, zone.xee, zone.ntot
         edges = record_opacities(mixture, zone, zone.T, n; radiation, lfast, vturb)
-        emissivities = lines ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb) : nothing
+        emissivities = lines ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb, cfrac) : nothing
         if luminous
-            lined = emissivities === nothing ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb) : emissivities
-            add_luminosities!(luminosities, lined, edge_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast), r, Δr)
+            lined = emissivities === nothing ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb, cfrac) : emissivities
+            add_luminosities!(luminosities, lined, edge_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, cfrac), r, Δr)
         end
         continuum = opacity(continuum_gas, zone, zone.T, n, radiation, edges; emissivities)
         attenuate && (spectrum = transmit(spectrum, incident, diffuse ? continuum : (; continuum..., emissivity=zero(continuum.emissivity),
