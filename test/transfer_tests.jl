@@ -488,7 +488,7 @@ function transfer_balance_tests(db, known=nothing)
                 @test length(strong) > 200
                 @test abs(sort(ratio)[length(ratio) ÷ 2] - 1) < 2e-3
                 @test count(r -> abs(r - 1) < 0.06, ratio) >= 0.93*length(ratio)          # (the others are hydrogen, the database of the package, and the bins of the continuum of He II)
-                known !== nothing && known.name == "package" && @test count(r -> abs(r - 1) < 0.03, ratio) >= length(ratio) - 1          # (the package has the hydrogen of XSTAR: all the bins but one are within 3%; the one is 9.5% high, at 1.145 eV, where He I 10830 Å, Fe XIII and the wings of the H I lines of n = 6 are)
+                known !== nothing && known.name == "package" && @test count(r -> abs(r - 1) < 0.03, ratio) >= length(ratio) - 1          # (the package has the hydrogen of XSTAR: all the bins but one are within 3%; the one is 9.5% high, at 1.145 eV, where the He I triplet 10830 Å is: the populations of the He I of XSTAR are not converged, see the test of hydrogen and helium alone)
             end
             @test all(>=(0), spectrum_table.lines_inward) && all(>=(0), spectrum_table.lines_outward)
             @test sum(spectrum_table.lines_inward .* [Radix.xstar_energy_grid(999)[1]; diff(spectrum_table.energy)]) > 0
@@ -634,6 +634,49 @@ function transfer_balance_tests(db, known=nothing)
                 end
             else
                 @info "Skipping the test of the thermal sources through a slab (it is for the database of the XSTAR package)"
+            end
+        end
+
+        @testset "hydrogen and helium alone: the populations of the He I of XSTAR are not converged" begin
+            # test/reference/xstar_hhe: the thick slab with the other elements left out, whose table of the lines lists them all. The lines of H I, He II and the singlets of He I agree; the triplets of He I
+            # (10830 Å, ...) are 2 times weaker in XSTAR because its populations of the He I are not a steady state of its own matrix (the relaxation of `msolvelucy` leaves out the levels below 10⁻⁶)
+            if known !== nothing && known.name == "package"
+                hhe_dir = joinpath(@__DIR__, "reference", "xstar_hhe")
+                hhemix = Radix.Mixture(db, levels; multiplier=Dict(Z => 0.0 for Z in 3:30))
+                hhemodel = Radix.Model(hhemix, processes, Dict{Int, String}(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion))
+                hherun = Radix.slab(hhemix, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+                hhelines = Radix.tables(hhemodel, hherun).lines
+                hhe_mine = Dict{Tuple{String, String, String}, Float64}()
+                for i in eachindex(hhelines.ion)
+                    hhe_key = (strip(hhelines.ion[i]), strip(hhelines.lower[i]), strip(hhelines.upper[i]))
+                    hhe_mine[hhe_key] = get(hhe_mine, hhe_key, 0.0) + (hhelines.emit_inward[i] + hhelines.emit_outward[i])/1e38
+                end
+                hhe_rows = [split(line, ',') for line in readlines(joinpath(hhe_dir, "lines.csv"))[2:end]]
+                triplet(hhe_row) = hhe_row[1] == "he_i" && occursin(r"\.3[SPDFG]", hhe_row[2] * hhe_row[3])
+                hhe_singles, hhe_triples = Float64[], Float64[]
+                for hhe_row in hhe_rows
+                    hhe_emission = parse(Float64, hhe_row[5]) + parse(Float64, hhe_row[6])
+                    hhe_emission > 1 || continue
+                    hhe_key = (hhe_row[1], hhe_row[2], hhe_row[3])
+                    hhe_ratio = get(hhe_mine, hhe_key, get(hhe_mine, (hhe_row[1], hhe_row[3], hhe_row[2]), NaN))/hhe_emission
+                    push!(triplet(hhe_row) ? hhe_triples : hhe_singles, hhe_ratio)
+                end
+                @test length(hhe_singles) > 150 && count(r -> abs(r - 1) < 0.05, hhe_singles) >= 0.97*length(hhe_singles) && abs(sort(hhe_singles)[end ÷ 2] - 1) < 5e-3
+                @test length(hhe_triples) >= 3 && all(r -> 1.7 < r < 2.4, hhe_triples)
+                # XSTAR's populations in the matrix of the first zone: He I 2³S gets 1.5 times what it loses, and Radix's solution is the steady state
+                hhe_zone = hherun.zones[1]
+                hhe_k = findfirst(==(2), hhemix.Z)
+                hhe_A = Matrix(Radix.element_matrix(hhemix.elements[hhe_k], Radix.Cell(10.0, hhe_zone.nₕ, hhe_zone.nₑ, hhe_zone.ntot); radiation=hhe_zone.radiation, escape=hhe_zone.escape[hhe_k]))
+                hhe_pops = [split(line, ',') for line in readlines(joinpath(hhe_dir, "populations_zone1.csv"))[2:end]]
+                hhe_hei = [parse(Float64, p[3]) for p in hhe_pops if p[1] == "he_i"]
+                hhe_heii = [parse(Float64, p[3]) for p in hhe_pops if p[1] == "he_ii"]
+                hhe_x = vcat(hhe_hei[1:45], hhe_heii)                    # (the continuum of He I is the ground state of He II)
+                hhe_inflow = sum(hhe_A[2, j]*hhe_x[j] for j in eachindex(hhe_x) if j != 2)
+                @test hhe_inflow > 1.4*(-hhe_A[2, 2]*hhe_x[2])
+                @test hhe_zone.populations[hhe_k][2] > 4*hhe_x[2]
+                @test hhe_zone.populations[hhe_k][2] ≈ Radix.level_populations(hhe_A)[2] rtol=1e-6
+            else
+                @info "Skipping the test of hydrogen and helium alone (it is for the database of the XSTAR package)"
             end
         end
 
