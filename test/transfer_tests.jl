@@ -733,6 +733,52 @@ function transfer_balance_tests(db, known=nothing)
             end
         end
 
+        @testset "levels below 1e-6: the two lines that XSTAR changes between passes" begin
+            # test/reference/xstar_hcar: hydrogen, helium, carbon and argon only. The forbidden 2³S line of C V and the 3s ¹P line of Ar IX change by +10.5% and +13.7% from the first pass of XSTAR to the third (Radix: 0 and +4%),
+            # because the populations of their upper levels (below 10⁻⁶) are not a steady state of XSTAR's own matrix: XSTAR's populations in the first and the third zones against the matrix of Radix
+            if known !== nothing && known.name == "package"
+                hcar_dir = joinpath(@__DIR__, "reference", "xstar_hcar")
+                hcar_mix = Radix.Mixture(db, levels; multiplier=Dict(Z => 0.0 for Z in 3:30 if Z != 6 && Z != 18))
+                hcar_label = Dict{Int, String}(Int(r.ion) => lowercase(strip(r.label)) for r in db if r isa Radix.Ion)
+                hcar_model = Radix.Model(hcar_mix, processes, Dict{Int, String}(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion))
+                hcar_kw = (; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+                hcar_one = Radix.slab(hcar_mix, processes; hcar_kw..., passes=1)
+                hcar_three = Radix.slab(hcar_mix, processes; hcar_kw..., passes=3)
+                hcar_lines(run) = (t = Radix.tables(hcar_model, run).lines; d = Dict{Tuple{String, String, String}, Float64}(); for i in eachindex(t.ion); d[(strip(t.ion[i]), strip(t.lower[i]), strip(t.upper[i]))] = (t.emit_inward[i] + t.emit_outward[i])/1e38; end; d)
+                hcar_x(file) = (d = Dict{Tuple{String, String, String}, Float64}(); for line in readlines(joinpath(hcar_dir, file))[2:end]; f = split(line, ','); d[(f[1], f[2], f[3])] = parse(Float64, f[5]) + parse(Float64, f[6]); end; d)
+                hcar_r1, hcar_r3, hcar_x1, hcar_x3 = hcar_lines(hcar_one), hcar_lines(hcar_three), hcar_x("lines_npass1.csv"), hcar_x("lines_npass3.csv")
+                hcar_cv = ("c_v", "1s2.1S_0", "1s1.2s1.3S_1"); hcar_ar = ("ar_ix", "2p6.1S_0", "2p5.3s1.1P_1")
+                @test hcar_x3[hcar_cv]/hcar_x1[hcar_cv] ≈ 1.105 rtol=5e-3
+                @test abs(hcar_r3[hcar_cv]/hcar_r1[hcar_cv] - 1) < 5e-3
+                @test hcar_x3[hcar_ar]/hcar_x1[hcar_ar] ≈ 1.137 rtol=5e-3
+                @test 1.02 < hcar_r3[hcar_ar]/hcar_r1[hcar_ar] < 1.07
+                hcar_resid(Z, zone, file, level) = begin
+                    k = findfirst(==(Z), hcar_mix.Z); el = hcar_mix.elements[k]; z = hcar_one.zones[zone]
+                    A = Matrix(Radix.element_matrix(el, Radix.Cell(10.0, z.nₕ, z.nₑ, z.ntot); radiation=z.radiation, escape=z.escape[k]))
+                    pop = Dict{Tuple{String, String}, Float64}()
+                    for line in readlines(joinpath(hcar_dir, file))[2:end]; f = split(line, ','); haskey(pop, (f[1], f[2])) || (pop[(f[1], f[2])] = parse(Float64, f[3])); end
+                    x = zeros(size(A, 1)); g = 0
+                    for (j, ion) in enumerate(el.ions), l in 1:(j == length(el.ions) ? el.nlev[j] : el.nlev[j] - 1)
+                        key = (hcar_label[ion], strip(el.levels[(ion, l)].label))
+                        haskey(pop, key) && (x[el.offset[j] + l] = pop[key])
+                        key == level && (g = el.offset[j] + l)
+                    end
+                    inflow = sum(max(A[g, j]*x[j], 0.0) for j in eachindex(x) if j != g); outflow = -A[g, g]*x[g]
+                    ((inflow - outflow)/max(inflow, outflow), z.populations[k][g]/x[g])
+                end
+                hcar_a = hcar_resid(6, 1, "populations_zone1.csv", ("c_v", "1s1.2s1.3S_1"))
+                @test hcar_a[1] < -0.9 && hcar_a[2] < 0.2                       # (the 2³S of C V in the first zone: 6% of what it loses is what it gets, and Radix's population is 7 times lower)
+                hcar_b = hcar_resid(6, 3, "populations_zone3.csv", ("c_v", "1s1.2s1.3S_1"))
+                @test -0.06 < hcar_b[1] < -0.01 && 0.7 < hcar_b[2] < 0.9
+                hcar_c = hcar_resid(18, 3, "populations_zone3.csv", ("ar_ix", "2p5.3s1.3P_2"))
+                @test hcar_c[1] < -0.05 && 0.7 < hcar_c[2] < 0.85                   # (and the first zone of the Ar IX agrees to 0.2%)
+                hcar_d = hcar_resid(18, 1, "populations_zone1.csv", ("ar_ix", "2p5.3s1.3P_2"))
+                @test abs(hcar_d[1]) < 2e-3 && abs(hcar_d[2] - 1) < 5e-3
+            else
+                @info "Skipping the test of the levels below 1e-6 (it is for the database of the XSTAR package)"
+            end
+        end
+
         @slow "three passes with the temperature iterated" begin
             # test/reference/xstar_thick_slab/xout_abund1_T_npass{1,3}.fits: the thick slab of the run above with niter=99 (T and x_e iterated), npass=1 and 3. The zones are those of
             # XSTAR (its rows are the states at the inner edges: the first zone is row 1 and the others the row after their number). XSTAR's own temperatures are those of
