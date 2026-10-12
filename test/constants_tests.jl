@@ -5,6 +5,7 @@
     K = Radix.constants()
     U = Radix.ucalc()
     CODATA2018 = Radix.PhysicalConstants.CODATA2018
+    @test K.rank_per_bin == 1000 && U.rank_per_bin == 10 && Radix.Constants(K; rank_per_bin=7).rank_per_bin == 7        # (XSTAR's nrank for the comparisons, the converged default otherwise)
 
     @testset "CODATA 2022 is the default" begin
         @test K == Radix.Constants()
@@ -44,7 +45,7 @@
         looser = Dict(:proton_mass => 3e-2, :eightpi => 1e-2, :saha_coeff_cb => 5e-3, :saha_ci => 6e-3, :fo_saha => 3e-3,
             :bb_coeff => 2e-3, :milne_coeff => 2e-3)
         for name in fieldnames(Radix.Constants)
-            getfield(K, name) isa Bool && continue
+            (getfield(K, name) isa Bool || name == :rank_per_bin) && continue                 # (XSTAR's ten edges and lines of each bin against the 1000 of the default are a choice, not a rounding)
             @test getfield(U, name) ≈ getfield(K, name) rtol=get(looser, name, 1e-3)
         end
         # ucalc's exponential integral has single-precision coefficients, the default has the full ones

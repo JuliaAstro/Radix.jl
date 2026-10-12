@@ -425,12 +425,12 @@ function broaden(E::AbstractVector, lines, T, vturb)
 end
 
 """
-    broaden(model, run; vturb=run.vturb, min_fraction=1e-15, nrank=rank_per_bin)
+    broaden(model, run; vturb=run.vturb, min_fraction=1e-15, nrank=constants().rank_per_bin)
 
 The emission of the lines of a run (`slab`) binned on its energy grid (`broaden(E, lines, T, vturb)`), at the temperature of the last zone: the `nrank` lines with the largest luminosity in each bin
 (`rank!`) among those with more than `min_fraction` of the luminosity of the source. Returns `(inward, outward)` in erg s⁻¹ erg⁻¹.
 """
-function broaden(model, run; vturb=run.vturb, min_fraction=results_min_fraction, nrank=rank_per_bin)
+function broaden(model, run; vturb=run.vturb, min_fraction=results_min_fraction, nrank=constants().rank_per_bin)
     mixture = model.mixture
     E = run.E
     rad = Radiation(E, zeros(length(E)))

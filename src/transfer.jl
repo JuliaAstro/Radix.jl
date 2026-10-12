@@ -240,6 +240,11 @@ const step_energy_min = 1.0             # ectt: the lowest energy (eV) that limi
 const step_progress_min = 1e-12         # the column that a zone adds, as a fraction of the column of the slab, below which the column is taken as out of reach
 const step_default_steps = 2            # numrec: nsteps of XSTAR, its largest zone is `r/numrec`
 
+# XSTAR solves the balance, the heating and the cooling, and the edges (`dsec`, `calc_hmc_all`, `calc_emisab_all`) on a grid of 999 bins (`ncn2m`, `epim`) to which `bremsmap` maps the field,
+# whatever the `ncn2` of the continuum arrays (`calc_emis_all`: `epi`, `bremsa`) is
+const balance_bins = 999
+const balance_grid = xstar_energy_grid(balance_bins)
+
 # the zones of `iterate`: a vector of (r, Δr) or a function of the zones so far (the results, the continuum depth and the `Transmitted`) that gives the next (r, Δr) or nothing
 function zone_source(zones::AbstractVector)
     index = 0
@@ -309,7 +314,7 @@ its own radius with the radiation of the incident spectrum attenuated by the con
 `exp(-dpthc)` (XSTAR's `trnfrc`) and mapped (`map_spectrum`), and with the escape probabilities of the lines and recombination
 edges that the optical depths of those zones give. With `equilibrium=true` the temperature of each is the thermal equilibrium
 (`thermal_equilibrium`, from `T` and the `xee` of the previous zone), otherwise `T` is kept and the electron fraction iterated
-(`ionization_balance`). `attenuate=false` leaves the spectrum as it is; `lines=false` leaves the lines out of the continuum opacity (`add_line!`), `luminous=false` does not add up the luminosities of the lines and edges (`Luminosities`), with the turbulent speed `vturb` (km/s). `passes` (odd, XSTAR's `npass`) repeats the march over the same zones: the even passes go from the outer edge inwards at the temperatures of the zones to give the optical depths of the lines and edges beyond each zone, which the odd passes use as the outward depths of the escape probabilities. `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
+(`ionization_balance`). `attenuate=false` leaves the spectrum as it is; `lines=false` leaves the lines out of the continuum opacity (`add_line!`), `luminous=false` does not add up the luminosities of the lines and edges (`Luminosities`), with the turbulent speed `vturb` (km/s). `passes` (odd, XSTAR's `npass`) repeats the march over the same zones: the even passes go from the outer edge inwards at the temperatures of the zones to give the optical depths of the lines and edges beyond each zone, which the odd passes use as the outward depths of the escape probabilities. `nrank` is the number of edges and lines of each energy bin that enter the continuum arrays (and the binned lines of `tables`): `constants().rank_per_bin`, 1000 (in practice all of them, so that the arrays hardly depend on the number of bins, which XSTAR's 10 do), and 10 with `constants(ucalc())`, XSTAR's own, for the comparisons with it. `processes` is a collection of `AbstractContinuum` processes (`standard_processes(compton)`) whose heating, cooling and
 opacity are those of the zones; `cfrac` is the covering fraction of the escape probabilities (give `Thomson` the same). Further keywords go to those functions.
 
 After each zone the opacities are added to the depths (`stpcut`): the lines and edges to the `OpticalDepths`, the continuum
@@ -321,16 +326,16 @@ fields `r`, `Δr`, `radiation`, `escape`, `opacity`), `final` (XSTAR's final cal
 not added to the radiation.
 """
 function Base.iterate(mixture::Mixture, ntot, processes, E, L, zones; T=100.0, equilibrium=false, xee=1.0, cfrac=0.0,
-        attenuate=true, diffuse=true, lines=true, luminous=true, vturb=default_turbulence, lfast=photoionization_lfast, passes=1, kw...)
+        attenuate=true, diffuse=true, lines=true, luminous=true, vturb=default_turbulence, lfast=photoionization_lfast, passes=1, nrank=constants().rank_per_bin, kw...)
     isodd(passes) || throw(ArgumentError("passes must be odd: the last pass goes in the same direction as the first"))
-    result = sweep(mixture, ntot, processes, E, L, zones; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, kw...)
+    result = sweep(mixture, ntot, processes, E, L, zones; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, nrank, kw...)
     for pass in 2:passes
         grid = [(zone.r, zone.Δr) for zone in result.zones]
         if iseven(pass)
             outer = backward(mixture, result, processes, E, L; cfrac, lfast, vturb, kw...)
             result = (; result..., outer)
         else
-            result = sweep(mixture, ntot, processes, E, L, grid; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast,
+            result = sweep(mixture, ntot, processes, E, L, grid; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, nrank,
                 outer=result.outer, kw...)
         end
     end
@@ -352,7 +357,7 @@ function backward(mixture::Mixture, result, processes, E, L; cfrac, lfast, vturb
     for i in reverse(eachindex(result.zones))
         zone = result.zones[i]
         outer[i] = map(copy, depths.outward)
-        radiation = map_spectrum(point_source(E, L .* exp.(-before[i]), zone.r))
+        radiation = map_spectrum(point_source(E, L .* exp.(-before[i]), zone.r), balance_grid)
         escape = escape_probabilities(mixture, OpticalDepths(result.inner[i], depths.outward); cfrac)
         n = zone.ntot
         balance = ionization_balance(mixture, zone.T, n; radiation, escape, xee=zone.xee, lfast, cfrac, kw...)
@@ -362,10 +367,10 @@ function backward(mixture::Mixture, result, processes, E, L; cfrac, lfast, vturb
     outer
 end
 
-function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, outer=nothing, kw...)
+function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, xee, cfrac, attenuate, diffuse, lines, luminous, vturb, lfast, nrank=constants().rank_per_bin, outer=nothing, kw...)
     depths = OpticalDepths(mixture)
     inner = Vector{Vector{Float64}}[]
-    continuum_gas = Continuum(mixture, processes; lfast, vturb)
+    continuum_gas = Continuum(mixture, processes; nrank, lfast, vturb)
     dpthc = zeros(length(E))
     dpthcont = zeros(length(E))
     spectrum = Transmitted(L)
@@ -379,7 +384,7 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
         step isa NamedTuple && (final_r = step.final; break)
         r, Δr = step
         incident = point_source(E, spectrum.L, r)
-        radiation = map_spectrum(incident)
+        radiation = map_spectrum(incident, balance_grid)           # (the balance, the heating and the edges are on the 999 bins of `bremsmap`; the continuum arrays on those of `incident`)
         push!(inner, map(copy, depths.inward))
         escape = escape_probabilities(mixture, outer === nothing ? depths : OpticalDepths(depths.inward, outer[length(results)+1]); cfrac)
         zone = if equilibrium
@@ -392,11 +397,12 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
         T, xee, n = zone.T, zone.xee, zone.ntot
         edges = record_opacities(mixture, zone, zone.T, n; radiation, lfast, vturb)
         emissivities = lines ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb, cfrac) : nothing
+        edge_emission = edge_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, cfrac)
         if luminous
             lined = emissivities === nothing ? line_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, vturb, cfrac) : emissivities
-            add_luminosities!(luminosities, lined, edge_emissivities(mixture, zone, zone.T, n; radiation, escape, lfast, cfrac), r, Δr)
+            add_luminosities!(luminosities, lined, edge_emission, r, Δr)
         end
-        continuum = opacity(continuum_gas, zone, zone.T, n, radiation, edges; emissivities, escape, cfrac)
+        continuum = opacity(continuum_gas, zone, zone.T, n, incident, edges; emissivities, escape, cfrac, edge_emission)
         attenuate && (spectrum = transmit(spectrum, incident, diffuse ? continuum : (; continuum..., emissivity=zero(continuum.emissivity),
             bremsstrahlung=zero(continuum.bremsstrahlung)), r, Δr; cfrac))
         push!(results, (; Base.structdiff(zone, (; memos=nothing))..., r, Δr, radiation, escape, opacity=continuum))   # (the integrals of the balance are not kept)

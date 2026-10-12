@@ -1,7 +1,6 @@
 # The continuum opacity of a zone and the attenuation of the spectrum: XSTAR's calc_emis_all (Thomson scattering, the photoionization
 # opacity of the records, free-free) with the ranking of the edges of rlbin and calc_emis_ion, and the accumulation of stpcut.
 
-const rank_per_bin = 10                 # nrank: the edges of each energy bin that enter the continuum opacity (the strongest)
 const rank_floor = 1e-37                # rlbin: edges weaker than this are not ranked
 const rank_energy_floor = 0.1           # setup: the lowest edge energy (eV) of the records that are not of type 49
 const damp_rate_type = 42              # the records of rate type 42 (PhotoionizeDamp) are always called
@@ -18,11 +17,11 @@ end
 const opacity_edge_types = Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoionizeSuper, PhotoRecombX}
 
 """
-    Continuum(mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence)
+    Continuum(mixture, processes; nrank=constants().rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence)
 
 The continuum opacity of the gas of `mixture` (cm⁻¹), as `calc_emis_all` makes it. Its `opacity`,
 
-    opacity(continuum, balance, T, ntot, radiation, edges; emissivities=nothing, escape=nothing, cfrac=0.0)
+    opacity(continuum, balance, T, ntot, radiation, edges; emissivities=nothing, escape=nothing, cfrac=0.0, edge_emission=nothing)
 
 of the zone whose `balance` (from `ionization_balance`) is at the temperature `T` (10⁴ K) and hydrogen density `ntot`, on the energy grid of
 `radiation`: the `opacity` of each of the `processes` (`standard_processes`: Thomson scattering and free-free absorption, the processes
@@ -44,7 +43,7 @@ struct Continuum{M<:Mixture, P, C<:NamedTuple}
     widths::Dict{Tuple{Int, Int}, Float64}      # the Auger widths of the K-vacancy levels (`auger_widths`)
     catalog::C                                   # the records that the zones rank, in the order of the records (`record_catalog`)
 end
-Continuum(mixture::Mixture, processes; nrank=rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence) =
+Continuum(mixture::Mixture, processes; nrank=constants().rank_per_bin, lfast=photoionization_lfast, vturb=default_turbulence) =
     Continuum(mixture, processes, nrank, lfast, Float64(vturb), auger_widths(mixture), record_catalog(mixture))
 
 # the records that every zone ranks, found once (there are a million of them in the records, and a few hundred thousand of these):
@@ -97,7 +96,7 @@ function add_two_photon_continua!(arrays, continuum::Continuum, balance, ntot, r
     arrays
 end
 
-function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges; emissivities=nothing, escape=nothing, cfrac=0.0)
+function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges; emissivities=nothing, escape=nothing, cfrac=0.0, edge_emission=nothing)
     mixture, nrank, lfast, vturb = continuum.mixture, continuum.nrank, continuum.lfast, continuum.vturb
     E = radiation.E
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
@@ -112,7 +111,7 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
     ranked = Dict{Int, Vector{Tuple{Float64, Int, Int}}}()
     for (k, j, eth) in continuum.catalog.edges
         strength = edges[k][j]
-        strength < rank_floor && continue
+        strength < rank_floor && (edge_emission === nothing || sum(edge_emission[k][j]) < rank_floor) && continue     # (`rlbin`: an edge with an opacity and an emissivity below the floor is not ranked, one with an emissivity only is, last)
         (E[1] < eth < E[end]) || continue
         list = get!(ranked, nbin(radiation, eth), Tuple{Float64, Int, Int}[])
         rank!(list, (strength, k, j), nrank)
