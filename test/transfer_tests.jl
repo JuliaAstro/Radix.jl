@@ -784,6 +784,53 @@ function transfer_balance_tests(db, known=nothing)
             end
         end
 
+        @slow "10000 energy bins: the balance is on the 999 bins of XSTAR, the continuum arrays on the 10000" begin
+            # test/reference/xstar_10000bins: XSTAR's balance, heating and edges (`dsec`, `calc_hmc_all`, `calc_emisab_all`) use the field that `bremsmap` maps to 999 bins, whatever `ncn2` is: the temperature of the thin slab
+            # changes by 0.03% from 999 to 10000 bins in XSTAR (18.8925 and 18.8982) and Radix follows (18.8958 and 18.9015, against 18.71 when the balance was on the bins of the field). The edges that `rlbin` ranks
+            # include those with an emissivity but no opacity, which the bins of 10000 (fewer edges in each) let in, so the continuum emission of the thick slab agrees with that of XSTAR
+            if known !== nothing && known.name == "package"
+                n10dir = joinpath(@__DIR__, "reference", "xstar_10000bins")
+                n10thin = fits(joinpath(n10dir, "thin_abund1.fits"))[2].data
+                n10o = findfirst(==(8), mixture.Z)
+                for (n10n, n10tol) in ((999, 2e-3), (10000, 2e-3))
+                    n10run = Radix.slab(mixture, processes; density=1e4, column=1e17, logξ=2.0, luminosity=1e-6*1e38, T=100.0, equilibrium=true, vturb=0.0, luminous=false, steps=2, emult=0.5, ncn2=n10n)
+                    @test n10run.zones[1].T ≈ Float64(n10thin.temperature[1]) rtol=n10tol
+                    n10n == 10000 && @test n10run.zones[1].fractions[n10o][8] ≈ Float64(n10thin.o_viii[1]) rtol=5e-3
+                end
+                n10slab = fits(joinpath(n10dir, "thick_abund1.fits"))[2].data
+                n10cont = fits(joinpath(n10dir, "thick_cont1.fits"))[3].data
+                n10E, n10I = Float64.(n10cont.energy), Float64.(n10cont.incident)
+                n10r0 = 3.16228e20
+                n10depth = Float64.(n10slab.delta_r)[2:end]
+                n10zones = [(n10r0 + n10depth[k], n10depth[k + 1] - n10depth[k]) for k in 1:length(n10depth) - 1]
+                n10thick = Radix.iterate(mixture, 1e4, processes, n10E, n10I*1e38, n10zones; T=10.0, iterate=false, vturb=0.0, luminous=false)
+                n10t = Float64.(n10cont.transmitted); n10vis = findall(>(1e-3*maximum(n10t)), n10t)
+                @test all(abs.(exp.(-n10thick.dpthcont[n10vis]) .* n10I[n10vis] ./ n10t[n10vis] .- 1) .< 1e-3)
+                for (n10mine, n10ref) in ((n10thick.spectrum.inward_continuum, n10cont.emit_inward), (n10thick.spectrum.outward_continuum, n10cont.emit_outward))
+                    n10ref = Float64.(n10ref); n10strong = findall(>(1e-3*maximum(n10ref)), n10ref)
+                    n10b = (n10mine[n10strong] ./ 1e38) ./ n10ref[n10strong]
+                    @test length(n10strong) > 5000 && abs(sort(n10b)[length(n10b) ÷ 2] - 1) < 3e-3
+                    @test count(b -> abs(b - 1) > 0.03, n10b) <= 12 && all(b -> abs(b - 1) < 0.06, n10b)
+                    @test sum(n10mine)/1e38/sum(n10ref) ≈ 1 rtol=4e-3
+                end
+                for (n10k, n10row) in ((1, 2), (6, 7), (13, 14))
+                    @test n10thick.zones[n10k].fractions[2][2] ≈ Float64(n10slab.he_ii[n10row]) rtol=1e-2
+                end
+                # XSTAR keeps the ten strongest edges and lines of each bin (`rank_per_bin`, 10 in the constants of `ucalc()` that these tests use): the continuum emission then depends on the number of bins
+                # (13% in the total from 999 to 30000 bins), and with the 1000 of the default constants it hardly does
+                n10total(n) = (E = Radix.xstar_energy_grid(n); L = Radix.powerlaw(E, -1.0, 1e8*1e38);
+                    run = Radix.iterate(mixture, 1e4, processes, E, L, n10zones; T=10.0, iterate=false, vturb=0.0, luminous=false); f = run.spectrum.inward_continuum; sum((f[i] + f[i + 1])/2*(E[i + 1] - E[i]) for i in 1:length(E) - 1))
+                n10xstar = n10total(999), n10total(10000)
+                n10converged = Radix.constants(Radix.Constants(Radix.constants(); rank_per_bin=Radix.converged_rank_per_bin)) do
+                    n10total(999), n10total(10000)
+                end
+                @test abs(n10xstar[2]/n10xstar[1] - 1) > 0.04
+                @test abs(n10converged[2]/n10converged[1] - 1) < 0.02
+            else
+                @info "Skipping the test of the 10000 energy bins (it is for the database of the XSTAR package)"
+            end
+        end
+
         @slow "three passes with the temperature iterated" begin
             # test/reference/xstar_thick_slab/xout_abund1_T_npass{1,3}.fits: the thick slab of the run above with niter=99 (T and x_e iterated), npass=1 and 3. The zones are those of
             # XSTAR (its rows are the states at the inner edges: the first zone is row 1 and the others the row after their number). XSTAR's own temperatures are those of

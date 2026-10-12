@@ -38,7 +38,7 @@ struct Results{Z, S, L, E}
 end
 
 """
-    tables(model, run; min_fraction=1e-15)
+    tables(model, run; min_fraction=1e-15, binned=true, nrank=constants().rank_per_bin)
 
 The results of `slab(model; ...)` as `Results`, four tables (their fields), each a named tuple of columns (vectors; units below):
 
@@ -51,7 +51,7 @@ The results of `slab(model; ...)` as `Results`, four tables (their fields), each
 
 `inward` is the first direction of the escape probabilities (XSTAR's `emit_inward`). Arrays only: `write(path, results)` writes them to one file.
 """
-function tables(model::Model, run; min_fraction=results_min_fraction, binned=true)
+function tables(model::Model, run; min_fraction=results_min_fraction, binned=true, nrank=constants().rank_per_bin)
     mixture, labels = model.mixture, model.ion_labels
     K = constants()
     zones = run.zones
@@ -69,7 +69,7 @@ function tables(model::Model, run; min_fraction=results_min_fraction, binned=tru
         ion_parameter=[luminosity/(z.ntot*z.r^2) for z in zones], x_e=[z.xee for z in zones], n_h=[z.ntot for z in zones], n_e=[z.nₑ for z in zones],
         pressure=[z.ntot*pressure_per_density*z.T for z in zones], temperature=[z.T for z in zones], heating=[z.heating for z in zones],
         cooling=[z.cooling for z in zones], heat_error=[z.imbalance for z in zones], fractions...)
-    emission = binned ? broaden(model, run; min_fraction) : (; inward=zeros(length(run.E)), outward=zeros(length(run.E)))
+    emission = binned ? broaden(model, run; min_fraction, nrank) : (; inward=zeros(length(run.E)), outward=zeros(length(run.E)))
     spectrum = (; energy=run.E, incident=run.incident, transmitted=run.transmitted, transmitted_lines=run.incident .* exp.(-run.dpthc),
         emit_inward=run.spectrum.inward_continuum, emit_outward=run.spectrum.outward_continuum,
         diffuse_inward=run.spectrum.inward, diffuse_outward=run.spectrum.outward, lines_inward=emission.inward, lines_outward=emission.outward)

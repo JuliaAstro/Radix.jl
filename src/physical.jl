@@ -42,8 +42,11 @@ are equal for CODATA. Fields:
   `collision_rate_coeff` (Maxwellian Υ rate coefficient for T in 10⁴ K, cm³ s⁻¹), `saha_coeff` (cm³ K^{3/2}),
   `sigma_thomson` (cm², the Compton heating and cooling) `electron_rest_eV` (m_e c², eV), and the free-free coefficients
   `ff_absorption_coeff` (`4 e⁶ h² /(3 mₑ c) (2π/(3 k mₑ))^{1/2}`, the absorption `ff_absorption_coeff/(√T E³)` per electron and per ion for the energy `E` in eV and
-  `T` in 10⁴ K, Gaunt factor 1) and `ff_emission_coeff` (`32π e⁶/(3 mₑ c³ h) (2π/(3 k mₑ))^{1/2}`, the emissivity per erg `ff_emission_coeff e^{-E/kT}/√T`), with `e² = α ħ c`.
+  `T` in 10⁴ K, Gaunt factor 1), `rank_per_bin` (the number of edges and lines of each energy bin that enter the continuum arrays: 1000, in practice all of them, so that the arrays hardly depend on the number of bins, and XSTAR's 10 in `ucalc()`) and `ff_emission_coeff` (`32π e⁶/(3 mₑ c³ h) (2π/(3 k mₑ))^{1/2}`, the emissivity per erg `ff_emission_coeff e^{-E/kT}/√T`), with `e² = α ħ c`.
 """
+const xstar_rank_per_bin = 10                 # XSTAR's nrank: the edges and the lines of each energy bin that enter the continuum arrays (`rlbin`), the strongest
+const converged_rank_per_bin = 1000           # the default: (nearly) all of them, so that the continuum arrays hardly depend on the number of bins
+
 struct Constants
     ergsev::Float64
     ergsev_bremsint::Float64
@@ -99,6 +102,7 @@ struct Constants
     electron_rest_eV::Float64
     ff_absorption_coeff::Float64
     ff_emission_coeff::Float64
+    rank_per_bin::Int
 end
 
 const T_floor_dE_over_kT = 50.0       # the fit temperature of the collision rates is at least ΔE/(50 k)
@@ -153,7 +157,7 @@ function Constants(codata::Module=CODATA2022)
         collision_rate_coeff=collision/sqrt(T_unit), saha_coeff=saha,
         sigma_thomson=value(u"cm^2", codata.ThomsonCrossSection), electron_rest_eV=value(u"eV", mₑ*c^2),
         ff_absorption_coeff=4*ff_prefactor*cgs_s^2/(3*cgs_g*cgs_cm)/ergsev^3,
-        ff_emission_coeff=32π*ff_prefactor/(3*cgs_g*cgs_cm^3*cgs_s)))
+        ff_emission_coeff=32π*ff_prefactor/(3*cgs_g*cgs_cm^3*cgs_s), rank_per_bin=converged_rank_per_bin))
 end
 
 """
@@ -178,7 +182,7 @@ ucalc() = Constants((;
     Ry_K_sat=Float64(1.578876f5), thermal_bohr=Float64(5.46538f-11), Ry_per_K=Float64(6.33652f-6), eV_K_ls=Float64(1.160443f4), single_expint=true,
     proton_mass=1800.0, light_speed=3e10, line_xsec=0.02655, thermal_speed=1.29e6,
     collision_rate_coeff=8.626e-8, saha_coeff=2.07e-16, sigma_thomson=6.6524587321e-25, electron_rest_eV=5.11e5,
-    ff_absorption_coeff=Float64(2.614f-37), ff_emission_coeff=Float64(1.032f-13)))
+    ff_absorption_coeff=Float64(2.614f-37), ff_emission_coeff=Float64(1.032f-13), rank_per_bin=xstar_rank_per_bin))
 
 const CURRENT_CONSTANTS = Ref(Constants())
 
