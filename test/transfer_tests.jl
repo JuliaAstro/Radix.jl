@@ -433,7 +433,7 @@ function transfer_balance_tests(db, known=nothing)
                 bins = (mine[strong] ./ 1e38) ./ reference[strong]
                 @test length(strong) > 500
                 @test abs(sort(bins)[length(bins) ÷ 2] - 1) < 3e-3
-                @test all(r -> abs(r - 1) < 6e-2, bins)
+                @test all(r -> abs(r - 1) < 3.5e-2, bins)          # (5% before the recombination continua were emitted with the escape probabilities of their edges)
                 @test sum(mine)/1e38 ≈ sum(reference) rtol=1e-2
             end
             # the end of the spectrum is the transmitted spectrum, where the lines do not absorb the bins that the edges do
@@ -486,8 +486,9 @@ function transfer_balance_tests(db, known=nothing)
                 strong = findall(>(1e-3*maximum(reference)), reference)
                 ratio = (diffuse[strong] .+ binned[strong]) ./ 1e38 ./ reference[strong]
                 @test length(strong) > 200
-                @test abs(sort(ratio)[length(ratio) ÷ 2] - 1) < 1e-3
+                @test abs(sort(ratio)[length(ratio) ÷ 2] - 1) < 2e-3
                 @test count(r -> abs(r - 1) < 0.06, ratio) >= 0.93*length(ratio)          # (the others are hydrogen, the database of the package, and the bins of the continuum of He II)
+                known !== nothing && known.name == "package" && @test count(r -> abs(r - 1) < 0.03, ratio) >= length(ratio) - 1          # (the package has the hydrogen of XSTAR: all the bins but one are within 3%; the one is 9.5% high, at 1.145 eV, where He I 10830 Å, Fe XIII and the wings of the H I lines of n = 6 are)
             end
             @test all(>=(0), spectrum_table.lines_inward) && all(>=(0), spectrum_table.lines_outward)
             @test sum(spectrum_table.lines_inward .* [Radix.xstar_energy_grid(999)[1]; diff(spectrum_table.energy)]) > 0

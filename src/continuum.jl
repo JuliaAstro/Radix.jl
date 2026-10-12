@@ -22,14 +22,15 @@ const opacity_edge_types = Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIoniz
 
 The continuum opacity of the gas of `mixture` (cm⁻¹), as `calc_emis_all` makes it. Its `opacity`,
 
-    opacity(continuum, balance, T, ntot, radiation, edges; emissivities=nothing)
+    opacity(continuum, balance, T, ntot, radiation, edges; emissivities=nothing, escape=nothing, cfrac=0.0)
 
 of the zone whose `balance` (from `ionization_balance`) is at the temperature `T` (10⁴ K) and hydrogen density `ntot`, on the energy grid of
 `radiation`: the `opacity` of each of the `processes` (`standard_processes`: Thomson scattering and free-free absorption, the processes
 times their densities; the scatterers (`AbstractScattering`) are in `continuum` as well as in `total`) and the photoionization opacity of
 the records. `edges` are the edge opacities of the records (`record_opacities`), which rank them: as `rlbin` does, only the `nrank` strongest
 edges of each energy bin (by the edge energy of `rank_energy`) enter, and every record of rate type 42. With the `emissivities` of the lines
-(`line_emissivities`) the lines are put in the bins too, as `linopac` does (`add_line!`): the `nrank` strongest lines of each bin, by their emissivity, enter.
+(`line_emissivities`) the lines are put in the bins too, as `linopac` does (`add_line!`): the `nrank` strongest lines of each bin, by their emissivity, enter. The recombination continua are emitted
+in the two directions with the `escape` probabilities of the depths of their edges (`escape_probabilities`; without them they are optically thin) and the damped photoionization with `cfrac`.
 
 Returns `(; total, continuum, emissivity, bremsstrahlung, edges)`: the two arrays of the opacity, `emissivity` (`rccemis`, 2 × n, per steradian: the recombination
 continua of the records called), `bremsstrahlung` (`brcems`: the `emissivity` of the processes, in all directions) and the number of records called.
@@ -96,7 +97,7 @@ function add_two_photon_continua!(arrays, continuum::Continuum, balance, ntot, r
     arrays
 end
 
-function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges; emissivities=nothing)
+function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, edges; emissivities=nothing, escape=nothing, cfrac=0.0)
     mixture, nrank, lfast, vturb = continuum.mixture, continuum.nrank, continuum.lfast, continuum.vturb
     E = radiation.E
     cell = Cell(Float64(T), Float64(balance.nₕ), Float64(balance.nₑ), Float64(ntot))
@@ -128,7 +129,9 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
         for (j, always) in continuum.catalog.rated[k]
             (always || chosen[k][j]) || continue
             abund = (x[el.lo[j]]*abundance, x[el.up[j]]*abundance)
-            rate(el.rates[j], cell; radiation, abund, lfast, ptmp=optically_thin, opacity=arrays)
+            # the recombination continua go in with the escape probabilities of their depths (`pescv` of `calc_emis_ion`), the damped photoionization of type 42 optically thin
+            ptmp = always ? ((1 - cfrac)/2, (1 + cfrac)/2) : something(escape_of(element_escape(escape, k), j, el.rates[j]), optically_thin)
+            rate(el.rates[j], cell; radiation, abund, lfast, ptmp, opacity=arrays)
             called += 1
         end
     end
