@@ -748,6 +748,11 @@ function transfer_balance_tests(db, known=nothing)
                 hcar_x(file) = (d = Dict{Tuple{String, String, String}, Float64}(); for line in readlines(joinpath(hcar_dir, file))[2:end]; f = split(line, ','); d[(f[1], f[2], f[3])] = parse(Float64, f[5]) + parse(Float64, f[6]); end; d)
                 hcar_r1, hcar_r3, hcar_x1, hcar_x3 = hcar_lines(hcar_one), hcar_lines(hcar_three), hcar_x("lines_npass1.csv"), hcar_x("lines_npass3.csv")
                 hcar_cv = ("c_v", "1s2.1S_0", "1s1.2s1.3S_1"); hcar_ar = ("ar_ix", "2p6.1S_0", "2p5.3s1.1P_1")
+                # the C V triplet 2³P-3³D at 248.7 Å drops by 16% in XSTAR from the first pass to the third (unconverged populations; Radix: -0.06%) below a line of 257 that Radix
+                # ranks 11th in its bin, which changes which 10 lines of the bin are spread (the 245 Å bin of the three passes of the thick slab)
+                hcar_tr = ("c_v", "1s1.2p1.3P_1", "1s1.3d1.3D")
+                @test hcar_x3[hcar_tr]/hcar_x1[hcar_tr] ≈ 0.843 rtol=5e-3
+                @test abs(hcar_r3[hcar_tr]/hcar_r1[hcar_tr] - 1) < 2e-3
                 @test hcar_x3[hcar_cv]/hcar_x1[hcar_cv] ≈ 1.105 rtol=5e-3
                 @test abs(hcar_r3[hcar_cv]/hcar_r1[hcar_cv] - 1) < 5e-3
                 @test hcar_x3[hcar_ar]/hcar_x1[hcar_ar] ≈ 1.137 rtol=5e-3
