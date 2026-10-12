@@ -5,6 +5,9 @@ using PhysicalConstants
 using Unitful
 import PhysicalConstants.CODATA2022
 
+const xstar_rank_per_bin = 10                 # XSTAR's nrank: the edges and the lines of each energy bin that enter the continuum arrays (`rlbin`), the strongest
+const converged_rank_per_bin = 1000           # the default: (nearly) all of them, so that the continuum arrays hardly depend on the number of bins
+
 """
     Constants
 
@@ -44,9 +47,6 @@ are equal for CODATA. Fields:
   `ff_absorption_coeff` (`4 e⁶ h² /(3 mₑ c) (2π/(3 k mₑ))^{1/2}`, the absorption `ff_absorption_coeff/(√T E³)` per electron and per ion for the energy `E` in eV and
   `T` in 10⁴ K, Gaunt factor 1), `rank_per_bin` (the number of edges and lines of each energy bin that enter the continuum arrays: 1000, in practice all of them, so that the arrays hardly depend on the number of bins, and XSTAR's 10 in `ucalc()`) and `ff_emission_coeff` (`32π e⁶/(3 mₑ c³ h) (2π/(3 k mₑ))^{1/2}`, the emissivity per erg `ff_emission_coeff e^{-E/kT}/√T`), with `e² = α ħ c`.
 """
-const xstar_rank_per_bin = 10                 # XSTAR's nrank: the edges and the lines of each energy bin that enter the continuum arrays (`rlbin`), the strongest
-const converged_rank_per_bin = 1000           # the default: (nearly) all of them, so that the continuum arrays hardly depend on the number of bins
-
 struct Constants
     ergsev::Float64
     ergsev_bremsint::Float64
