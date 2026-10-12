@@ -680,6 +680,59 @@ function transfer_balance_tests(db, known=nothing)
             end
         end
 
+        @slow "three passes: the spectrum, the lines and the edges" begin
+            # test/reference/xstar_thick_slab_npass3: the thick slab with `npass=3`. The continuum, the binned emission, the luminosities of the lines (and how they change from the first pass: the He II 3s-2p line by 1.6)
+            # and the total of the recombination edges follow XSTAR's (package database only)
+            if known !== nothing && known.name == "package"
+                p3dir = joinpath(@__DIR__, "reference", "xstar_thick_slab_npass3")
+                p3model = Radix.Model(mixture, processes, Dict{Int, String}(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion))
+                p3kw = (; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+                p3one = Radix.tables(p3model, Radix.slab(mixture, processes; p3kw..., passes=1))
+                p3run = Radix.slab(mixture, processes; p3kw..., passes=3)
+                p3res = Radix.tables(p3model, p3run)
+                p3sp = p3res.spectrum
+                p3cont = fits(joinpath(p3dir, "xout_cont1.fits"))[3].data
+                p3spect = fits(joinpath(p3dir, "xout_spect1.fits"))[3].data
+                p3t = Float64.(p3cont.transmitted)
+                p3vis = findall(>(1e-3*maximum(p3t)), p3t)
+                @test all(abs.((p3sp.transmitted[p3vis] ./ 1e38) ./ p3t[p3vis] .- 1) .< 1e-3)
+                for (p3mine, p3ref) in ((p3sp.emit_inward, p3cont.emit_inward), (p3sp.emit_outward, p3cont.emit_outward))
+                    p3ref = Float64.(p3ref); p3strong = findall(>(1e-3*maximum(p3ref)), p3ref)
+                    p3b = (p3mine[p3strong] ./ 1e38) ./ p3ref[p3strong]
+                    @test abs(sort(p3b)[length(p3b) ÷ 2] - 1) < 2e-3 && all(b -> abs(b - 1) < 3.5e-2, p3b)
+                end
+                for (p3d, p3l, p3ref) in ((p3sp.diffuse_inward, p3sp.lines_inward, p3spect.emit_inward), (p3sp.diffuse_outward, p3sp.lines_outward, p3spect.emit_outward))
+                    p3ref = Float64.(p3ref); p3strong = findall(>(1e-3*maximum(p3ref)), p3ref)
+                    p3b = (p3d[p3strong] .+ p3l[p3strong]) ./ 1e38 ./ p3ref[p3strong]
+                    @test length(p3strong) > 200 && abs(sort(p3b)[length(p3b) ÷ 2] - 1) < 2e-3
+                    @test count(b -> abs(b - 1) < 0.07, p3b) >= length(p3b) - 3             # (the He I bin at 1.145 eV, the C V forbidden line at 41 Å and a bin at 245 Å)
+                end
+                # the luminosities of the lines, and their change from the first pass
+                p3agg(t) = (d = Dict{Tuple{String, String, String}, Float64}(); for i in eachindex(t.ion); p3k = (strip(t.ion[i]), strip(t.lower[i]), strip(t.upper[i])); d[p3k] = get(d, p3k, 0.0) + (t.emit_inward[i] + t.emit_outward[i])/1e38; end; d)
+                p3m3, p3m1 = p3agg(p3res.lines), p3agg(p3one.lines)
+                p3x3 = fits(joinpath(p3dir, "xout_lines1.fits"))[3].data
+                p3x1 = fits(joinpath(p3dir, "xout_lines1_npass1.fits"))[3].data
+                p3x1d = Dict{Tuple{String, String, String}, Float64}(); for i in eachindex(p3x1.ion); p3x1d[(strip(p3x1.ion[i]), strip(p3x1.lower_level[i]), strip(p3x1.upper_level[i]))] = Float64(p3x1.emit_inward[i]) + Float64(p3x1.emit_outward[i]); end
+                p3ratio, p3change = Float64[], Float64[]
+                for i in eachindex(p3x3.ion)
+                    p3k = (strip(p3x3.ion[i]), strip(p3x3.lower_level[i]), strip(p3x3.upper_level[i]))
+                    p3v = Float64(p3x3.emit_inward[i]) + Float64(p3x3.emit_outward[i])
+                    p3a3 = get(p3m3, p3k, get(p3m3, (p3k[1], p3k[3], p3k[2]), NaN)); p3a1 = get(p3m1, p3k, get(p3m1, (p3k[1], p3k[3], p3k[2]), NaN))
+                    isfinite(p3a3) && push!(p3ratio, p3a3/p3v)
+                    (haskey(p3x1d, p3k) && isfinite(p3a3) && isfinite(p3a1)) && push!(p3change, (p3a3/p3a1)/(p3v/p3x1d[p3k]))
+                end
+                @test length(p3ratio) > 590 && abs(sort(p3ratio)[end ÷ 2] - 1) < 3e-3 && count(r -> abs(r - 1) < 0.05, p3ratio) >= 0.98*length(p3ratio)
+                @test length(p3change) > 540 && count(c -> abs(c - 1) < 0.02, p3change) >= 0.95*length(p3change)           # (XSTAR changes 414 of them by more than 1%)
+                p3he = ("he_ii", "1s0.2p1.2P_1/2", "1s0.3s1.2S_1/2")
+                @test p3m3[p3he]/p3m1[p3he] ≈ 1.596 rtol=0.03
+                # the total of the recombination edges (XSTAR's table: 798877.05, and 807150.61 with one pass)
+                p3e = p3res.edges
+                @test sum(p3e.emit_inward .+ p3e.emit_outward)/1e38 ≈ 798877.05 rtol=3e-3
+            else
+                @info "Skipping the test of the three passes (it is for the database of the XSTAR package)"
+            end
+        end
+
         @slow "three passes with the temperature iterated" begin
             # test/reference/xstar_thick_slab/xout_abund1_T_npass{1,3}.fits: the thick slab of the run above with niter=99 (T and x_e iterated), npass=1 and 3. The zones are those of
             # XSTAR (its rows are the states at the inner edges: the first zone is row 1 and the others the row after their number). XSTAR's own temperatures are those of
