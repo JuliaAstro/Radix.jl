@@ -6,7 +6,9 @@ using FITSFiles
 # the term of a process in the result of heating_cooling
 term(hc, P) = only(t for t in hc.processes if t.process isa P)
 
-function toy_heating_tests()
+toy_heating_tests() = Radix.constants(toy_heating_body, Radix.Constants(Radix.constants(); compton_surrogate=false))      # (the toy tables below are tables: the surrogate is the physics)
+
+function toy_heating_body()
     @testset "Heating and cooling" begin
         K = Radix.constants()
 

@@ -47,7 +47,7 @@ Compton scattering with the table of the Compton heating (XSTAR's `coheat.dat`, 
 temperature `Te[i]` (in electron rest masses) and the photon energy `Eph[j]` (in electron rest masses).
 
 - `σ(compton, Eph::Real, Te::Real)` is XSTAR's `cmpfnc`: the Compton function at the photon energy `Eph` and the electron temperature `Te` (both in
-  electron rest masses), interpolated linearly in the table (its limit `4 Te - Eph` below an energy of `compton_Eph_min`);
+  electron rest masses), from the surrogate model of the exchange of Klein-Nishina scattering by a thermal gas (`compton_surrogate`, by default: `compton_surrogate` of the constants), or interpolated linearly in the table (its limit `4 Te - Eph` below an energy of `compton_Eph_min`, also outside the range of the surrogate);
 - `σ(compton, E, T)` is the scattering cross section, `σ_T`, and `heating(compton, E, T)` and `cooling(compton, E, T)` those of the energy exchanged
   per electron, `σ_T E/mc²` and `σ_T (cmpfnc + E/mc²)`, whose integrals over the radiation are the Compton heating and cooling;
 - `integral(compton, radiation, T)` is XSTAR's `comp2`: `(cmp1, cmp2)`, the heating being `cmp1 nₑ` and the cooling `kT cmp2 nₑ` (eV, times erg per eV).
@@ -132,6 +132,10 @@ hunt_index(xx, x) = clamp(searchsortedlast(xx, x), 1, length(xx))
 
 # Compton scattering: cmpfnc, the coefficients of the energy exchanged, and the heating and cooling that derive from them
 function σ(compton::Compton, Eph::Real, Te::Real)
+    if constants().compton_surrogate
+        v = surrogate_exchange(Eph, Te)
+        v === nothing || return v
+    end
     Eph > compton_Eph_min || return 4Te - Eph
     iE = clamp(hunt_index(compton.Eph, Eph), 2, length(compton.Eph))
     iT = clamp(hunt_index(compton.Te, Te), 2, length(compton.Te))
