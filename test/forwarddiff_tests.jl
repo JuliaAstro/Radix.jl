@@ -13,6 +13,8 @@ const AD_RTOL = 2e-3
 # relation until it changes by less than 1%, which makes it slightly non-smooth: its finite
 # differences are noisy at the 1% level while the derivative stays within it.
 const AD_RTOLS = Dict("type70" => 3e-2)
+# ... and at a step of 1e-4 the finite differences of one case give 9.39 and 5.4 (1e-5) against 9.02 for 1e-3 to 1e-2 and 9.024 for the derivative: the tabulated recombination of the superlevel is not smooth at that scale
+const AD_STEPS = Dict("type70" => 1e-3)
 # the fewest derivatives a case must compare (type 22 has three records, half of them above its 6e4 K limit; type 10 has four)
 const AD_MIN_CHECKS = Dict("type22" => 4, "type10" => 4)
 const AD_OFFSET = 1.2345              # moves T and the densities off the table nodes
@@ -76,6 +78,7 @@ end
 function ad_check(name, call, variable)
     fixture = first(split(name))
     rtol = get(AD_RTOLS, fixture, AD_RTOL)
+    step = get(AD_STEPS, fixture, AD_STEP)
     nchecked = nbad = 0
     for (c, _) in ucalc_cases(fixture)
         coef, cell, lv = ucalc_inputs(c)
@@ -86,7 +89,7 @@ function ad_check(name, call, variable)
             (v == 0 || !isfinite(v)) && continue
             d = ForwardDiff.derivative(f, x0)
             value(x) = ForwardDiff.value(f(ForwardDiff.Dual{Nothing}(x, 0.0)))
-            h = AD_STEP*x0
+            h = step*x0
             fd = (value(x0 + h) - value(x0 - h))/(2h)
             # a derivative that is zero to rounding is compared with the size of the rate
             scale = max(abs(d), abs(fd))

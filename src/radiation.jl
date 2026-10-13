@@ -65,6 +65,31 @@ depends on it (+50% for an E⁻¹ spectrum on XSTAR's grid).
 map_spectrum(rad::Radiation, E::AbstractVector{<:AbstractFloat}=rad.E) = Radiation(E, [rad.F[nbin(rad, e)] for e in E])
 
 """
+    average_spectrum(radiation, E)
+
+The spectrum of `radiation` on the grid `E`, as the average of its field (linear between the grid points, the trapezoid rule that integrates it) over the cell of each bin of `E` (from the middle of the interval to the bin before to the middle of that to the one after), so that
+integrals over the new grid conserve the photons and the energy of the field: where `map_spectrum` samples it at the bins.
+"""
+function average_spectrum(rad::Radiation, E::AbstractVector{<:AbstractFloat})
+    x, F = rad.E, rad.F
+    n, m = length(x), length(E)
+    cum = zeros(n)                                  # the integral of F up to each point
+    for i in 1:n - 1
+        cum[i + 1] = cum[i] + (F[i] + F[i + 1])*(x[i + 1] - x[i])/2
+    end
+    function integral(e)                            # (exact for the piecewise-linear field)
+        e <= x[1] && return 0.0
+        e >= x[n] && return cum[n]
+        i = searchsortedlast(x, e)
+        d = e - x[i]
+        cum[i] + F[i]*d + (F[i + 1] - F[i])*d^2/(2*(x[i + 1] - x[i]))
+    end
+    edges = [i == 1 ? E[1] : i == m + 1 ? E[m] : (E[i - 1] + E[i])/2 for i in 1:m + 1]
+    cells = [integral(edges[i + 1]) - integral(edges[i]) for i in 1:m]
+    Radiation(E, [edges[i + 1] > edges[i] ? cells[i]/(edges[i + 1] - edges[i]) : F[min(searchsortedlast(x, E[i]) + 1, n)] for i in 1:m])
+end
+
+"""
     Opacity([R=Float64,] n)
 
 Continuum opacity arrays on a grid of `n` energies that the photoionization rates
@@ -133,6 +158,9 @@ end
 A radiation field without photons on XSTAR's energy grid: the default of the photoionization rates, for which the
 photoionization rates are 0 and the recombination rates are those of the gas alone.
 """
+const energy_grids = Dict{Int, Vector{Float64}}()
+cached_energy_grid(n) = get!(() -> xstar_energy_grid(n), energy_grids, n)
+
 const NO_RADIATION = let E = xstar_energy_grid()
     Radiation(E, zeros(length(E)))
 end

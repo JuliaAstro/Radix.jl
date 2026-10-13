@@ -204,12 +204,78 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
         if kl == nb1 + 2
             optmp2 = rnist*exptmpp*sgtp*abund2*pesc*ntot
             opakab = max(0.0, optmp - optmp2)
+            exact && break                     # (the sums are those of `exact_edge_rates`)
         end
         kl += 1
     end
     exact && opacity !== nothing && exact_edge_arrays!(opacity, epi, eth, ε, σ, K, bktm, rnist, ptmp, abund1, abund2, ntot, lfast)
+    if exact
+        x = exact_edge_rates(rad, nphint, eth, ε, σ, K, bktm, rnist, pesc, lfast)
+        return (; pirt=x.pirt, rrrt=x.rrrt, piht=x.piht*K.ergsev, rrcl=x.rrcl*K.ergsev,
+            piht2=x.piht2*K.ergsev, rrcl2=x.rrcl2*K.ergsev, opakab=opakab)
+    end
     (; pirt=sumr, rrrt=sumi, piht=sumh*K.ergsev, rrcl=sumc*K.ergsev,
         piht2=sumh2*K.ergsev, rrcl2=sumc2*K.ergsev, opakab=opakab)
+end
+
+"""
+    exact_edge_rates(rad, nphint, E_th, ε, σ, K, kT, rnist, pesc, lfast)
+
+The integrals of `photoionization_integrals` (`pirt`, `rrrt`, `piht`, `rrcl`, `piht2`, `rrcl2`, the energies in eV s⁻¹) of the radiation `rad` (up to its bin `nphint`, linear between the grid points as
+the trapezoid rule has it) and the cross section table (linear between its points), done piece by piece between the grid points and the nodes of the table with Gauss-Legendre of three points
+(pieces of at most kT for the recombination, which is integrated up to `exact_exp_limit` kT above the threshold). The recombination integrand is `rnist (blackbody E³ + stimulated F) σ e^{-(E-E_th)/kT}/E`: the spontaneous
+and Planck-like part of `phint53` (the default, `pesc` its escape probabilities) or with the stimulated term of the radiation as `phint53hunt` has it. `phint53`'s sums over the grid points take the integrand at the points only,
+which for the recombination continuum of a K edge (it falls in kT, a bin or two at 999 bins) is wrong by a random tens of percent (0.26 to 1.2 of the converged value at 999 bins, 0.90 to 0.96 at 10000), and
+the photoionization rate by 1-2%.
+"""
+function exact_edge_rates(rad::Radiation, nphint, eth, ε, σ, K, kT, rnist, pesc, lfast; blackbody=K.bb_coeff*2*K.fourpi*pesc, stimulated=0.0)
+    E, F = rad.E, rad.F
+    ntmp = length(ε)
+    pirt = rrrt = piht = rrcl = piht2 = rrcl2 = 0.0
+    zero_rates = (; pirt, rrrt, piht, rrcl, piht2, rrcl2)
+    ntmp >= 2 || return zero_rates
+    Ry = K.Ry_eV
+    elo, ehi = eth + ε[1]*Ry, min(eth + ε[ntmp]*Ry, E[nphint])
+    elo < ehi || return zero_rates
+    ecut = min(ehi, eth + exact_exp_limit*kT)
+    recombine = lfast >= 2
+    k = clamp(searchsortedlast(E, elo), 1, nphint - 1)            # the interval of the grid (E[k], E[k+1]) and the segment of the table (nodes(j), nodes(j+1))
+    j = 1
+    a = elo
+    while a < ehi
+        while k < nphint - 1 && E[k + 1] <= a
+            k += 1
+        end
+        while j < ntmp - 1 && eth + ε[j + 1]*Ry <= a
+            j += 1
+        end
+        b = min(ehi, E[k + 1], j < ntmp - 1 ? eth + ε[j + 1]*Ry : ehi)
+        a < ecut && (b = min(b, a + kT))
+        b > a || (a = nextfloat(a); continue)
+        n1 = eth + ε[j]*Ry
+        dn = eth + ε[min(j + 1, ntmp)]*Ry - n1
+        slope = dn > 0 ? (σ[j + 1] - σ[j])/dn : 0.0
+        dE = E[k + 1] - E[k]
+        h, c = (b - a)/2, (a + b)/2
+        for i in 1:3
+            x = c + h*gauss3_nodes[i]
+            w = gauss3_weights[i]*h
+            s = σ[j] + slope*(x - n1)
+            f = F[k] + (F[k + 1] - F[k])*(x - E[k])/dE
+            r = s*f/x*w
+            pirt += r
+            piht += r*x
+            piht2 += r*(x - eth)
+            if recombine && x < ecut
+                q = rnist*(blackbody*min(bb_energy_cap, x)^3 + stimulated*f)*s*exp(-(x - eth)/kT)/x*w
+                rrrt += q
+                rrcl += q*x
+                rrcl2 += q*(x - eth)
+            end
+        end
+        a = b
+    end
+    (; pirt, rrrt, piht, rrcl, piht2, rrcl2)
 end
 
 const gauss3_nodes = (-sqrt(3/5), 0.0, sqrt(3/5))
@@ -639,6 +705,13 @@ function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, 
 
     bktm = K.kB_cgs*T*T_unit/K.ergsev
     rnist = K.fo_saha*swrat/T/sqrt(T)
+
+    if K.exact_binning
+        # the table over the field of the grid, not over the first power of two bins that the table spans (a span that depends on the grid, and so do the rates of a superlevel by a factor 2)
+        x = exact_edge_rates(rad, numcon3, eth, ε, σ, K, bktm, rnist, 1.0, 2; blackbody=K.bb_coeff, stimulated=1/K.eightpi)
+        return (; pirt=x.pirt, rrrt=xnx*x.rrrt, piht=x.piht*K.ergsev, rrcl=xnx*x.rrcl*K.ergsev,
+            piht2=x.piht2*K.ergsev, rrcl2=xnx*x.rrcl2*K.ergsev)
+    end
 
     # the span of the table, in a power of two bins
     nphint = nbin(rad, ε[ntmp]*K.Ry_eV_single + eth)

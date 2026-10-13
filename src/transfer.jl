@@ -242,8 +242,15 @@ const step_default_steps = 2            # numrec: nsteps of XSTAR, its largest z
 
 # XSTAR solves the balance, the heating and the cooling, and the edges (`dsec`, `calc_hmc_all`, `calc_emisab_all`) on a grid of 999 bins (`ncn2m`, `epim`) to which `bremsmap` maps the field,
 # whatever the `ncn2` of the continuum arrays (`calc_emis_all`: `epi`, `bremsa`) is
-const balance_bins = 999
-const balance_grid = xstar_energy_grid(balance_bins)
+const balance_grid = xstar_energy_grid(xstar_balance_bins)
+
+# the field of the balance, the heating and the edges of a zone: XSTAR's `bremsmap` samples it at the 999 bins of `balance_grid` whatever the number of bins of the arrays; with `exact_binning` it is averaged onto the `balance_bins` of the constants
+function balance_field(incident::Radiation)
+    K = constants()
+    K.exact_binning || return map_spectrum(incident, balance_grid)
+    n = K.balance_bins
+    length(incident.E) == n ? incident : average_spectrum(incident, cached_energy_grid(n))
+end
 
 # the zones of `iterate`: a vector of (r, Δr) or a function of the zones so far (the results, the continuum depth and the `Transmitted`) that gives the next (r, Δr) or nothing
 function zone_source(zones::AbstractVector)
@@ -357,7 +364,7 @@ function backward(mixture::Mixture, result, processes, E, L; cfrac, lfast, vturb
     for i in reverse(eachindex(result.zones))
         zone = result.zones[i]
         outer[i] = map(copy, depths.outward)
-        radiation = map_spectrum(point_source(E, L .* exp.(-before[i]), zone.r), balance_grid)
+        radiation = balance_field(point_source(E, L .* exp.(-before[i]), zone.r))
         escape = escape_probabilities(mixture, OpticalDepths(result.inner[i], depths.outward); cfrac)
         n = zone.ntot
         balance = ionization_balance(mixture, zone.T, n; radiation, escape, xee=zone.xee, lfast, cfrac, kw...)
@@ -387,7 +394,7 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
         step isa NamedTuple && (final_r = step.final; break)
         r, Δr = step
         incident = point_source(E, spectrum.L, r)
-        radiation = map_spectrum(incident, balance_grid)           # (the balance, the heating and the edges are on the 999 bins of `bremsmap`; the continuum arrays on those of `incident`)
+        radiation = balance_field(incident)           # (XSTAR's balance, heating and edges are on the 999 bins of `bremsmap`; the continuum arrays on those of `incident`)
         push!(inner, map(copy, depths.inward))
         escape = escape_probabilities(mixture, outer === nothing ? depths : OpticalDepths(depths.inward, outer[length(results)+1]); cfrac)
         zone = if equilibrium

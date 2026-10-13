@@ -294,7 +294,7 @@ function toy_transfer_tests()
             run = Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e12), (2e13, 3e12)]; T=1.0, iterate=false, diffuse=false)
             @test length(run.zones) == 2
             @test [z.r for z in run.zones] == [1e13, 2e13] && [z.Δr for z in run.zones] == [1e12, 3e12]
-            @test run.zones[1].radiation.F == Radix.map_spectrum(Radix.point_source(E, L, 1e13)).F
+            @test run.zones[1].radiation.F == Radix.point_source(E, L, 1e13).F                   # (the field itself on the 999 bins of the balance; `ucalc()` maps it with `bremsmap`)
             @test run.zones[2].radiation.F[10] ≈ run.zones[1].radiation.F[10]/4                  # 1/r²
             @test all(z -> z.T == 1.0 && z.xee == 1.0, run.zones)
             @test run.depths.inward == [[0.0]] && run.zones[1].escape == [[(0.5, 0.5)]]
@@ -386,6 +386,37 @@ function toy_transfer_tests()
                 end
             end
             @test maximum(old)/minimum(old) > 1.1
+        end
+
+        @testset "the rates of the balance: the integrals of the cross section over the field do not depend on the bins" begin
+            # `phint53` sums the integrand at the grid points (the recombination of a K edge, which falls in a bin or two, is a random 0.26 to 1.2 of the converged value at 999 bins) and `phint53hunt` cuts the table
+            # at a power of two bins above the threshold (the rates of a superlevel change by a factor 2 with the grid); `exact_edge_rates` integrates piece by piece, the field linear between the grid points
+            kx = Radix.constants()
+            xε = [0.0, 0.01, 0.05, 0.2, 1.0, 5.0, 30.0]
+            xσ = 6e-19 ./ (1 .+ 8 .* xε).^3
+            xs = Dict(n => begin
+                xE = Radix.xstar_energy_grid(n)
+                xrad = Radix.point_source(xE, Radix.powerlaw(xE, -1.0, 1e38), 1e12)
+                (Radix.photoionization_integrals(xrad, 1362.2, xε, xσ, 10.0, 2e-3, (0.4, 0.6); lfast=2),
+                    Radix.photoionization_integrals_hunt(xrad, 1362.2, xε, xσ, 10.0, 0.5, 1.0),
+                    Radix.photoionization_integrals(xrad, 54.4, xε, xσ, 1.0, 2e-3, (0.4, 0.6); lfast=2))
+            end for n in (999, 3000, 10000))
+            for i in 1:3, name in (:pirt, :rrrt, :piht, :rrcl, :piht2, :rrcl2)
+                @test getfield(xs[999][i], name) ≈ getfield(xs[10000][i], name) rtol=2e-3
+                @test getfield(xs[3000][i], name) ≈ getfield(xs[10000][i], name) rtol=1e-3
+            end
+            # XSTAR's rules at the same grids do not (the constants of `ucalc()`)
+            xu = Radix.constants(Radix.ucalc()) do
+                Tuple(Radix.photoionization_integrals(Radix.point_source(xg, Radix.powerlaw(xg, -1.0, 1e38), 1e12), 1362.2, xε, xσ, 10.0, 2e-3, (0.4, 0.6); lfast=2).rrrt for xg in (Radix.xstar_energy_grid(999), Radix.xstar_energy_grid(10000)))
+            end
+            @test abs(xu[1]/xu[2] - 1) > 0.05
+            # the average of the field over the cells of a grid conserves its integral
+            xa = Radix.xstar_energy_grid(10000)
+            xinc = Radix.point_source(xa, Radix.powerlaw(xa, -1.0, 1e38), 1e12)
+            xb = Radix.average_spectrum(xinc, Radix.xstar_energy_grid(999))
+            xtrap(r, lo, hi) = sum((r.F[i] + r.F[i + 1])/2*(r.E[i + 1] - r.E[i]) for i in 1:length(r.E) - 1 if lo <= r.E[i] && r.E[i + 1] <= hi)
+            @test xtrap(xb, 10.0, 1e4) ≈ xtrap(xinc, 10.0, 1e4) rtol=2e-3
+            @test Radix.average_spectrum(xinc, xa).F[2:end - 1] ≈ xinc.F[2:end - 1]          # (the cells at the ends are half as wide)
         end
         end
     end
