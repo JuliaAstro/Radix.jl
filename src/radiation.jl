@@ -82,6 +82,7 @@ Opacity(R::Type{<:Real}, n::Integer) = Opacity(zeros(R, n), zeros(R, n), zeros(R
 Opacity(n::Integer) = Opacity(Float64, n)
 
 # grid constants of nbinc/huntf
+const default_energy_bins = 10000    # the number of energy bins of `slab` and of the default grid (XSTAR's own default is 9999, its references of the tests 999)
 const grid_guard_fraction = 50       # the top 1/50 of the grid (at least 2 bins) is not used
 const grid_min_bins = 2
 const grid_tiny = 1e-34
@@ -105,12 +106,12 @@ function nbin(rad::Radiation, e)
 end
 
 """
-    xstar_energy_grid(ncn2=9999)
+    xstar_energy_grid(ncn2=default_energy_bins)
 
 XSTAR's photon energy grid (its `ener`), in eV: `ncn2 - max(2, ncn2/50)` points spaced geometrically from 0.1 to
 4×10⁵ eV, then `max(2, ncn2/50)` more from there to 10⁶ eV.
 """
-function xstar_energy_grid(ncn2=9999)
+function xstar_energy_grid(ncn2=default_energy_bins)
     numcon2 = max(grid_min_bins, ncn2 ÷ grid_guard_fraction)
     numcon3 = ncn2 - numcon2
     E = zeros(ncn2)

@@ -71,6 +71,7 @@ the continuum opacity and recombination emissivity are added to it. Also returns
 function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
     abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing, buffer=nothing)
     K = constants()
+    exact = K.exact_binning
 
     epi, bremsa = rad.E, rad.F
     ncn2 = length(epi)
@@ -190,13 +191,13 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
             tempcp2 = tempip*(epiip - eth)
             sumc += tempc*wwir + tempcp*wwir
             sumc2 += tempc2*wwir + tempcp2*wwir
-            if opacity !== nothing
+            if opacity !== nothing && !exact
                 opacity.emissivity[1, kl] += abund2*atmp2*ptmp[1]*ntot/K.fourpi
                 opacity.emissivity[2, kl] += abund2*atmp2*ptmp[2]*ntot/K.fourpi
             end
         end
         optmp = abund1*ntot*sgtp
-        if opacity !== nothing
+        if opacity !== nothing && !exact
             opacity.total[kl] += optmp
             opacity.continuum[kl] += optmp
         end
@@ -206,8 +207,94 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
         end
         kl += 1
     end
+    exact && opacity !== nothing && exact_edge_arrays!(opacity, epi, eth, ε, σ, K, bktm, rnist, ptmp, abund1, abund2, ntot, lfast)
     (; pirt=sumr, rrrt=sumi, piht=sumh*K.ergsev, rrcl=sumc*K.ergsev,
         piht2=sumh2*K.ergsev, rrcl2=sumc2*K.ergsev, opakab=opakab)
+end
+
+const gauss3_nodes = (-sqrt(3/5), 0.0, sqrt(3/5))
+const gauss3_weights = (5/9, 8/9, 5/9)
+const exact_exp_limit = 40.0            # the recombination emission is integrated up to this many kT above the threshold (e⁻⁴⁰ = 4×10⁻¹⁸)
+
+"""
+    exact_edge_arrays!(opacity, E, E_th, ε, σ, K, kT, rnist, ptmp, abund1, abund2, ntot, lfast)
+
+Adds the opacity and the recombination emissivity of an edge to the arrays of the continuum as their average over the cell of each bin of `E` (from the
+middle of the interval to the bin before to the middle of that to the one after, the weights of the trapezoid rule that integrates the arrays), not as the value at the
+grid points that XSTAR's `phint53` takes. The cross section is the table `σ(ε)` (linear between the points, as `phint53` integrates it, and zero outside), the emissivity
+`abund2 ntot ptmp rnist bb(E) σ(E) e^{-(E - E_th)/kT}`. The integrals of the arrays then conserve the energy and the absorption of the edge whatever the position of the threshold in a bin: with XSTAR's
+rule the recombination continuum of a K edge, which falls in about kT (9 eV at 10⁵ K) and is one or two bins wide at 999 bins, has an integral that is wrong by tens of percent (0.26 to 1.65 of the converged value
+for Ne X at 999 to 3000 bins).
+"""
+function exact_edge_arrays!(opacity, E, eth, ε, σ, K, kT, rnist, ptmp, abund1, abund2, ntot, lfast)
+    n, ntmp = length(E), length(ε)
+    (ntmp >= 2 && n >= 2) || return opacity
+    nodes = [eth + ε[j]*K.Ry_eV for j in 1:ntmp]
+    elo, ehi = nodes[1], min(nodes[ntmp], E[n])
+    elo < ehi || return opacity
+    cum = zeros(ntmp)                                  # the integral of the table up to each node
+    slope = zeros(ntmp)                                # and the slope of each segment (the table is linear between its points)
+    for j in 1:ntmp - 1
+        dx = nodes[j + 1] - nodes[j]
+        slope[j] = dx > 0 ? (σ[j + 1] - σ[j])/dx : 0.0
+        cum[j + 1] = cum[j] + (σ[j] + σ[j + 1])*dx/2
+    end
+    cell_lo(k) = k == 1 ? E[1] : (E[k - 1] + E[k])/2
+    cell_hi(k) = k == n ? E[n] : (E[k] + E[k + 1])/2
+    cell_of(x) = (k = clamp(searchsortedlast(E, x), 1, n - 1); x >= (E[k] + E[k + 1])/2 ? k + 1 : k)
+    kfirst, klast = cell_of(elo), cell_of(ehi)
+    # the opacity: the average of the table over each cell, from the integral up to its upper end (the nodes are passed once)
+    j = 1
+    low = max(cell_lo(kfirst), elo)
+    cum_low = cum[1] + σ[1]*(low - nodes[1]) + slope[1]*(low - nodes[1])^2/2         # (low is below the second node when it is the first cell: the first cell starts at the threshold)
+    while j < ntmp - 1 && nodes[j + 1] <= low
+        j += 1
+    end
+    cum_low = cum[j] + σ[j]*(low - nodes[j]) + slope[j]*(low - nodes[j])^2/2
+    scale = abund1*ntot
+    for k in kfirst:klast
+        hi = min(cell_hi(k), ehi)
+        while j < ntmp - 1 && nodes[j + 1] <= hi
+            j += 1
+        end
+        cum_hi = cum[j] + σ[j]*(hi - nodes[j]) + slope[j]*(hi - nodes[j])^2/2
+        if hi > low
+            κ = scale*(cum_hi - cum_low)/(cell_hi(k) - cell_lo(k))
+            opacity.total[k] += κ
+            opacity.continuum[k] += κ
+        end
+        low, cum_low = max(hi, low), cum_hi
+    end
+    lfast >= 2 || return opacity
+    abund2*ntot > 0 || return opacity
+    # the recombination emission: the integral over each cell of bb(E) σ(E) e^{-(E - E_th)/kT} (Gauss-Legendre of three points on pieces of at most kT), up to exact_exp_limit kT
+    ecut = min(ehi, eth + exact_exp_limit*kT)
+    elo < ecut || return opacity
+    coefficient = abund2*ntot*rnist*K.bb_coeff*2
+    j = 1
+    for k in cell_of(elo):cell_of(ecut)
+        a, bcell = max(cell_lo(k), elo), min(cell_hi(k), ecut)
+        sum = 0.0
+        while a < bcell
+            while j < ntmp - 1 && nodes[j + 1] <= a
+                j += 1
+            end
+            b = min(bcell, j < ntmp - 1 ? nodes[j + 1] : bcell, a + kT)
+            b > a || break
+            h, c = (b - a)/2, (a + b)/2
+            piece = 0.0
+            for i in 1:3
+                x = c + h*gauss3_nodes[i]
+                piece += gauss3_weights[i]*min(bb_energy_cap, x)^3*(σ[j] + slope[j]*(x - nodes[j]))*exp(-(x - eth)/kT)
+            end
+            sum += piece*h
+            a = b
+        end
+        average = coefficient*sum/(cell_hi(k) - cell_lo(k))
+        opacity.emissivity[1, k] += average*ptmp[1]
+        opacity.emissivity[2, k] += average*ptmp[2]
+    end
+    opacity
 end
 
 # what the integrals of a photoionization record give, kept for a series of cells of the same temperature, radiation, escape probabilities and
