@@ -48,7 +48,7 @@
         # by default the photoionization rates see no radiation: no photoionization, and the gas's own recombination
         cell = Radix.Cell(1.0, 1e3, 2e3, 1e4)
         E = Radix.xstar_energy_grid()
-        @test length(E) == 9999 && E[1] == 0.1 && 3.99e5 < E[9800] < 4.01e5 && 1.0e6 < E[end] < 1.01e6
+        @test length(E) == 10000 && E[1] == 0.1 && 3.99e5 < E[9800] < 4.01e5 && 1.0e6 < E[end] < 1.01e6
         @test Radix.NO_RADIATION.E == E && all(iszero, Radix.NO_RADIATION.F)
         p3 = Radix.ParPhotoIonize3(Int32(59), "p", Int32[1, 1, 0, 1, 7, 1, 7], f32[13.6, 10.0, 1.0e3, 1.0, 3.0, 1.0], table)
         @test Radix.rate(p3, cell).frate == 0

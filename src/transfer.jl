@@ -477,18 +477,18 @@ function step_thickness(opacity, E, L, dpthc, r, depth, ntot, column, emult, tau
 end
 
 """
-    slab(mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> powerlaw(E, α, L), ncn2=999, kw...)
+    slab(mixture, processes; density, column, logξ, luminosity, α=-1.0, spectrum=(E, L) -> powerlaw(E, α, L), ncn2=default_energy_bins, kw...)
     slab(mixture, processes; pressure, column, logξ, luminosity, ...)
     slab(mixture, processes; density, radexp, ...)
     slab(mixture, processes; density=DensityTable(path), column, luminosity, ...)
 
 A slab of gas of the `density` (cm⁻³) at the source distance, constant or `density (r/r₀)^radexp` for `radexp ≠ 0` (XSTAR's `radexp`), or a `DensityTable` (or the path of its file: XSTAR's `radexp < -99`, whose zones are at the distances of the table, the first at `r[1]` and `logξ` not needed), or the constant `pressure` (dyn cm⁻², `ConstantPressure`, XSTAR's `lcpres=1`: the density of each zone is `P/(k T)` at its temperature, `logξ` is then the logarithm of the ionization parameter of the pressure `Ξ`) and hydrogen column `column` (cm⁻²) illuminated by the power-law source `powerlaw(E, α, luminosity)` (erg s⁻¹) on XSTAR's energy grid
-of `ncn2` points (or the spectrum `spectrum(E, luminosity)`, e.g. `(E, L) -> blackbody(E, 0.5, L)`), at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `iterate` solves (its keywords
+of `ncn2` points (10000 by default: the continuum arrays and the transmitted spectrum are on this grid, and the balance on XSTAR's 999-bin grid whatever it is, so the cost hardly depends on it; the references of XSTAR have 999, `ncn2=999`) (or the spectrum `spectrum(E, luminosity)`, e.g. `(E, L) -> blackbody(E, 0.5, L)`), at the distance where the ionization parameter is `10^logξ` (`source_distance`): the run of XSTAR with `spectrum=pow trad=α` that `iterate` solves (its keywords
 `T` and `xee` of the first zone, `equilibrium`, `emult`, `taumax`, `steps` (`nsteps`), `vturb`, `lines`, ... go to it). Returns what `iterate` does and the energies `E`, the incident spectrum
 `incident`, the distance `r` and the `transmitted` spectrum of XSTAR's output, `incident × exp(-dpthcont)`.
 """
 function slab(mixture::Mixture, processes; density=nothing, pressure=nothing, radexp=0.0, column, logξ=nothing, luminosity, α=-1.0,
-        spectrum=(E, L) -> powerlaw(E, α, L), ncn2=999, kw...)
+        spectrum=(E, L) -> powerlaw(E, α, L), ncn2=default_energy_bins, kw...)
     (density === nothing) == (pressure === nothing) && throw(ArgumentError("give the density (constant density) or the pressure (constant pressure)"))
     density isa AbstractString && (density = DensityTable(density))
     density isa DensityTable || logξ !== nothing || throw(ArgumentError("give the ionization parameter `logξ` (only a `DensityTable` has the distance of its own)"))

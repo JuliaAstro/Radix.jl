@@ -200,7 +200,7 @@ function toy_transfer_tests()
             @test sum(Δ) ≈ 1e17 && all(>=(0), Δ)
             @test sum(Δ[1:end - 1])*1e4 < 1e21 <= sum(Δ)*1e4*(1 + 1e-12)           # the zones go on until the column is reached
             # another source
-            hot = Radix.slab(hmixture, processes; density=1e4, column=1e17, logξ=2.0, luminosity=1e35, spectrum=(E, L) -> Radix.blackbody(E, 0.5, L), T=1.0, iterate=false, diffuse=false)
+            hot = Radix.slab(hmixture, processes; ncn2=999, density=1e4, column=1e17, logξ=2.0, luminosity=1e35, spectrum=(E, L) -> Radix.blackbody(E, 0.5, L), T=1.0, iterate=false, diffuse=false)
             @test hot.incident == Radix.blackbody(hot.E, 0.5, 1e35) && hot.r ≈ sqrt(1e35/(1e2*1e4)) && hot.zones[1].radiation.F[10] ≈ Radix.map_spectrum(Radix.point_source(hot.E, hot.incident, hot.r)).F[10]
             # constant pressure: the density of each zone is P/(k T) at the temperature of the zone (here fixed), and the column adds up with it
             pressure = 1.38e-12*1e4*1.0                                          # n = 10⁴ at T = 1 (10⁴ K)
@@ -214,7 +214,7 @@ function toy_transfer_tests()
             hot = Radix.iterate(hmixture, Radix.ConstantPressure(pressure), processes, E, L; r=1e13, column=1e21, T=2.0, iterate=false, diffuse=false)
             @test all(z -> isapprox(z.ntot, 5e3; rtol=1e-6), hot.zones)
             @test sum(z.Δr for z in hot.zones) ≈ 1e21/5e3 rtol=1e-6        # half the density: twice the length for the column
-            @test_throws ArgumentError Radix.slab(hmixture, processes; column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false)
+            @test_throws ArgumentError Radix.slab(hmixture, processes; ncn2=999, column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false)
             @test Radix.source_distance_pressure(1e46, 10.0, 1e-7) ≈ sqrt(1e46/(Radix.constants().fourpi*Float64(2.99792458f10)*1e-7*10.0))
             # a density that varies as a power of the distance from the source (`radexp`): the density of a zone is that of its inner edge, and the column adds up with it
             d = Radix.PowerLawDensity(1e4, 1e13, -2.0)
@@ -228,10 +228,10 @@ function toy_transfer_tests()
             @test length(radial.zones) > 1
             @test_throws ArgumentError Radix.iterate(hmixture, d, processes, E, L; r=1e13, column=6.7e16, T=1.0, iterate=false, diffuse=false)      # (out of reach: the zones are at most r/2 thick and the density falls as r⁻²)
             @test radial.zones[end].ntot < 1e4
-            model = Radix.slab(hmixture, processes; density=1e4, radexp=-2.0, column=1e16, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false)
+            model = Radix.slab(hmixture, processes; ncn2=999, density=1e4, radexp=-2.0, column=1e16, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false)
             @test model.zones[1].ntot ≈ 1e4
             @test model.zones[end].ntot ≈ 1e4*(model.zones[end].r/model.r)^-2 rtol=1e-12
-            @test Radix.slab(hmixture, processes; density=1e4, radexp=0.0, column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false).zones[end].ntot == 1e4
+            @test Radix.slab(hmixture, processes; ncn2=999, density=1e4, radexp=0.0, column=1e21, logξ=2.0, luminosity=1e35, T=1.0, iterate=false, diffuse=false).zones[end].ntot == 1e4
             few = Radix.iterate(hmixture, 1e4, processes, E, L; r=1e13, column=1e21, steps=10, T=1.0, iterate=false, diffuse=false)
             @test few.zones[2].Δr == 1e12 && length(few.zones) > length(slab.zones)
             thin = Radix.iterate(hmixture, 1e4, processes, E, L; r=1e30, column=1e17, T=1.0, iterate=false, diffuse=false)
@@ -314,6 +314,46 @@ function toy_transfer_tests()
             flat = Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
             @test flat.zones[2].radiation.F == flat.zones[1].radiation.F
             @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
+        @testset "an edge in the bins of the continuum: the average of each cell, not the value at the grid points" begin
+            # the recombination continuum of a K edge falls in about kT (9 eV at 10⁵ K) and is one or two bins wide on a grid of 999 points, so XSTAR's value at the grid points
+            # (and its first bin at the nearest one to the threshold) gives an integral that depends on where the threshold falls in a bin (a factor 4 at 999 bins for the Ne X edge): `exact_binning`
+            K = Radix.constants()
+            ε = [0.0, 0.01, 0.05, 0.2, 1.0, 5.0, 30.0]                                  # Ry above the threshold
+            σ = 6e-19 ./ (1 .+ 8 .* ε).^3
+            eth, T, rnist, ptmp, abund, ntot = 1362.2, 10.0, 2e-3, (0.4, 0.6), (3e-5, 2e-5), 1e4
+            kT = K.kB_cgs*T*Radix.T_unit/K.ergsev
+            nodes = eth .+ ε .* K.Ry_eV
+            # the integral of the table and of the emission integrand on a very fine grid (the table is linear between its points)
+            fine(f) = sum(begin
+                    xs = range(nodes[j], min(nodes[j + 1], eth + 60kT); length=20001)
+                    nodes[j] >= eth + 60kT ? 0.0 : sum((f(xs[i], j) + f(xs[i + 1], j))/2*step(xs) for i in 1:20000)
+                end for j in 1:length(ε) - 1)
+            table(x, j) = σ[j] + (σ[j + 1] - σ[j])*(x - nodes[j])/(nodes[j + 1] - nodes[j])
+            absorption = sum((σ[j] + σ[j + 1])/2*(nodes[j + 1] - nodes[j]) for j in 1:length(ε) - 1)
+            emission = abund[2]*ntot*rnist*K.bb_coeff*2*fine((x, j) -> min(Radix.bb_energy_cap, x)^3*table(x, j)*exp(-(x - eth)/kT))
+            for n in (999, 2000, 3000, 10000)
+                E = Radix.xstar_energy_grid(n)
+                op = Radix.Opacity(n)
+                Radix.exact_edge_arrays!(op, E, eth, ε, σ, K, kT, rnist, ptmp, abund[1], abund[2], ntot, 2)
+                weights = [((k == n ? E[n] : (E[k] + E[k + 1])/2) - (k == 1 ? E[1] : (E[k - 1] + E[k])/2)) for k in 1:n]
+                @test sum(op.total .* weights) ≈ abund[1]*ntot*absorption rtol=1e-9
+                @test op.continuum == op.total
+                @test sum((op.emissivity[1, :] .+ op.emissivity[2, :]) .* weights) ≈ emission rtol=2e-4
+                @test sum(op.emissivity[2, :] .* weights)/sum(op.emissivity[1, :] .* weights) ≈ ptmp[2]/ptmp[1] rtol=1e-12
+                below = [k for k in 1:n - 1 if (E[k] + E[k + 1])/2 <= eth]                  # (the cells under the threshold have nothing, the one with it has the part above)
+                @test all(op.total[below] .== 0) && all(op.emissivity[:, below] .== 0) && all(op.emissivity .>= 0)
+            end
+            # XSTAR's rule does not conserve it: the integral of its values at the grid points changes with the grid by tens of percent
+            old = Radix.constants(Radix.Constants(K; exact_binning=false)) do
+                map((999, 2000, 3000)) do n
+                    E = Radix.xstar_energy_grid(n)
+                    op = Radix.Opacity(n)
+                    Radix.photoionization_integrals(Radix.Radiation(E, ones(n)), eth, ε, σ, T, rnist, ptmp; abund, ntot, lfast=2, opacity=op)
+                    sum(((op.emissivity[1, k] + op.emissivity[2, k] + op.emissivity[1, k + 1] + op.emissivity[2, k + 1])/2)*(E[k + 1] - E[k]) for k in 1:n - 1)
+                end
+            end
+            @test maximum(old)/minimum(old) > 1.1
+        end
         end
     end
 end
@@ -395,7 +435,7 @@ function transfer_balance_tests(db, known=nothing)
             @test thickrun.zones[1].fractions[2][2] ≈ slabab.he_ii[2] rtol=1e-4
             @test thickrun.zones[1].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[2] rtol=1e-4
             # the thickness of the zones of XSTAR's `step` (its log: log N = 20.26, 20.56, 20.74, 20.86, 20.95, 21.00 at the inner edges of the zones after the first two and at the end)
-            auto = Radix.slab(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false)
+            auto = Radix.slab(mixture, processes; ncn2=999, density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false)
             @test length(auto.zones) == 7 && auto.zones[1].Δr == 0
             @test auto.r ≈ r0 rtol=1e-6                              # the source of the reference run: E⁻¹ with the luminosity 10⁴⁶ erg/s
             @test auto.E ≈ Es rtol=1e-5
@@ -411,7 +451,7 @@ function transfer_balance_tests(db, known=nothing)
             @test auto.zones[end].fractions[findfirst(==(8), mixture.Z)][8] ≈ Float64(slabab.o_viii[end]) rtol=1e-3
             # three passes (`npass=3`: the outward optical depths of the lines and edges of the pass back from the outer edge): the ion fractions change by
             # 2.5% (He II in the first zone) to 0.2% and follow those of XSTAR in the change, which the escape probabilities of the outer side make
-            auto3 = Radix.slab(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false, passes=3)
+            auto3 = Radix.slab(mixture, processes; ncn2=999, density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, α=-1.0, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0, luminous=false, passes=3)
             pass3 = fits(joinpath(dir, "xout_abund1_npass3.fits"))[2].data
             @test auto3.passes == 3 && length(auto3.zones) == 7
             for k in 1:7
@@ -420,7 +460,7 @@ function transfer_balance_tests(db, known=nothing)
                 @test auto3.zones[k].fractions[2][2] ≈ Float64(pass3.he_ii[k]) rtol=4e-3
             end
             @test auto3.zones[1].fractions[2][2] < 0.98*auto.zones[1].fractions[2][2]
-            @test_throws ArgumentError Radix.slab(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, passes=2)
+            @test_throws ArgumentError Radix.slab(mixture, processes; ncn2=999, density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, passes=2)
             for k in 2:length(zones)
                 @test thickrun.zones[k].fractions[2][2] ≈ slabab.he_ii[k + 1] rtol=1.5e-3
                 @test thickrun.zones[k].fractions[findfirst(==(8), mixture.Z)][8] ≈ slabab.o_viii[k + 1] rtol=3e-4
@@ -445,7 +485,7 @@ function transfer_balance_tests(db, known=nothing)
         @slow "the luminosities of the lines and the recombination edges of the thick slab" begin
             # the zones of `slab` (the seven of XSTAR) with its table of the lines (`xout_lines1.fits`: emit_inward + emit_outward in 10³⁸ erg/s, for the lines above 10²) and the total of
             # its table of the recombination edges (`xout_rrc1.fits`, 6 MB, not kept): 807150.6. The run of the table has the hydrogen of the database of the package of XSTAR
-            slab = Radix.slab(mixture, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+            slab = Radix.slab(mixture, processes; ncn2=999, density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
             ionlabel = Dict(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion)
             label(ion, level) = strip(levels[(Int(ion), Int(level))].label)
             emission = Dict{Tuple{String, String, String}, Float64}()
@@ -560,10 +600,10 @@ function transfer_balance_tests(db, known=nothing)
                 @test Radix.gas_density(denseTable, 1.0, (denseTable.r[6] + denseTable.r[7])/2) ≈ (denseTable.n[6] + denseTable.n[7])/2
                 @test_throws ArgumentError Radix.DensityTable([2.0, 1.0], [1.0, 1.0])
                 denseO = findfirst(==(8), mixture.Z)
-                denseKw = (; luminosity=1e-3*1e38, α=-1.0, steps=2, emult=1.0, T=100.0, iterate=false, vturb=0.0, luminous=false)
+                denseKw = (; ncn2=999, luminosity=1e-3*1e38, α=-1.0, steps=2, emult=1.0, T=100.0, iterate=false, vturb=0.0, luminous=false)
                 # the column of 10¹⁸ cm⁻²: five zones, and the final calculation at the sixth line
                 denseRef = fits(joinpath(denseDir, "xout_abund1_column.fits"))[2].data
-                denseRun = Radix.slab(mixture, processes; density=denseFile, column=1e18, denseKw...)
+                denseRun = Radix.slab(mixture, processes; ncn2=999, density=denseFile, column=1e18, denseKw...)
                 @test length(denseRun.zones) == 6 && denseRun.r == denseTable.r[1]
                 @test [z.r - denseRun.r for z in denseRun.zones[1:5]] ≈ Float64.(denseRef.delta_r)[1:5] rtol=1e-5 atol=1e8
                 @test (denseRun.final.r - denseRun.r) ≈ Float64(denseRef.delta_r[6]) rtol=1e-5
@@ -578,7 +618,7 @@ function transfer_balance_tests(db, known=nothing)
                 @test denseRun.final.cooling ≈ 1.26292604e-15 rtol=3e-3
                 # the column of 10¹⁹ cm⁻² is more than the file has: the zones are its lines, and the end of the slab is the last
                 denseRef = fits(joinpath(denseDir, "xout_abund1_table.fits"))[2].data
-                denseRun = Radix.slab(mixture, processes; density=denseFile, column=1e19, denseKw...)
+                denseRun = Radix.slab(mixture, processes; ncn2=999, density=denseFile, column=1e19, denseKw...)
                 @test length(denseRun.zones) == 40 && denseRun.final.r == denseTable.r[end]
                 @test [z.r - denseRun.r for z in denseRun.zones] ≈ Float64.(denseRef.delta_r) rtol=1e-5 atol=1e8
                 @test [z.fractions[2][2] for z in denseRun.zones] ≈ Float64.(denseRef.he_ii) rtol=5e-3
@@ -595,7 +635,7 @@ function transfer_balance_tests(db, known=nothing)
                 oxygen = findfirst(==(8), mixture.Z)
                 for (name, spectrum, tolerance) in (("bbody", (E, L) -> Radix.blackbody(E, 0.5, L), 2e-3), ("brems", (E, L) -> Radix.thermal(E, 0.1, L), 6e-3))
                     sourcetable = fits(joinpath(@__DIR__, "reference", "xstar_sources", "thin_$(name)_abund1.fits"))[2].data
-                    sourcerun = Radix.slab(mixture, processes; density=1e4, column=1e17, logξ=2.0, luminosity=1e-3*1e38, spectrum, steps=2, emult=0.5, T=100.0, equilibrium=true, vturb=0.0, luminous=false)
+                    sourcerun = Radix.slab(mixture, processes; ncn2=999, density=1e4, column=1e17, logξ=2.0, luminosity=1e-3*1e38, spectrum, steps=2, emult=0.5, T=100.0, equilibrium=true, vturb=0.0, luminous=false)
                     sourcezone = sourcerun.zones[1]
                     @test sourcezone.T ≈ Float64(sourcetable.temperature[1]) rtol=tolerance
                     @test sourcezone.xee ≈ Float64(sourcetable.x_e[1]) rtol=1e-4
@@ -616,7 +656,7 @@ function transfer_balance_tests(db, known=nothing)
                 oxygen = findfirst(==(8), mixture.Z)
                 for (name, spectrum, rows, tolerance, front) in (("bbody", (E, L) -> Radix.blackbody(E, 0.5, L), 1:4, 4e-3, true), ("brems", (E, L) -> Radix.thermal(E, 0.1, L), 1:5, 7e-3, false))
                     sourcetable = fits(joinpath(@__DIR__, "reference", "xstar_sources", "thick_$(name)_abund1.fits"))[2].data
-                    sourcerun = Radix.slab(mixture, processes; density=1e4, column=1e19, logξ=2.0, luminosity=1e-3*1e38, spectrum, steps=2, emult=1.0, T=100.0, equilibrium=true, vturb=0.0, luminous=false)
+                    sourcerun = Radix.slab(mixture, processes; ncn2=999, density=1e4, column=1e19, logξ=2.0, luminosity=1e-3*1e38, spectrum, steps=2, emult=1.0, T=100.0, equilibrium=true, vturb=0.0, luminous=false)
                     sourcestates = [sourcerun.zones[1:end - 1]..., sourcerun.final]            # (XSTAR's table has no row for the last zone, the final calculation is its last)
                     @test length(sourcestates) == length(sourcetable.temperature)
                     @test [z.r - sourcerun.r for z in sourcestates] ≈ Float64.(sourcetable.delta_r) rtol=2e-4 atol=1e10
@@ -644,7 +684,7 @@ function transfer_balance_tests(db, known=nothing)
                 hhe_dir = joinpath(@__DIR__, "reference", "xstar_hhe")
                 hhemix = Radix.Mixture(db, levels; multiplier=Dict(Z => 0.0 for Z in 3:30))
                 hhemodel = Radix.Model(hhemix, processes, Dict{Int, String}(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion))
-                hherun = Radix.slab(hhemix, processes; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+                hherun = Radix.slab(hhemix, processes; ncn2=999, density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
                 hhelines = Radix.tables(hhemodel, hherun).lines
                 hhe_mine = Dict{Tuple{String, String, String}, Float64}()
                 for i in eachindex(hhelines.ion)
@@ -686,9 +726,9 @@ function transfer_balance_tests(db, known=nothing)
             if known !== nothing && known.name == "package"
                 p3dir = joinpath(@__DIR__, "reference", "xstar_thick_slab_npass3")
                 p3model = Radix.Model(mixture, processes, Dict{Int, String}(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion))
-                p3kw = (; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
-                p3one = Radix.tables(p3model, Radix.slab(mixture, processes; p3kw..., passes=1))
-                p3run = Radix.slab(mixture, processes; p3kw..., passes=3)
+                p3kw = (; ncn2=999, density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+                p3one = Radix.tables(p3model, Radix.slab(mixture, processes; ncn2=999, p3kw..., passes=1))
+                p3run = Radix.slab(mixture, processes; ncn2=999, p3kw..., passes=3)
                 p3res = Radix.tables(p3model, p3run)
                 p3sp = p3res.spectrum
                 p3cont = fits(joinpath(p3dir, "xout_cont1.fits"))[3].data
@@ -741,9 +781,9 @@ function transfer_balance_tests(db, known=nothing)
                 hcar_mix = Radix.Mixture(db, levels; multiplier=Dict(Z => 0.0 for Z in 3:30 if Z != 6 && Z != 18))
                 hcar_label = Dict{Int, String}(Int(r.ion) => lowercase(strip(r.label)) for r in db if r isa Radix.Ion)
                 hcar_model = Radix.Model(hcar_mix, processes, Dict{Int, String}(Int(r.ion) => strip(r.label) for r in db if r isa Radix.Ion))
-                hcar_kw = (; density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
-                hcar_one = Radix.slab(hcar_mix, processes; hcar_kw..., passes=1)
-                hcar_three = Radix.slab(hcar_mix, processes; hcar_kw..., passes=3)
+                hcar_kw = (; ncn2=999, density=1e4, column=1e21, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, iterate=false, vturb=0.0)
+                hcar_one = Radix.slab(hcar_mix, processes; ncn2=999, hcar_kw..., passes=1)
+                hcar_three = Radix.slab(hcar_mix, processes; ncn2=999, hcar_kw..., passes=3)
                 hcar_lines(run) = (t = Radix.tables(hcar_model, run).lines; d = Dict{Tuple{String, String, String}, Float64}(); for i in eachindex(t.ion); d[(strip(t.ion[i]), strip(t.lower[i]), strip(t.upper[i]))] = (t.emit_inward[i] + t.emit_outward[i])/1e38; end; d)
                 hcar_x(file) = (d = Dict{Tuple{String, String, String}, Float64}(); for line in readlines(joinpath(hcar_dir, file))[2:end]; f = split(line, ','); d[(f[1], f[2], f[3])] = parse(Float64, f[5]) + parse(Float64, f[6]); end; d)
                 hcar_r1, hcar_r3, hcar_x1, hcar_x3 = hcar_lines(hcar_one), hcar_lines(hcar_three), hcar_x("lines_npass1.csv"), hcar_x("lines_npass3.csv")
@@ -818,8 +858,12 @@ function transfer_balance_tests(db, known=nothing)
                 end
                 # XSTAR keeps the ten strongest edges and lines of each bin (`rank_per_bin`, 10 in the constants of `ucalc()` that these tests use): the continuum emission then depends on the number of bins
                 # (13% in the total from 999 to 30000 bins), and with the 1000 of the default constants it hardly does
-                n10total(n) = (E = Radix.xstar_energy_grid(n); L = Radix.powerlaw(E, -1.0, 1e8*1e38);
-                    run = Radix.iterate(mixture, 1e4, processes, E, L, n10zones; T=10.0, iterate=false, vturb=0.0, luminous=false); f = run.spectrum.inward_continuum; sum((f[i] + f[i + 1])/2*(E[i + 1] - E[i]) for i in 1:length(E) - 1))
+                n10total(n) = begin
+                    n10grid = Radix.xstar_energy_grid(n)
+                    n10run = Radix.iterate(mixture, 1e4, processes, n10grid, Radix.powerlaw(n10grid, -1.0, 1e8*1e38), n10zones; T=10.0, iterate=false, vturb=0.0, luminous=false)
+                    n10f = n10run.spectrum.inward_continuum
+                    sum((n10f[i] + n10f[i + 1])/2*(n10grid[i + 1] - n10grid[i]) for i in 1:length(n10grid) - 1)
+                end
                 n10xstar = n10total(999), n10total(10000)
                 n10converged = Radix.constants(Radix.Constants(Radix.constants(); rank_per_bin=Radix.converged_rank_per_bin)) do
                     n10total(999), n10total(10000)
@@ -862,7 +906,7 @@ function transfer_balance_tests(db, known=nothing)
             # test/reference/xstar_const_pressure: `lcpres=1 pressure=1e-7`, log Ξ = 1, 10²¹ cm⁻² (the thick slab at a pressure instead of a density): r = 1.62965×10²⁰ cm, the first zone at
             # T = 10.4611 and n = 6927 (the database of the package of XSTAR: 10.4574 and 6929 here, 0.04% and 0.03%; the one of the tree has other hydrogen records)
             pressure = 1e-7
-            cp = Radix.slab(mixture, processes; pressure, column=3e20, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, equilibrium=true, vturb=0.0, luminous=false)
+            cp = Radix.slab(mixture, processes; ncn2=999, pressure, column=3e20, logξ=1.0, luminosity=1e8*1e38, emult=1.0, taumax=5.0, steps=3, T=10.0, equilibrium=true, vturb=0.0, luminous=false)
             @test cp.r ≈ 1.62965e20 rtol=1e-5
             @test length(cp.zones) == 2 && cp.zones[1].Δr == 0
             @test all(z -> isapprox(z.ntot*1.38e-12*z.T, pressure; rtol=1e-6), cp.zones)          # n = P/(k T) at the temperature of each zone
