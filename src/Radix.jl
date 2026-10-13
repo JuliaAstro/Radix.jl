@@ -36,6 +36,7 @@ include("processes.jl")
 include("mixture.jl")
 include("transfer.jl")
 include("continuum.jl")
+include("saturation.jl")
 
 include("abundances.jl")
 include("model.jl")

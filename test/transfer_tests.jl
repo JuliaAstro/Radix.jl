@@ -314,6 +314,39 @@ function toy_transfer_tests()
             flat = Radix.iterate(hmixture, 1e4, processes, E, L, [(1e13, 1e17), (1e13, 1e17)]; T=1.0, iterate=false, attenuate=false)
             @test flat.zones[2].radiation.F == flat.zones[1].radiation.F
             @test run.zones[1].fractions[1][2] ≈ 1/3                                      # x₂ = 1/(1 + α nₑ) with α nₑ = 2
+        @testset "a saturated line in the bins: the profile inside the cell, not the mean opacity" begin
+            # a line narrower than a bin (the thermal width is 6×10⁻⁵ of the energy, the bin 1.6×10⁻² at 999 points) absorbs less than its mean opacity says when it is saturated:
+            # the transmission of the bin is the average of exp(-τ) over the bin, not exp of the average of τ. `resolved_transmission` gives the first
+            K = Radix.constants()
+            e0, a, S, Tline = 1500.0, 1e-3, 120.0, 1.0                         # a centre depth of S/√π ≈ 68, a hydrogen-like mass at 10⁴ K
+            dele = e0*K.thermal_speed/Radix.cm_per_km*sqrt(Tline)/(K.light_speed/Radix.cm_per_km)
+            profile(x) = S*Radix.voigt(x, a)/Radix.line_profile_norm
+            totals = Float64[]
+            for n in (999, 3000, 10000)
+                E = Radix.xstar_energy_grid(n)
+                rad = Radix.Radiation(E, zeros(n))
+                op = Radix.Opacity(n)
+                Radix.add_line!(op, rad, S, 0.0, 0.0, K.hc_eVÅ_single/e0, 0.0, Tline, 1.0, a*dele*K.fourpi; lfast=2)
+                absorbers = Radix.LineAbsorbers()
+                absorbers.index[(1, 1)] = 1
+                push!(absorbers.e0, e0); push!(absorbers.S, S); push!(absorbers.widths, S*dele); push!(absorbers.damping, S*a)
+                T = Radix.resolved_transmission(E, absorbers, zeros(n))
+                # the average of exp(-τ) over each cell, on a fine grid
+                cell(k) = (k == 1 ? E[1] : (E[k - 1] + E[k])/2, k == n ? E[n] : (E[k] + E[k + 1])/2)
+                k0 = argmin(abs.(E .- e0))
+                exact = map(k0 - 3:k0 + 3) do k
+                    lo, hi = cell(k)
+                    xs = range(lo, hi; length=40001)
+                    sum((exp(-profile((xs[i] - e0)/dele)) + exp(-profile((xs[i + 1] - e0)/dele)))/2 for i in 1:40000)/40000
+                end
+                @test T[k0 - 3:k0 + 3] ≈ exact atol=5e-3
+                weights = [((k == n ? E[n] : (E[k] + E[k + 1])/2) - (k == 1 ? E[1] : (E[k - 1] + E[k])/2)) for k in 1:n]
+                push!(totals, sum((1 .- T) .* weights))
+                n == 999 && @test abs(sum((1 .- exp.(-op.total)) .* weights)/totals[end] - 1) > 0.1           # (exp of the mean opacity of the bin is not the mean of exp)
+            end
+            @test maximum(totals)/minimum(totals) < 1.02                         # the equivalent width does not depend on the bins
+        end
+
         @testset "an edge in the bins of the continuum: the average of each cell, not the value at the grid points" begin
             # the recombination continuum of a K edge falls in about kT (9 eV at 10⁵ K) and is one or two bins wide on a grid of 999 points, so XSTAR's value at the grid points
             # (and its first bin at the nearest one to the threshold) gives an integral that depends on where the threshold falls in a bin (a factor 4 at 999 bins for the Ne X edge): `exact_binning`
@@ -862,14 +895,19 @@ function transfer_balance_tests(db, known=nothing)
                     n10grid = Radix.xstar_energy_grid(n)
                     n10run = Radix.iterate(mixture, 1e4, processes, n10grid, Radix.powerlaw(n10grid, -1.0, 1e8*1e38), n10zones; T=10.0, iterate=false, vturb=0.0, luminous=false)
                     n10f = n10run.spectrum.inward_continuum
-                    sum((n10f[i] + n10f[i + 1])/2*(n10grid[i + 1] - n10grid[i]) for i in 1:length(n10grid) - 1)
+                    n10w(f, lo, hi) = sum(((1 - f[i]) + (1 - f[i + 1]))/2*(n10grid[i + 1] - n10grid[i]) for i in 1:length(n10grid) - 1 if lo <= n10grid[i] < hi)
+                    (sum((n10f[i] + n10f[i + 1])/2*(n10grid[i + 1] - n10grid[i]) for i in 1:length(n10grid) - 1), n10w(n10run.transmission, 13.6, 54.0), n10w(exp.(-n10run.dpthc), 13.6, 54.0))
                 end
                 n10xstar = n10total(999), n10total(10000)
-                n10converged = Radix.constants(Radix.Constants(Radix.constants(); rank_per_bin=Radix.converged_rank_per_bin)) do
+                n10converged = Radix.constants(Radix.Constants(Radix.constants(); rank_per_bin=Radix.converged_rank_per_bin, exact_binning=true, resolved_lines=true)) do
                     n10total(999), n10total(10000)
                 end
-                @test abs(n10xstar[2]/n10xstar[1] - 1) > 0.04
-                @test abs(n10converged[2]/n10converged[1] - 1) < 0.02
+                @test abs(n10xstar[2][1]/n10xstar[1][1] - 1) > 0.04
+                @test abs(n10converged[2][1]/n10converged[1][1] - 1) < 0.02
+                # the equivalent width of the absorption of the slab in 14-54 eV with its lines: the mean opacity of the bins (exp(-dpthc), which XSTAR's transmitted spectrum with lines is) gives 2 to 3 times as much at 999 bins
+                # as at 10000, and the profiles of the lines inside the bins (`resolved_transmission`) 7%
+                @test n10converged[1][3]/n10converged[2][3] > 1.5
+                @test abs(n10converged[1][2]/n10converged[2][2] - 1) < 0.12
             else
                 @info "Skipping the test of the 10000 energy bins (it is for the database of the XSTAR package)"
             end

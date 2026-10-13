@@ -373,8 +373,11 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
     continuum_gas = Continuum(mixture, processes; nrank, lfast, vturb)
     dpthc = zeros(length(E))
     dpthcont = zeros(length(E))
+    dpthl = zeros(length(E))
     spectrum = Transmitted(L)
     luminosities = Luminosities(mixture)
+    absorbers = LineAbsorbers()
+    resolved = lines && constants().resolved_lines
     results = NamedTuple[]
     next_zone = zone_source(zones)
     final_r = nothing
@@ -407,11 +410,14 @@ function sweep(mixture::Mixture, ntot, processes, E, L, zones; T, equilibrium, x
             bremsstrahlung=zero(continuum.bremsstrahlung)), r, Δr; cfrac))
         push!(results, (; Base.structdiff(zone, (; memos=nothing))..., r, Δr, radiation, escape, opacity=continuum))   # (the integrals of the balance are not kept)
         add_zone!(depths, edges, Δr)
+        resolved && add_zone!(absorbers, continuum_gas, edges, zone.T, Δr)
         dpthc .+= continuum.total .* Δr
         dpthcont .+= continuum.continuum .* Δr
+        dpthl .+= continuum.lines .* Δr
     end
     final = isempty(results) ? nothing : final_zone(mixture, ntot, processes, results[end], depths, something(final_r, results[end].r + results[end].Δr); lfast, cfrac, kw...)
-    (; zones=results, final, depths, dpthc, dpthcont, spectrum, luminosities, vturb, inner, outer)
+    transmission = resolved ? resolved_transmission(E, absorbers, dpthc .- dpthl) : exp.(-dpthc)
+    (; zones=results, final, depths, dpthc, dpthcont, transmission, spectrum, luminosities, vturb, inner, outer)
 end
 
 # final_zone: XSTAR's final calculation at the end of the slab, a zone of no thickness at the distance where the last zone ends with its temperature and electron
