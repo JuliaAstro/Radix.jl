@@ -31,7 +31,7 @@ edges of each energy bin (by the edge energy of `rank_energy`) enter, and every 
 (`line_emissivities`) the lines are put in the bins too, as `linopac` does (`add_line!`): the `nrank` strongest lines of each bin, by their emissivity, enter. The recombination continua are emitted
 in the two directions with the `escape` probabilities of the depths of their edges (`escape_probabilities`; without them they are optically thin) and the damped photoionization with `cfrac`.
 
-Returns `(; total, continuum, emissivity, bremsstrahlung, edges)`: the two arrays of the opacity, `emissivity` (`rccemis`, 2 × n, per steradian: the recombination
+Returns `(; total, continuum, emissivity, bremsstrahlung, lines, edges)`: the two arrays of the opacity, `lines` (the part of `total` that the lines put in, the mean of each bin), `emissivity` (`rccemis`, 2 × n, per steradian: the recombination
 continua of the records called), `bremsstrahlung` (`brcems`: the `emissivity` of the processes, in all directions) and the number of records called.
 """
 struct Continuum{M<:Mixture, P, C<:NamedTuple}
@@ -120,7 +120,9 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
     for list in values(ranked), (_, k, j) in list
         chosen[k][j] = true
     end
+    before = copy(arrays.total)
     emissivities === nothing || add_lines!(arrays, continuum, balance, T, ntot, radiation, edges, emissivities)
+    lines = arrays.total .- before
     add_two_photon_continua!(arrays, continuum, balance, ntot, radiation)
     called = 0
     for k in eachindex(mixture.elements)
@@ -135,5 +137,5 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
         end
     end
     bremsstrahlung = sum((emissivity(process, E, T, balance.nₑ) for process in continuum.processes); init=zeros(length(E)))
-    (; total=arrays.total, continuum=arrays.continuum, emissivity=arrays.emissivity, bremsstrahlung, edges=called)
+    (; total=arrays.total, continuum=arrays.continuum, emissivity=arrays.emissivity, bremsstrahlung, lines, edges=called)
 end
