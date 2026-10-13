@@ -464,6 +464,7 @@ end
 Radix.constants!(Radix.Constants())
 include("forwarddiff_tests.jl")
 include("constants_tests.jl")
+include("compton_tests.jl")
 include("levels_tests.jl")
 toy_balance_tests()
 toy_mixture_tests()
