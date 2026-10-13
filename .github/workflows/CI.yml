@@ -61,7 +61,7 @@ jobs:
       - uses: julia-actions/cache@v3
       - name: Cache the atomic database
         id: atdb
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/atdb
           key: atdb-xstar-2.59j-${{ env.ATDB_BYTES }}
