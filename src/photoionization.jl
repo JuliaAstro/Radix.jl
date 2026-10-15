@@ -296,11 +296,14 @@ for Ne X at 999 to 3000 bins).
 function exact_edge_arrays!(opacity, E, eth, ε, σ, K, kT, rnist, ptmp, abund1, abund2, ntot, lfast)
     n, ntmp = length(E), length(ε)
     (ntmp >= 2 && n >= 2) || return opacity
-    nodes = [eth + ε[j]*K.Ry_eV for j in 1:ntmp]
+    nodes = scratch(:edge_nodes, ntmp)
+    for j in 1:ntmp
+        nodes[j] = eth + ε[j]*K.Ry_eV
+    end
     elo, ehi = nodes[1], min(nodes[ntmp], E[n])
     elo < ehi || return opacity
-    cum = zeros(ntmp)                                  # the integral of the table up to each node
-    slope = zeros(ntmp)                                # and the slope of each segment (the table is linear between its points)
+    cum = fill!(scratch(:edge_cum, ntmp), 0.0)         # the integral of the table up to each node
+    slope = fill!(scratch(:edge_slope, ntmp), 0.0)     # and the slope of each segment (the table is linear between its points)
     for j in 1:ntmp - 1
         dx = nodes[j + 1] - nodes[j]
         slope[j] = dx > 0 ? (σ[j + 1] - σ[j])/dx : 0.0
@@ -399,7 +402,9 @@ end
 memo_none!(memo, slot, opacity, index, result) = (memo !== nothing && opacity === nothing && !index && (memo.kind[slot] = 0x01); result)
 function memo_put!(memo::PhotoMemo, slot, nₑ, kind, init, final, r, eth, dE)
     nₑ > 0 || return nothing
-    memo.vals[:, slot] .= (nₑ, init, final, r.pirt, r.rrrt, r.piht, r.rrcl, r.piht2, r.rrcl2, r.opakab, eth, dE)
+    vals = memo.vals
+    vals[1, slot], vals[2, slot], vals[3, slot], vals[4, slot], vals[5, slot], vals[6, slot] = nₑ, init, final, r.pirt, r.rrrt, r.piht
+    vals[7, slot], vals[8, slot], vals[9, slot], vals[10, slot], vals[11, slot], vals[12, slot] = r.rrcl, r.piht2, r.rrcl2, r.opakab, eth, dE
     memo.kind[slot] = kind
     nothing
 end
@@ -730,10 +735,11 @@ function photoionization_integrals_hunt(rad::Radiation, E_th, ε, σ, T, swrat, 
     end
     nphint = min(nphint, ncn2)
 
-    done = falses(ncn2)
+    done = scratch(:hunt_done, ncn2, Bool)
+    fill!(done, false)
     W = promote_type(eltype(σ), eltype(ε), typeof(T), typeof(swrat), typeof(xnx), eltype(bremsa))
-    ansar1 = zeros(W, ncn2)
-    ansar2 = zeros(W, ncn2)
+    ansar1 = W === Float64 ? scratch(:hunt_cross_section, ncn2) : zeros(W, ncn2)           # (read only where `done` is set: not zeroed)
+    ansar2 = W === Float64 ? scratch(:hunt_emission, ncn2) : zeros(W, ncn2)
     nskp = ndelt
     sumr = sumh = sumh2 = sumc = sumc2 = sumi = 0.0
     tst1 = tst2 = tst3 = tst4 = 0.0
@@ -850,7 +856,7 @@ function photoionize_superlevel(coef, cell::Cell, tabulate; radiation=NO_RADIATI
     T = cell.T
     xnx = cell.nₑ
     rec, ε, xs = tabulate(T*T_unit, cell.ntot, ett/K.Ry_eV_coarse)   # (ucalc divides by 13.6)
-    σ = max.(xs*Mb, 0.0)
+    σ = scaled_table(xs, Mb, :super_sigma; floor=0.0)
     r = photoionization_integrals_hunt(radiation, ett, ε, σ, T, swrat, xnx)
     ans = if r.rrrt <= rrrt_floor
         (0.0, 0.0, 0.0, 0.0, r.piht2, r.rrcl2)

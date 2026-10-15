@@ -67,7 +67,7 @@ function rate(coef::CollisionSuper, cell::Cell; index=false)
     dE = Float64(b.E) - Float64(a.E)
     abs(dE) < supercoll_min_dE && return none
     T = max(cell.T*T_unit, K.T_floor_coeff*(dE + tiny)/K.hc_eVÅ_single)
-    logC = interpolate_super_table(Float64.(coef.ne_grid), Float64.(coef.T_grid), Float64.(coef.C), T,
+    logC = interpolate_super_table(as_float64(coef.ne_grid), as_float64(coef.T_grid), as_float64(coef.C), T,
         cell.ntot; guard=1e-36)
     cul = exp10(logC)
     xt = K.hc_over_k/Float64(coef.λ)/T

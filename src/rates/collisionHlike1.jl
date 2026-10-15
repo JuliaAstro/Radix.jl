@@ -59,7 +59,7 @@ function hlike_collision(coef, cell::Cell, index, second_form)
     dE = abs(Float64(up.E) - Float64(lo.E))
     dE <= hlike_min_dE && return none
     T = max(cell.T*T_unit, dE*T_unit/K.kT_eV/T_floor_dE_over_kT)
-    cijpp = hlike_upsilon(Float64.(coef.coeffs), T, second_form)
+    cijpp = hlike_upsilon(as_float64(coef.coeffs), T, second_form)
     gu, gl = Float64(up.g), Float64(lo.g)
     cji = K.collision_rate_coeff*cijpp/sqrt(cell.T)/(hlike_g_guard + gu)
     cij = cji*gu*expo(-dE/(K.kT_eV*cell.T))/(hlike_g_guard + gl)

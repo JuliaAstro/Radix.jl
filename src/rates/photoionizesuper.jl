@@ -46,12 +46,26 @@ table is scaled so that the Milne relation at `T` (K) with the threshold `E_th` 
 at 10⁶ Mb, and its tail below 10⁻⁶ of the first point is dropped. As in ucalc, the second tabulated
 log₁₀ density is limited to 8 and the density to the last tabulated one. Returns `rec`, `E_grid` and `σ`.
 """
+# the array `v` with the element `k` limited to `cap`, read only
+struct Capped{V<:AbstractVector{Float64}} <: AbstractVector{Float64}
+    parent::V
+    k::Int
+    cap::Float64
+end
+Base.size(v::Capped) = size(v.parent)
+Base.IndexStyle(::Type{<:Capped}) = IndexLinear()
+Base.@propagate_inbounds Base.getindex(v::Capped, i::Int) = i == v.k ? min(v.parent[i], v.cap) : v.parent[i]
+
+# log₁₀ α of the density `j` at the temperature `rte`, between the temperatures `it` and `it + 1` (a function and not a closure: the indices change, which a closure would box)
+@inline super_alpha_at(logα, logT, it, rte, j) = logα[it, j] + (logα[it + 1, j] - logα[it, j])/(logT[it + 1] - logT[it])*(rte - logT[it])
+
 function superlevel_cross_section(coef::PhotoionizeSuper, T, den, E_th)
-    logne = Float64.(coef.ne_grid)
-    logT = Float64.(coef.T_grid)
-    logα = Float64.(coef.logα)
-    nden, ntem = length(logne), length(logT)
-    nden > 1 && (logne[2] = min(logne[2], super_log_density_max))
+    ne_grid = as_float64(coef.ne_grid)
+    nden = length(ne_grid)
+    logne = (nden > 1 ? Capped(ne_grid, 2, super_log_density_max) : ne_grid)         # (the second tabulated log₁₀ density is limited, without changing the record)
+    logT = as_float64(coef.T_grid)
+    logα = as_float64(coef.logα)
+    ntem = length(logT)
     rne, rte = log10(den), log10(T)
 
     in = 1                                          # density interval
@@ -86,30 +100,29 @@ function superlevel_cross_section(coef::PhotoionizeSuper, T, den, E_th)
         end
     end
 
-    at(j) = logα[it, j] + (logα[it + 1, j] - logα[it, j])/(logT[it + 1] - logT[it])*(rte - logT[it])
-    rec = at(in)
+    rec = super_alpha_at(logα, logT, it, rte, in)
     if nden > 2 && 1 < in < nden
         x1, x2, x3 = logne[in - 1], logne[in], logne[in + 1]
-        y1, y2, y3 = at(in - 1), rec, at(in + 1)
+        y1, y2, y3 = super_alpha_at(logα, logT, it, rte, in - 1), rec, super_alpha_at(logα, logT, it, rte, in + 1)
         denom = (x1*x1 - x2*x2)*(x1 - x3) - (x1*x1 - x3*x3)*(x1 - x2)
         a = ((y1 - y2)*(x1 - x3) - (y1 - y3)*(x1 - x2))/denom
         b = -((y1 - y2)*(x1*x1 - x3*x3) - (y1 - y3)*(x1*x1 - x2*x2))/denom
         c = y1 - a*x1*x1 - b*x1
         rec = a*rne*rne + b*rne + c
     elseif nden > 1 && in < nden                    # (at the last density rne equals logne[in])
-        rec += (at(in + 1) - rec)/(logne[in + 1] - logne[in])*(rne - logne[in])
+        rec += (super_alpha_at(logα, logT, it, rte, in + 1) - rec)/(logne[in + 1] - logne[in])*(rne - logne[in])
     end
     rec = exp10(rec)
 
-    ε = Float64.(coef.E_grid)
-    xs = Float64.(coef.σ)
-    scale = rec/(milne_flat + milne_recombination(T, ε, xs, E_th))
-    xs = min.(xs.*scale, super_xs_cap)
+    ε = as_float64(coef.E_grid)
+    σ0 = as_float64(coef.σ)
+    scale = rec/(milne_flat + milne_recombination(T, ε, σ0, E_th))
+    xs = scaled_table(σ0, scale, :super_table; cap=super_xs_cap)
     last = length(xs)
     for i in eachindex(xs)
         xs[i] > xs[1]*super_xs_trim && (last = i)
     end
-    (rec, ε[1:last], xs[1:last])
+    (rec, view(ε, 1:last), view(xs, 1:last))
 end
 
 """

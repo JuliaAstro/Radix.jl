@@ -31,7 +31,7 @@ above 6×10⁴ K.
 function rate(coef::DielecRecombH, cell::Cell; index=false)
     none = (; init=1, final=0, frate=0., irate=0.)
     (index || cell.T > storey_T_max) && return none
-    a, b, c, d, e = Float64.(coef.coeffs[1:5])
+    a, b, c, d, e = ntuple(i -> Float64(coef.coeffs[i]), 5)
     T = cell.T
     dirt = storey_unit*(a/T + b + T*(c + T*d))*T^-1.5*expo(-e/T)
     (; init=1, final=0, frate=cell.nₑ*max(dirt, 0.0), irate=0.)

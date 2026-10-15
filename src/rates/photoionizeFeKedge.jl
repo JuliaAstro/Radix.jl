@@ -39,30 +39,33 @@ const fe_ion_offset = 114              # ucalc's charge is the ion index minus t
 const fe_threshold_fraction = 0.8      # the integral starts at this fraction of the edge energy
 
 """
-    pexs(nmin, zc, eion, far, gam, scal, E)
+    pexs(nmin, zc, eion, far, gam, scal, E, divisor=1, out)
 
 Photoabsorption cross section (cm², before the 1e-18) of a series of resonances converging
-on the K edge, on the energies `E` (Ry), after Palmeri et al. (XSTAR's `pexs`):
+on the K edge, on the energies `E/divisor` (Ry), after Palmeri et al. (XSTAR's `pexs`):
 `nmin` the lowest resonance, `zc` the effective charge, `eion` the edge energy (Ry), `far`
 the oscillator-strength scale, `gam` the resonance width and `scal` a scale factor.
 Returns `nothing` if `nmin ≥ 30`.
 """
-function pexs(nmin, zc, eion, far, gam, scal, E)
+function pexs(nmin, zc, eion, far, gam, scal, E, divisor=1.0, out=zeros(length(E)))
     pexs_pi = constants().pi_pexs
     nmin >= pexs_nmax && return nothing
-    x = zeros(pexs_nmax)
-    a = zeros(pexs_nmax)
+    xr = scratch(:fek_resonances, pexs_nmax)           # the energies and the strengths of the resonances
+    ar = scratch(:fek_strengths, pexs_nmax)
     nres = pexs_nmax
     for n in nmin:pexs_nmax
-        x[n] = -(zc/n)^2
-        a[n] = pexs_a_coeff*far*nmin^3/n^3
-        n > nmin && x[n] - x[n - 1] > gam/2 && (nres = n)
+        xr[n] = -(zc/n)^2
+        ar[n] = pexs_a_coeff*far*nmin^3/n^3
+        n > nmin && xr[n] - xr[n - 1] > gam/2 && (nres = n)
     end
-    xmin = x[nmin] - pexs_window*gam
-    xres = x[nres]
+    xmin = xr[nmin] - pexs_window*gam
+    xres = xr[nres]
     kdim = length(E)
-    e = E .- eion
-    axs = zeros(kdim)
+    e = scratch(:fek_energies, length(E))
+    for i in eachindex(E)
+        e[i] = E[i]/divisor - eion
+    end
+    axs = fill!(out, 0.0)
     jmin, jres, jmax = 1, kdim, kdim
     for i in 2:kdim
         e[i - 1] <= xmin && e[i] > xmin && (jmin = i - 1)
@@ -70,14 +73,18 @@ function pexs(nmin, zc, eion, far, gam, scal, E)
         e[i - 1] < 0 && e[i] >= 0 && (jmax = i - 1)
     end
     jmin == jmax && (jmax = jmin + 1)
-    for ii in nmin:pexs_nmax, jj in jmin:jres
-        axs[jj] += a[ii]/pexs_pi*gam/2/((e[jj] - x[ii])^2 + (gam/2)^2) +
-            a[ii]/pexs_pi*gam/2/((abs(e[jj]) - x[ii])^2 + (gam/2)^2)
+    for jj in jmin:jres                                # (each energy sums the resonances in the same order, in a local sum: the work arrays of the task may alias one another, which would keep the loop from being optimized)
+        ej, sum = e[jj], axs[jj]
+        for ii in nmin:pexs_nmax
+            sum += ar[ii]/pexs_pi*gam/2/((ej - xr[ii])^2 + (gam/2)^2) +
+                ar[ii]/pexs_pi*gam/2/((abs(ej) - xr[ii])^2 + (gam/2)^2)
+        end
+        axs[jj] = sum
     end
     for ij in jres + 1:jmax
         axs[ij] = axs[jres]
     end
-    scal .* axs
+    axs .*= scal
 end
 
 """
@@ -98,9 +105,10 @@ function rate(coef::PhotoionizeFeKedge, cell::Cell; radiation=NO_RADIATION, abun
     index && return (; none..., init=Int(coef.level), final=1)
     ett2 = Float64(coef.E_th)*K.Ry_eV_single
     σ = pexs(Int(coef.n), Float64(coef.ion - fe_ion_offset), Float64(coef.E_th),
-        Float64(coef.f), Float64(coef.γ), Float64(coef.scale), radiation.E ./ K.Ry_eV_single)
+        Float64(coef.f), Float64(coef.γ), Float64(coef.scale), radiation.E, K.Ry_eV_single, scratch(:fek_sigma, length(radiation.E)))
     σ === nothing && return none
-    r = photoionization_integrals_fo(radiation, ett2*fe_threshold_fraction, σ .* Mb,
+    σ .*= Mb
+    r = photoionization_integrals_fo(radiation, ett2*fe_threshold_fraction, σ,
         cell.T, 1.0, cell.nₑ; abund=abund, ntot=cell.ntot, lfast=1, opacity=opacity)
     (; init=Int(coef.level), final=1, frate=r.pirt, irate=0., fenergy=r.piht,
         ienergy=0., fenergy2=r.piht2, ienergy2=0., opacity=0.)

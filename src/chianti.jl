@@ -21,7 +21,7 @@ const chianti_e = 2.71828               # XSTAR's value of e in the kind-1 facto
 `p[4] = y(3/4)`, `p[5] = y(1)`, evaluated for `x` in (0, 1).
 """
 function splinem(p, x)
-    q = Float64.(p)
+    q = ntuple(i -> Float64(p[i]), 5)
     s2, s3, s4 = ntuple(k -> spline_stencil_scale[k]*spline_s*sum(spline_stencils[k] .* q), 3)
     segment = x <= spline_dx ? 1 : x <= 2spline_dx ? 2 : x <= 3spline_dx ? 3 : 4
     x0 = x - (segment - 0.5)*spline_dx
@@ -70,10 +70,13 @@ end
 # Natural cubic spline (prepspline/calcspline): second derivatives of the spline
 # through (x, y), then evaluation at xt. Outside the nodes the end segments are
 # extrapolated, as in XSTAR.
-function spline_second_derivatives(x, y)
+spline_second_derivatives(x, y) = spline_second_derivatives!(zeros(length(x)), zeros(length(x)), x, y)
+
+# (into the arrays `y2` and `u`, of the length of `x`)
+function spline_second_derivatives!(y2, u, x, y)
     n = length(x)
-    y2 = zeros(n)
-    u = zeros(n)
+    fill!(y2, 0.0)
+    fill!(u, 0.0)
     for i in 2:n - 1
         sig = (x[i] - x[i-1])/(x[i+1] - x[i-1])
         p = sig*y2[i-1] + 2.0
@@ -115,8 +118,9 @@ function chianti_upsilon(kind, ΔE, C, x::AbstractVector, Υ::AbstractVector, T)
     kte = T/ΔE/chianti_Ry_K
     kind in 1:6 || throw(ArgumentError("unknown transition type $kind"))
     xt = kind in (1, 4) ? 1 - log(C)/log(kte + C) : kte/(kte + C)
-    xs, ys = Float64.(x), Float64.(Υ)
-    sups = eval_spline(xs, ys, spline_second_derivatives(xs, ys), xt)
+    xs, ys = as_float64(x), as_float64(Υ)
+    y2 = spline_second_derivatives!(scratch(:spline_y2, length(xs)), scratch(:spline_u, length(xs)), xs, ys)
+    sups = eval_spline(xs, ys, y2, xt)
     kind == 1 && return sups*log(kte + exp(1.0))
     kind == 2 && return sups
     kind == 3 && return sups/(kte + 1)

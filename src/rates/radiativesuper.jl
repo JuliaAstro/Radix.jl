@@ -36,8 +36,8 @@ const superdecay_A_linear = 30.0          # a one-point table above this holds A
 
 # calt71: the Einstein A of the record at the conditions of the cell and its wavelength
 function superlevel_decay(coef::RadiativeSuper, T, den)
-    logne, logT = Float64.(coef.ne_grid), Float64.(coef.T_grid)
-    logA = Float64.(coef.A)
+    logne, logT = as_float64(coef.ne_grid), as_float64(coef.T_grid)
+    logA = as_float64(coef.A)
     nden, ntem = length(logne), length(logT)
     if nden == 1 && ntem == 1
         a = logA[1]

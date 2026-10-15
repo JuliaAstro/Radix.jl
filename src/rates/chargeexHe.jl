@@ -43,7 +43,7 @@ level of the recombined ion, `nlev`, the number of levels of the ion).
 function rate(coef::ChargeExHe, cell::Cell; index=false, nlev=0)
     T = cell.T
     two = coef.level != 0
-    init, final = two ? (coef.level, nlev + coef.parent.level - 1) : (1, nlev)
+    init, final = two ? (Int(coef.level), Int(nlev) + Int(coef.parent.level) - 1) : (1, Int(nlev))        # (the same types in both branches)
     index && return (; init, final, frate=0., irate=0.)
     res = cx_unit*coef.a*min(T, cxHe_Tmax)^coef.b*(1 + coef.c*expo(coef.d*T))
     irate = res*cell.nₕ*cxHe_fraction/(two ? cxHe_levels : 1)

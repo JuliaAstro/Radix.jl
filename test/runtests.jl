@@ -7,6 +7,7 @@ Radix.constants!(Radix.ucalc())
 
 include("slow.jl")
 include("ucalc_tests.jl")
+include("allocation_tests.jl")
 include("elements_tests.jl")
 include("mixture_tests.jl")
 include("heating_tests.jl")
