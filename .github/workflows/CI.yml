@@ -44,7 +44,7 @@ jobs:
     # the comparisons with XSTAR need its atomic database (875 MB, not in the repository): it is downloaded once and cached
     name: Julia 1 - the atomic database of XSTAR
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     permissions:
       actions: write
       contents: read
