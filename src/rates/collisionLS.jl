@@ -74,7 +74,7 @@ function helike_fit_collision(coef, cell::Cell, index, kind)
     (a === nothing || b === nothing) && return none
     lo, up = b.E < a.E ? (b, a) : (a, b)
     index && return (; none..., init=lo.level, final=up.level)
-    r = Float64.(coef.coeffs)
+    r = as_float64(coef.coeffs)
     T = cell.T*T_unit
     if kind == :ls
         E = abs(Float64(up.E) - Float64(lo.E))

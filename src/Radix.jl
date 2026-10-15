@@ -12,6 +12,7 @@ export powerlaw, blackbody, thermal, tabulated
 
 include("constants.jl")
 include("physical.jl")
+include("scratch.jl")
 include("atom.jl")
 include("cell.jl")
 include("ion.jl")

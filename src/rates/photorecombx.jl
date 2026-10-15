@@ -51,10 +51,24 @@ density column is used. log₁₀ T is limited to the table. Floating-point inpu
 precision as in `ucalc`; other number types (dual numbers) are kept, so the rate can be differentiated. The table is scaled so that the Milne relation at
 `T` (K) with the threshold `E_th` (Ry) gives `rec`. Returns `rec`, `E_grid` and `σ` (Mb).
 """
+# log₁₀ of the recombination coefficients that are above photorecombx_log_min (the others are already logarithms), read only
+struct LogRecombination{V<:AbstractMatrix{Float32}} <: AbstractMatrix{Float32}
+    parent::V
+end
+Base.size(v::LogRecombination) = size(v.parent)
+Base.IndexStyle(::Type{<:LogRecombination}) = IndexLinear()
+Base.@propagate_inbounds function Base.getindex(v::LogRecombination, i::Int)
+    a = v.parent[i]
+    a > photorecombx_log_min ? log10(a + photorecombx_floor) : a
+end
+
+@inline recomb_alpha_at(logα, temps, it, rte, j) = logα[j, it] + (logα[j, it + 1] - logα[j, it])/(temps[it + 1] - temps[it])*(rte - temps[it])
+
 function superlevel_cross_section(coef::PhotoRecombX, T, den, E_th)
-    dens, temps = Float32.(coef.ne_grid), Float32.(coef.T_grid)
+    dens, temps = as_type(Float32, coef.ne_grid), as_type(Float32, coef.T_grid)
     nden, ntem = length(dens), length(temps)
-    logα = map(a -> a > photorecombx_log_min ? log10(a + photorecombx_floor) : a, Float32.(coef.α))   # (nden, ntem)
+    α = as_type(Float32, coef.α)
+    logα = LogRecombination(α)                                    # (nden, ntem), on access
     rne, rte = log10(to_single(den)), log10(to_single(T))
 
     in = 1
@@ -73,18 +87,17 @@ function superlevel_cross_section(coef::PhotoRecombX, T, den, E_th)
         rte >= temps[i] && rte < temps[i + 1] && (it = i)
     end
 
-    at(j) = logα[j, it] + (logα[j, it + 1] - logα[j, it])/(temps[it + 1] - temps[it])*(rte - temps[it])
-    rec1 = at(in)
+    rec1 = recomb_alpha_at(logα, temps, it, rte, in)
     rr = rec1
     if in != nden && in > 1
-        rr = rec1 + (at(in + 1) - rec1)*(1/(dens[in + 1] - dens[in]))*(rne - dens[in])
+        rr = rec1 + (recomb_alpha_at(logα, temps, it, rte, in + 1) - rec1)*(1/(dens[in + 1] - dens[in]))*(rne - dens[in])
     end
     rec = exp10(rr)
 
-    ε = Float64.(coef.E_grid)
-    xs = Float64.(coef.σ)
+    ε = as_float64(coef.E_grid)
+    xs = as_float64(coef.σ)
     scale = rec/to_single(milne_recombination(T, ε, xs, E_th))
-    (to_double(rec), ε, xs.*to_double(scale))
+    (to_double(rec), ε, scaled_table(xs, to_double(scale), :super_table))
 end
 
 """

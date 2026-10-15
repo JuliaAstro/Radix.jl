@@ -95,14 +95,19 @@ function record_opacities(mixture::Mixture, balance, T, ntot; radiation=NO_RADIA
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
         opacity = zeros(length(el.rates))
         for (indices, records) in el.groups
-            for i in eachindex(records)
-                j = indices[i]
-                lo, up = el.lo[j], el.up[j]
-                density = x[lo]*ntot*abundance
-                opacity[j] = record_opacity(records[i], cell, density, (x[lo]*abundance, x[up]*abundance), radiation, lfast; vturb)
-            end
+            group_opacities!(opacity, indices, records, el, x, ntot, abundance, cell, radiation, lfast, vturb)       # (one dynamic dispatch for each type of record)
         end
         opacity
+    end
+end
+
+# the opacities of the records of a type group (`records` has one concrete type, so that the calls in the loop are type-stable and allocate nothing)
+function group_opacities!(opacity, indices, records, el, x, ntot, abundance, cell, radiation, lfast, vturb)
+    for i in eachindex(records)
+        j = indices[i]
+        lo, up = el.lo[j], el.up[j]
+        density = x[lo]*ntot*abundance
+        opacity[j] = record_opacity(records[i], cell, density, (x[lo]*abundance, x[up]*abundance), radiation, lfast; vturb)
     end
 end
 
@@ -120,18 +125,22 @@ function line_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
         el, x, abundance = mixture.elements[k], balance.populations[k], mixture.abundance[k]
         emissivity = fill((0.0, 0.0), length(el.rates))
         for (indices, records) in el.groups
-            for i in eachindex(records)
-                coef, j = records[i], indices[i]
-                coef.rtype == line_data_type || continue
-                lo, up = el.lo[j], el.up[j]
-                abund1, abund2 = x[lo]*ntot*abundance, x[up]*ntot*abundance
-                (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
-                ptmp = something(escape_of(element_escape(escape, k), j, coef), optically_thin)
-                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))[1]
-                emissivity[j] = (-abund2*ans3*ptmp[1]/(ptmp[1] + ptmp[2]), -abund2*ans3*ptmp[2]/(ptmp[1] + ptmp[2]))
-            end
+            group_line_emissivities!(emissivity, indices, records, el, x, ntot, abundance, cell, radiation, lfast, element_escape(escape, k), cfrac)
         end
         emissivity
+    end
+end
+
+function group_line_emissivities!(emissivity, indices, records, el, x, ntot, abundance, cell, radiation, lfast, escape, cfrac)
+    for i in eachindex(records)
+        coef, j = records[i], indices[i]
+        coef.rtype == line_data_type || continue
+        lo, up = el.lo[j], el.up[j]
+        abund1, abund2 = x[lo]*ntot*abundance, x[up]*ntot*abundance
+        (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
+        ptmp = something(escape_of(escape, j, coef), optically_thin)
+        ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac))[1]
+        emissivity[j] = (-abund2*ans3*ptmp[1]/(ptmp[1] + ptmp[2]), -abund2*ans3*ptmp[2]/(ptmp[1] + ptmp[2]))
     end
 end
 
@@ -149,19 +158,23 @@ function edge_emissivities(mixture::Mixture, balance, T, ntot; radiation=NO_RADI
         emissivity = fill((0.0, 0.0), length(el.rates))
         memo = memo_of_balance(balance, k)
         for (indices, records) in el.groups
-            for i in eachindex(records)
-                coef, j = records[i], indices[i]
-                (coef.rtype == edge_rate_type && coef isa opacity_edge_types) || continue
-                lo, up = el.lo[j], el.up[j]
-                abund1, abund2 = x[lo]*abundance, x[up]*abundance
-                (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
-                ptmp = something(escape_of(element_escape(escape, k), j, coef), optically_thin)
-                cache, slot = memo_of(memo, coef, j)
-                ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac, cache, slot))[1]
-                emissivity[j] = (ptmp[1]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot, ptmp[2]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot)
-            end
+            group_edge_emissivities!(emissivity, indices, records, el, x, ntot, abundance, cell, radiation, lfast, element_escape(escape, k), cfrac, memo)
         end
         emissivity
+    end
+end
+
+function group_edge_emissivities!(emissivity, indices, records, el, x, ntot, abundance, cell, radiation, lfast, escape, cfrac, memo)
+    for i in eachindex(records)
+        coef, j = records[i], indices[i]
+        (coef.rtype == edge_rate_type && coef isa opacity_edge_types) || continue
+        lo, up = el.lo[j], el.up[j]
+        abund1, abund2 = x[lo]*abundance, x[up]*abundance
+        (abund1 > line_abundance_min || abund2 > line_abundance_min) || continue
+        ptmp = something(escape_of(escape, j, coef), optically_thin)
+        cache, slot = memo_of(memo, coef, j)
+        ans3 = energies_of(coef, cell, (; radiation, lfast, pesc=ptmp[1] + ptmp[2], ptmp, cfrac, cache, slot))[1]
+        emissivity[j] = (ptmp[1]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot, ptmp[2]*abs(ans3)/(ptmp[1] + ptmp[2])*abund2*ntot)
     end
 end
 

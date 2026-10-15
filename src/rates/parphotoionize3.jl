@@ -90,7 +90,7 @@ function rate(coef::ParPhotoIonize3, cell::Cell; radiation=NO_RADIATION, abund=(
     E0, s0, ya, pp, yw = Float64(coef.E0), Float64(coef.σ0), Float64(coef.ya),
         Float64(coef.P), Float64(coef.yw)
     qq = ph3_qq_base + coef.l - pp/2
-    sg = zeros(ncn2)
+    sg = fill!(scratch(:fo_cross_section, ncn2), 0.0)
     for ll in nb1:ncn2 - numcon2
         xx = radiation.E[ll]/E0
         yyqq = exp(-min(ph3_exp_limit, max(-ph3_exp_limit, qq*log(max(ph3_floor, xx)))))

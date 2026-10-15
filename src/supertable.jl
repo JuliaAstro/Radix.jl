@@ -37,8 +37,11 @@ function interpolate_super_table(logne, logT, table, T, den; guard=0.0)
             break
         end
     end
-    at(j) = table[it, j] + (table[it + 1, j] - table[it, j])/(logT[it + 1] - logT[it] + guard)*(rte - logT[it])
-    rec = at(in)
-    in < nden && (rec += (at(in + 1) - rec)/(logne[in + 1] - logne[in] + guard)*(rne - logne[in]))   # (at the last density rne equals logne[in])
+    rec = super_table_at(table, logT, it, in, rte, guard)
+    in < nden && (rec += (super_table_at(table, logT, it, in + 1, rte, guard) - rec)/(logne[in + 1] - logne[in] + guard)*(rne - logne[in]))   # (at the last density rne equals logne[in])
     rec
 end
+
+# the value at the temperature `rte` of the column `j` of the table between the rows `it` and `it + 1`
+@inline super_table_at(table, logT, it, j, rte, guard) =
+    table[it, j] + (table[it + 1, j] - table[it, j])/(logT[it + 1] - logT[it] + guard)*(rte - logT[it])

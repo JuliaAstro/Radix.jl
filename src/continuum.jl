@@ -52,18 +52,24 @@ Continuum(mixture::Mixture, processes; nrank=constants().rank_per_bin, lfast=pho
 function record_catalog(mixture::Mixture)
     edges, lines, two_photon = Tuple{Int, Int, Float64}[], Tuple{Int, Int, Float64}[], Tuple{Int, Int}[]
     rated = [Tuple{Int, Bool}[] for _ in mixture.elements]
-    for k in eachindex(mixture.elements), (indices, records) in mixture.elements[k].groups, i in eachindex(records)
+    for k in eachindex(mixture.elements), (indices, records) in mixture.elements[k].groups
+        catalog_group!(edges, lines, two_photon, rated[k], k, indices, records)           # (one dynamic dispatch for each type of record)
+    end
+    (; edges, lines, two_photon, rated)
+end
+
+function catalog_group!(edges, lines, two_photon, rated, k, indices, records)
+    for i in eachindex(records)
         coef, j = records[i], indices[i]
         if coef.rtype == edge_rate_type && coef isa opacity_edge_types
             push!(edges, (k, j, rank_energy(coef)))
-            push!(rated[k], (j, false))
+            push!(rated, (j, false))
         elseif coef isa PhotoionizeDamp && coef.rtype == damp_rate_type
-            push!(rated[k], (j, true))
+            push!(rated, (j, true))
         end
         coef.rtype == line_data_type && hasproperty(coef, :λ) && push!(lines, (k, j, abs(Float64(coef.λ))))
         coef isa Union{AtomicLine2, TwoPhotonDecay} && coef.rtype == two_photon_data_type && push!(two_photon, (k, j))
     end
-    (; edges, lines, two_photon, rated)
 end
 
 # the lines in the bins: the `nrank` strongest of each bin by emissivity (rlbin with lopak = 0 over the lines of data type 4), each put in with `add_line!`

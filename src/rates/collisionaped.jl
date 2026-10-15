@@ -79,7 +79,7 @@ function rate(coef::CollisionAPED, cell::Cell; index=false)
     T = cell.T*T_unit
     (T < coef.T_min || T > coef.T_max) && return none
     χ = eij/aped_keV/(K.kB_keV*T)
-    υ = max(interpolate_aped(n, Float64.(coef.T_grid), Float64.(coef.Υ), T), 0.0)
+    υ = max(interpolate_aped(n, as_float64(coef.T_grid), as_float64(coef.Υ), T), 0.0)
     frate = irate = zero(υ)
     if χ < aped_max_chi
         frate = K.ups_coeff*υ*exp(-χ)/(sqrt(T)*Float64(a.g))*cell.nₑ

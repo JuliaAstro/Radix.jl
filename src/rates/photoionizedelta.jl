@@ -59,9 +59,13 @@ function rate(coef::PhotoionizeDelta, cell::Cell; radiation=NO_RADIATION, index=
     cont = get(levels, (coef.ion, nlev), nothing)
     (lo === nothing || cont === nothing) && return none
     xt = Float64(coef.E_inf)
-    x = Float64.(coef.E_grid)
-    hgh = Float64.(coef.f)
-    m = length(x)
+    m = length(coef.E_grid)
+    x = scratch(:delta_energies, m)                   # (the table as Float64, in work arrays: it is read many times)
+    hgh = scratch(:delta_strengths, m)
+    for i in 1:m
+        x[i] = Float64(coef.E_grid[i])
+        hgh[i] = Float64(coef.f[i])
+    end
     m == 0 && return none
 
     te = cell.T*T_unit*delta_kB
