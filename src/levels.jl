@@ -17,7 +17,12 @@ end
 Base.length(t::Levels) = length(t.levels)
 Base.iterate(t::Levels, args...) = iterate(t.levels, args...)
 Base.getindex(t::Levels, key) = t.levels[key]
-Base.get(t::Levels, key, default) = get(t.levels, key, default)
+# (the lookup is inlined and reads the value of the slot of the dictionary: `get` of a `Dict` returns a `Union` of the level and the default from a function that is not inlined, which Julia 1.12 boxes, 64 bytes at each lookup)
+@inline function Base.get(t::Levels, key, default)
+    d = t.levels
+    i = Base.ht_keyindex(d, key)
+    i < 0 ? default : @inbounds d.vals[i]
+end
 Base.haskey(t::Levels, key) = haskey(t.levels, key)
 Base.keys(t::Levels) = keys(t.levels)
 Base.values(t::Levels) = values(t.levels)

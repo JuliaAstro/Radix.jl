@@ -37,7 +37,7 @@ which is what `ucalc` puts in its energy output (it multiplies by the dimensionl
 function rate(coef::RadiativeProb, cell::Cell; index=false)
     levels = coef.levels
     K = constants()
-    none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
+    none = (; init=Int32(0), final=Int32(0), frate=0., irate=0., fenergy=0., ienergy=0.)
     a = get(levels, (coef.ion, coef.transition.lower), nothing)
     b = get(levels, (coef.ion, coef.transition.upper), nothing)
     (a === nothing || b === nothing) && return none
