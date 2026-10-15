@@ -132,7 +132,14 @@ function opacity(continuum::Continuum, balance, T, ntot, radiation::Radiation, e
             abund = (x[el.lo[j]]*abundance, x[el.up[j]]*abundance)
             # the recombination continua go in with the escape probabilities of their depths (`pescv` of `calc_emis_ion`), the damped photoionization of type 42 optically thin
             ptmp = always ? ((1 - cfrac)/2, (1 + cfrac)/2) : something(escape_of(element_escape(escape, k), j, el.rates[j]), optically_thin)
-            rate(el.rates[j], cell; radiation, abund, lfast, ptmp, opacity=arrays)
+            coef = el.rates[j]
+            if coef isa Union{PhotoRecombX, PhotoionizeSuper}
+                # (the superlevels do not fill the arrays: `photoionize_superlevel` takes no `opacity`)
+            elseif coef isa Union{ParPhotoIonize1, ParPhotoIonize2, PhotoionizeDamp}
+                rate(coef, cell; radiation, abund, lfast, ptmp, opacity=arrays, integrals=false)      # (the arrays do not need the integrals of the rates)
+            else
+                rate(coef, cell; radiation, abund, lfast, ptmp, opacity=arrays)
+            end
             called += 1
         end
     end

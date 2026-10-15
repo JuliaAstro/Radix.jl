@@ -71,11 +71,14 @@ function record_opacity(coef::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay
     r = rate(coef, cell; radiation, pesc=1.0, vturb)
     r.opacity*density
 end
-function record_opacity(coef::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoRecombX, PhotoionizeSuper}, cell::Cell,
+function record_opacity(coef::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3}, cell::Cell,
         density, abund, radiation, lfast; vturb=default_turbulence)
-    r = rate(coef, cell; radiation, abund, lfast, ptmp=optically_thin)
+    r = coef isa ParPhotoIonize3 ? rate(coef, cell; radiation, abund, lfast, ptmp=optically_thin) :
+        rate(coef, cell; radiation, abund, lfast, ptmp=optically_thin, integrals=false)          # (the opacity of an edge does not need the integrals of its rates)
     r.opacity
 end
+# the superlevels (types 70 and 99) have no opacity: `photoionize_superlevel` returns 0 after integrating the table over the radiation
+record_opacity(coef::Union{PhotoRecombX, PhotoionizeSuper}, cell::Cell, density, abund, radiation, lfast; vturb=default_turbulence) = 0.0
 
 """
     record_opacities(mixture, balance, T, ntot; radiation=NO_RADIATION, lfast=photoionization_lfast, vturb=default_turbulence)

@@ -347,6 +347,27 @@ function toy_transfer_tests()
             @test maximum(totals)/minimum(totals) < 1.02                         # the equivalent width does not depend on the bins
         end
 
+        @testset "two lines that overlap are one group: the equivalent width does not depend on the cell that holds them" begin
+            # He II Lyα is a doublet 0.7 meV apart with a width of 3 meV: with the equivalent width of each line added in a cell that has both the absorption was 36% too much at 10000 bins (cells of 60 meV),
+            # and right at 100000 (0.6 meV, the lines in different cells)
+            e0, dele, a, S = 40.81, 2.8e-3, 1.2e-3, 800.0
+            function doublet(n, lines)
+                E = Radix.xstar_energy_grid(n)
+                absorbers = Radix.LineAbsorbers()
+                for (i, de) in enumerate(lines)
+                    absorbers.index[(1, i)] = i
+                    push!(absorbers.e0, e0 + de); push!(absorbers.S, S); push!(absorbers.widths, S*dele); push!(absorbers.damping, S*a)
+                end
+                T = Radix.resolved_transmission(E, absorbers, zeros(n))
+                sum(((1 - T[i]) + (1 - T[i + 1]))/2*(E[i + 1] - E[i]) for i in 1:n - 1 if e0 - 3 <= E[i] < e0 + 3)
+            end
+            both = [doublet(n, (0.0, 7e-4)) for n in (999, 10000, 100000)]
+            @test maximum(both)/minimum(both) < 1.03
+            single, other = doublet(10000, (0.0,)), doublet(10000, (7e-4,))
+            @test both[2] < 0.95*(single + other)                     # (less than the sum: the lines are on top of each other)
+            @test both[2] > max(single, other)
+        end
+
         @testset "an edge in the bins of the continuum: the average of each cell, not the value at the grid points" begin
             # the recombination continuum of a K edge falls in about kT (9 eV at 10⁵ K) and is one or two bins wide on a grid of 999 points, so XSTAR's value at the grid points
             # (and its first bin at the nearest one to the threshold) gives an integral that depends on where the threshold falls in a bin (a factor 4 at 999 bins for the Ne X edge): `exact_binning`
@@ -417,6 +438,15 @@ function toy_transfer_tests()
             xtrap(r, lo, hi) = sum((r.F[i] + r.F[i + 1])/2*(r.E[i + 1] - r.E[i]) for i in 1:length(r.E) - 1 if lo <= r.E[i] && r.E[i + 1] <= hi)
             @test xtrap(xb, 10.0, 1e4) ≈ xtrap(xinc, 10.0, 1e4) rtol=2e-3
             @test Radix.average_spectrum(xinc, xa).F[2:end - 1] ≈ xinc.F[2:end - 1]          # (the cells at the ends are half as wide)
+            # the arrays and the opacity of the edge do not need the integrals of its rates (`integrals=false`, which the opacities of the zones use)
+            xg = Radix.xstar_energy_grid(999)
+            xr = Radix.point_source(xg, Radix.powerlaw(xg, -1.0, 1e38), 1e12)
+            xo1, xo2 = Radix.Opacity(999), Radix.Opacity(999)
+            xfull = Radix.photoionization_integrals(xr, 1362.2, xε, xσ, 10.0, 2e-3, (0.4, 0.6); abund=(3e-5, 2e-5), ntot=1e4, lfast=2, opacity=xo1)
+            xnone = Radix.photoionization_integrals(xr, 1362.2, xε, xσ, 10.0, 2e-3, (0.4, 0.6); abund=(3e-5, 2e-5), ntot=1e4, lfast=2, opacity=xo2, integrals=false)
+            @test xo1.total == xo2.total && xo1.emissivity == xo2.emissivity
+            @test xnone.opakab == xfull.opakab
+            @test xnone.pirt == 0 && xnone.rrrt == 0 && xfull.pirt > 0 && xfull.rrrt > 0
         end
         end
     end

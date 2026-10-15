@@ -56,7 +56,7 @@ const bb_energy_cap = 2e4            # eV; the Planck-like factor stops growing 
 const ph_exp_limit = 200.0           # recombination terms only while (E - E_th)/kT is below this
 
 """
-    photoionization_integrals(rad, E_th, ε, σ, T, rnist, ptmp; abund=(0, 0), ntot=0, lfast=1, opacity=nothing, buffer=nothing)
+    photoionization_integrals(rad, E_th, ε, σ, T, rnist, ptmp; abund=(0, 0), ntot=0, lfast=1, opacity=nothing, buffer=nothing, integrals=true)
 
 Photoionization rate `pirt`, recombination rate `rrrt`, and the energy-weighted
 `piht`, `rrcl` (erg s⁻¹, measured from zero) and `piht2`, `rrcl2` (measured from
@@ -66,10 +66,10 @@ threshold `E_th` in eV, `σ` in cm²) over the radiation field (XSTAR's `phint53
 probabilities (in the reverse and forward direction). The recombination terms need `lfast ≥ 2`. `buffer`, a `Vector{Float64}`,
 is used for the work array of the integral when the cross sections are `Float64`s (it grows as needed), instead of a new one. If `opacity` is given,
 the continuum opacity and recombination emissivity are added to it. Also returns
-`opakab`, the opacity of the first bins above the threshold.
+`opakab`, the opacity of the first bins above the threshold. With `integrals=false` the sums are not made (they are 0: with the exact binning they are the costly part, and the opacity of the arrays and `opakab` do not need them).
 """
 function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
-    abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing, buffer=nothing)
+    abund=(0.0, 0.0), ntot=0.0, lfast=1, opacity=nothing, buffer=nothing, integrals=true)
     K = constants()
     exact = K.exact_binning
 
@@ -210,6 +210,7 @@ function photoionization_integrals(rad::Radiation, E_th, ε, σ, T, rnist, ptmp;
     end
     exact && opacity !== nothing && exact_edge_arrays!(opacity, epi, eth, ε, σ, K, bktm, rnist, ptmp, abund1, abund2, ntot, lfast)
     if exact
+        integrals || return (; pirt=0.0, rrrt=0.0, piht=0.0, rrcl=0.0, piht2=0.0, rrcl2=0.0, opakab=opakab)
         x = exact_edge_rates(rad, nphint, eth, ε, σ, K, bktm, rnist, pesc, lfast)
         return (; pirt=x.pirt, rrrt=x.rrrt, piht=x.piht*K.ergsev, rrcl=x.rrcl*K.ergsev,
             piht2=x.piht2*K.ergsev, rrcl2=x.rrcl2*K.ergsev, opakab=opakab)
@@ -436,7 +437,7 @@ memory; here it is the continuum energy plus the energy of the parent level.
 """
 function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     ptmp=(0.5, 0.5), abund=(0.0, 0.0), lfast=1, opacity=nothing, index=false,
-    extrapolate=false, shifted=false, parent=true, rates_only=false, cache=nothing, slot=0)
+    extrapolate=false, shifted=false, parent=true, rates_only=false, cache=nothing, slot=0, integrals=true)
     if cache !== nothing && opacity === nothing && !index
         hit = memo_get(cache, slot, cell.nₑ)
         hit === nothing || return hit
@@ -486,7 +487,7 @@ function photoionize_level(coef, cell::Cell; radiation=NO_RADIATION,
     ethtmp = shifted ? max(0.0, eth - Float64(cont.E)) : 0.0
     rnist = rnissel*exp(-max(0.0, ethtmp + K.Ry_eV*ε0)/K.kT_eV/T)/(rnisseu_floor + 1)
     r = photoionization_integrals(radiation, eth, ε, σ, T, rnist, ptmp;
-        abund=abund, ntot=cell.ntot, lfast=lfast, opacity=opacity, buffer=buffers.sgbar)
+        abund=abund, ntot=cell.ntot, lfast=lfast, opacity=opacity, buffer=buffers.sgbar, integrals)
 
     rates_only && return (; none..., init=idest1, final=idest2, frate=r.pirt,
         opacity=r.opakab)
