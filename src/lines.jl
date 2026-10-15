@@ -114,6 +114,8 @@ function add_line!(opacity::Opacity, radiation::Radiation, optpp, rcem1, rcem2, 
         return opacity
     end
 
+    K.exact_binning && return add_line_exact!(opacity, E, optpp, e0, dele, aasmall)
+
     buffers = line_buffers()
     etpp, optpp2 = buffers.energy, buffers.opacity
     e00 = E[ml1]
@@ -175,6 +177,80 @@ function add_line!(opacity::Opacity, radiation::Radiation, optpp, rcem1, rcem2, 
                 end
             end
             opsum = sume = 0.0
+        end
+    end
+    opacity
+end
+
+const line_exact_core = 100.0             # exact binning: the profile is sampled up to this many Doppler widths from the centre, and the Lorentzian wing beyond is integrated over the cells
+const line_exact_step = 0.5               # ... in pieces of this many widths up to 4 widths and of line_exact_growth - 1 of the distance beyond
+const line_exact_core_inner = 4.0
+const line_exact_growth = 1.1
+const line_exact_wing_cut = 1e-10         # ... and the wing is followed to the distance where its opacity is this fraction of the opacity at the centre (the integral of what is beyond is 2a/(π v) = 2×10⁻⁵ a⁰·⁵ of the line)
+const line_exact_norm = sqrt(π)           # the normalization of the profile: linopac's 1.772 loses 2.6×10⁻⁴
+
+"""
+    add_line_exact!(opacity, E, optpp, e0, dele, a)
+
+The opacity `optpp H(a, v)/√π` of the line of the centre `e0` (eV), the Doppler width `dele` (eV) and the damping parameter `a`, averaged over the cell of each bin (from the middle of the interval to the bin before to the
+middle of that to the one after, the weights of the trapezoid rule, as the edges of `exact_binning` are), added to `opacity.total`: the integral of what it puts in is `optpp dele` (less the wing beyond `line_exact_wing_cut`), the cells are
+integrated and not sampled. The core (`line_exact_core` widths) is integrated cell by cell (the pieces end at the edges of the cells) with Gauss-Legendre rules of three points up to 4 widths and two beyond; the wing beyond it is the Lorentzian `a/(π(a² + v²))`, whose integral over a cell is an arctangent.
+`linopac`, which this replaces with `exact_binning`, samples the profile at 20000 points of a grid around the line whatever its width (the loop's test of its end is never met), 100 times as many as this takes, and puts the mean of the interval
+before each bin in it.
+"""
+function add_line_exact!(opacity::Opacity, E::AbstractVector, optpp, e0, dele, a)
+    n = length(E)
+    (E[1] < e0 < E[n] && dele > 0) || return opacity
+    total = opacity.total
+    cell_lo(k) = k == 1 ? E[1] : (E[k - 1] + E[k])/2
+    cell_hi(k) = k == n ? E[n] : (E[k] + E[k + 1])/2
+    cell_of(x) = (k = clamp(searchsortedlast(E, x), 1, n - 1); x >= (E[k] + E[k + 1])/2 ? k + 1 : k)
+    φ(x) = (a > line_damping_voigt ? voigt(x, a) : exp(-x*x))/line_exact_norm
+    scale = optpp*dele
+    k0 = cell_of(e0)
+    xcore = line_exact_core
+    for side in (-1, 1)
+        # the core: pieces of the distance x from the centre (in widths) that end at the next step of the grid of x (0.5 up to 4 widths, 10% of x beyond) or at the edge of the cell, with Gauss-Legendre
+        # of three points up to 4 widths (the Gaussian) and of two beyond
+        k = k0
+        xedge = side > 0 ? (cell_hi(k) - e0)/dele : (e0 - cell_lo(k))/dele
+        x = 0.0
+        while x < xcore && 1 <= k <= n
+            xgrid = x < line_exact_core_inner ? (floor(x/line_exact_step) + 1)*line_exact_step : x*line_exact_growth
+            xn = min(xgrid, xedge, xcore)
+            h = (xn - x)/2
+            c = (xn + x)/2
+            piece = 0.0
+            if x < line_exact_core_inner
+                for q in 1:3
+                    piece += gauss3_weights[q]*φ(c + h*gauss3_nodes[q])
+                end
+            else
+                g = 1/sqrt(3)
+                piece = φ(c - h*g) + φ(c + h*g)
+            end
+            total[k] += scale*piece*h/(cell_hi(k) - cell_lo(k))
+            x = xn
+            if x >= xedge
+                k += side
+                (1 <= k <= n) && (xedge += (cell_hi(k) - cell_lo(k))/dele)
+            end
+        end
+        # the Lorentzian wing, cell by cell, from the end of the core to where it is negligible
+        xwing = max(xcore, sqrt(a/(π*line_exact_wing_cut)))
+        Ewing = e0 + side*dele*xwing
+        (a > 0 && xwing > xcore) || continue
+        Estart = e0 + side*dele*xcore
+        kstart = cell_of(Estart)
+        kend = clamp(cell_of(Ewing), 1, n)
+        for k in (side > 0 ? (kstart:kend) : (kstart:-1:kend))
+            lo, hi = cell_lo(k), cell_hi(k)
+            xa = side > 0 ? max(lo, Estart) : max(lo, Ewing)                  # energies of the part of the cell inside [Estart, Ewing]
+            xb = side > 0 ? min(hi, Ewing) : min(hi, Estart)
+            xb > xa || continue
+            va, vb = (side > 0 ? ((xa - e0)/dele, (xb - e0)/dele) : ((e0 - xb)/dele, (e0 - xa)/dele))       # distances from the centre in widths, va < vb
+            integral = vb - va < 0.02*va ? (vb - va)*a/(π*(a*a + ((va + vb)/2)^2)) : (atan(vb/a) - atan(va/a))/π       # (midpoint rule where the cell is narrow against its distance)
+            total[k] += scale*integral/(hi - lo)
         end
     end
     opacity

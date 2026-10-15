@@ -81,6 +81,52 @@ function lines_tests()
             end
         end
 
+        @testset "the exact binning of a line: the average over each cell, integrated" begin
+            # `linopac` samples the profile at 20000 points of a grid around the line whatever its width and puts the mean of the interval before each bin in it (a sum that is
+            # off by up to 0.8% and has a half bin shift); `exact_binning` integrates the profile over the cell of each bin, in about a microsecond: the core with Gauss-Legendre,
+            # the Lorentzian wing with arctangents
+            K = Radix.constants()
+            @test K.exact_binning
+            for n in (999, 10000)
+                Eg = Radix.xstar_energy_grid(n)
+                radg = Radix.Radiation(Eg, zeros(n))
+                lo(k) = k == 1 ? Eg[1] : (Eg[k - 1] + Eg[k])/2
+                hi(k) = k == n ? Eg[n] : (Eg[k] + Eg[k + 1])/2
+                for (elin, T, delea, mass, optpp) in ((12.0, 10.0, 1e-6, 16.0, 1e-3), (25.0, 1.0, 1e-3, 1.0, 1e5), (1.9, 10.0, 0.5, 20.0, 10.0), (1.5, 1000.0, 5e-4, 56.0, 1.0))
+                    opacity = Radix.Opacity(n)
+                    Radix.add_line!(opacity, radg, optpp, 0.0, 0.0, elin, 1.0, T, mass, delea)
+                    e0 = K.hc_eVÅ_single/elin
+                    c = K.light_speed/Radix.cm_per_km
+                    dele = sqrt((e0*K.thermal_speed/Radix.cm_per_km*sqrt(T/mass)/c)^2 + (e0/c)^2)
+                    a = delea/(Radix.line_damping_floor + dele)/K.fourpi
+                    # what goes in is the integral of the profile, optpp dele
+                    @test sum(opacity.total[k]*(hi(k) - lo(k)) for k in 1:n) ≈ optpp*dele rtol=1e-4
+                    # and each cell has the mean of the profile over it (Simpson's rule, with the same Voigt function)
+                    k0 = searchsortedlast(Eg, e0)
+                    peak = maximum(opacity.total)
+                    for k in max(1, k0 - 50):min(n, k0 + 50)
+                        m = 400
+                        xs = range(lo(k), hi(k); length=m + 1)
+                        f(e) = optpp*Radix.voigt(abs(e - e0)/dele, a)/sqrt(π)
+                        ref = sum((f(xs[i]) + 4f((xs[i] + xs[i + 1])/2) + f(xs[i + 1]))/6*(xs[i + 1] - xs[i]) for i in 1:m)/(hi(k) - lo(k))
+                        ref > 1e-5*peak && @test opacity.total[k] ≈ ref rtol=2e-3
+                    end
+                end
+            end
+            # the total of the two rules differs by the sampling of `linopac` (1%)
+            Eg = Radix.xstar_energy_grid(999); radg = Radix.Radiation(Eg, zeros(999))
+            area(K) = Radix.constants(K) do
+                opacity = Radix.Opacity(999)
+                Radix.add_line!(opacity, radg, 1.0, 0.0, 0.0, 12.0, 1.0, 10.0, 16.0, 1e-6)
+                sum(opacity.total[k]*((k == 999 ? Eg[k] : (Eg[k] + Eg[k + 1])/2) - (k == 1 ? Eg[1] : (Eg[k - 1] + Eg[k])/2)) for k in 1:999)
+            end
+            @test area(K) ≈ area(Radix.ucalc()) rtol=2e-2
+            # a line outside the grid adds nothing
+            none = Radix.Opacity(999)
+            Radix.add_line!(none, radg, 1.0, 0.0, 0.0, 12398.4016/Eg[1]*2, 1.0, 1.0, 1.0, 0.0)
+            @test all(==(0), none.total)
+        end
+
         @testset "the natural width of a line" begin
             f32 = Float32
             lv(level, E, g) = Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, level, 5], f32[E, g, 1, 13.6])
