@@ -66,7 +66,7 @@ rates times ΔE. The first level of the record is the lower one whatever the ene
 function rate(coef::CollisionAPED, cell::Cell; index=false)
     levels = coef.levels
     K = constants()
-    none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
+    none = (; init=Int32(0), final=Int32(0), frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper
     index && return (; none..., init=i1, final=i2)
     n = Int(coef.kind) - aped_interpolated_electron

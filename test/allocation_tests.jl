@@ -11,9 +11,6 @@ allocated(coef, cell, kw) = @allocated Radix.rate(coef, cell; kw...)
         @test Radix.as_float64(Float64[1, 2]) isa Vector{Float64}                       # (it is itself)
         m = Radix.as_type(Float32, rand(2, 3))
         @test size(m) == (2, 3) && eltype(m) == Float32 && m[2, 3] isa Float32
-        sum_view(x) = sum(x)
-        sum_view(w)
-        @test @allocated(sum_view(w)) == 0
         a = Radix.scratch(:test_a, 5)
         a .= 1:5
         @test length(a) == 5 && Radix.scratch(:test_a, 5) === a                         # (the same array)

@@ -57,7 +57,7 @@ function rate(coef::CollisionSuper, cell::Cell; index=false)
     levels = coef.levels
     nlev = nlevels(levels, coef.ion)
     K = constants()
-    none = (; init=0, final=0, frate=0., irate=0., fenergy=0., ienergy=0.)
+    none = (; init=Int32(0), final=Int32(0), frate=0., irate=0., fenergy=0., ienergy=0.)
     i1, i2 = coef.transition.lower, coef.transition.upper
     index && return (; none..., init=i1, final=i2)
     (i1 <= 0 || i1 > nlev || i2 <= 0 || i2 > nlev || i1 == i2) && return none
