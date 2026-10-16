@@ -38,8 +38,8 @@ function ucalc_radiation(c)
 end
 
 # the parent ion of the photoionization records (position among the integers)
-parent_ion(c) = c.ints[c.ndesc == 59 ? 5 : c.ndesc in (70, 99) ? 9 : 6]
-parent_level(c) = c.ints[c.ndesc == 59 ? 4 : c.ndesc in (70, 99) ? 8 : 5]
+parent_ion(c) = c.ints[c.ndesc in (52, 59) ? 5 : c.ndesc in (70, 99) ? 9 : 6]
+parent_level(c) = c.ints[c.ndesc in (52, 59) ? 4 : c.ndesc in (70, 99) ? 8 : 5]
 
 function ucalc_inputs(c)
     t, xpx, xee, xh0 = c.cond[1:4]
@@ -49,7 +49,7 @@ function ucalc_inputs(c)
         for v in c.lv]
     # photoionization leaving an excited level of the next ion: its weight and energy (the
     # driver gets them as kpar, gpar, epar)
-    if c.ndesc in (49, 53, 59, 70, 99) && c.rad[5] > 1
+    if c.ndesc in (49, 52, 53, 59, 70, 99) && c.rad[5] > 1
         push!(recs, Radix.AtomicLevel(Int32(13), "", Int32[1, 2, 0, 1, c.rad[5], parent_ion(c)],
             Float32[c.rad[7], c.rad[6], 1, 0]))
     end
@@ -60,9 +60,9 @@ function ucalc_inputs(c)
 end
 
 # `expected(o)` maps the ucalc outputs onto the named fields Radix returns
-function check_ucalc(name; call, expected, rtol=1e-5, atol=0)
+function check_ucalc(name; call, expected, rtol=1e-5, atol=0, skip=0, select=c -> true)
     n = 0
-    for (c, o) in ucalc_cases(name)
+    for (c, o) in Iterators.filter(co -> select(first(co)), Iterators.drop(ucalc_cases(name), skip))
         coef, cell, levels = ucalc_inputs(c)
         got = call(coef, cell, levels, c)
         for (k, v) in pairs(expected(o, c))
@@ -144,6 +144,9 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     end
     @testset "type 56 ElectronImpact1" begin
         @test check_ucalc("type56"; call=level_call, expected=with_energy) == 100
+        # the block of ucalc for type 101 (SPEX collision strengths "similar to 56") is a copy of that of type 56: the driver gives the same output for the 100 cases of type 56 with
+        # the type changed to 101, so they are the same rate
+        @test Radix.ratemap[101] === Radix.ElectronImpact1
     end
     @testset "type 60 and 62 CollisionHlike1 and 2" begin
         # the "hot" fixtures reach 1e9 K and more, where the scaled temperature is fixed
@@ -169,7 +172,7 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     photo_expected = (o, c) -> merge((; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4],
             init=o[7], final=o[8], opacity=o[11], sum_total=o[12], sum_continuum=o[13],
             sum_em1=o[14], sum_em2=o[15]),
-        parent_level(c) == 1 || c.ndesc == 59 ? (; ienergy2=-o[5], fenergy2=-o[6]) : ())
+        parent_level(c) == 1 || c.ndesc in (52, 59) ? (; ienergy2=-o[5], fenergy2=-o[6]) : ())
     @testset "type 49 ParPhotoIonize1" begin
         @test check_ucalc("type49"; call=photo_call, expected=photo_expected, rtol=5e-6, atol=1e-100) == 96
     end
@@ -178,6 +181,10 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
     end
     @testset "type 59 ParPhotoIonize3" begin
         @test check_ucalc("type59"; call=photo_call, expected=photo_expected, rtol=1e-6, atol=1e-100) == 100
+    end
+    @testset "type 52 ParPhotoIonize3" begin
+        # the code of ucalc for type 52 is that of 59 ("same as 59 but rate type 7"): the cases of type 59 with the rate type 7 (the recombination continuum of the records of rate type 1 is not made)
+        @test check_ucalc("type52"; call=photo_call, expected=photo_expected, rtol=1e-6, atol=1e-100) == 100
     end
     @testset "types 66, 68 and 69: He-like collision fits" begin
         for (name, n) in (("type66", 24), ("type68", 208), ("type69", 480))
@@ -228,6 +235,17 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
             expected=(o, c) -> (; frate=o[1], irate=o[2], fenergy=o[6], ienergy=o[5], init=o[7], final=o[8]),
             rtol=2e-6, atol=1e-100) == 240
     end
+    @testset "type 65 EffectiveCharge2" begin
+        # no record of this type is in atdb.fits: synthetic ones (test/reference/ucalc/synthetic.jl), n = 1 to 25 and Zeff = 1 to 8
+        # (the recombination rate has the Boltzmann factor of the threshold energy, which the 13.6 read as a double by the driver and as a single by the levels of Radix changes by 3e-8 × ΔE/kT)
+        @test check_ucalc("type65"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
+            expected=(o, c) -> (; frate=o[1], irate=o[2], fenergy=o[6], ienergy=o[5], init=o[7], final=o[8]),
+            rtol=3e-6, atol=1e-100) == 120
+    end
+    @testset "type 67 CollisionKeenan" begin
+        # no record of this type is in atdb.fits: synthetic ones (synthetic.jl), among them one with the levels in the reverse order, a negative first coefficient and one that is too small
+        @test check_ucalc("type67"; call=(co, ce, lv, c) -> Radix.rate(co, ce), expected=with_energy, rtol=3e-6, atol=1e-100) == 32
+    end
     @testset "type 77 CollisionSuper" begin
         @test check_ucalc("type77"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=with_energy, rtol=1e-6, atol=1e-100) == 240
@@ -259,6 +277,43 @@ with_energy(o, c) = (; direct(o, c)..., fenergy=o[6], ienergy=o[5])
             expected=direct, rtol=1e-6, atol=1e-100) == 240
         @test check_ucalc("type75"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
             expected=direct, rtol=1e-6, atol=1e-100) == 64
+    end
+    @testset "type 96 AutoionizeSafronova" begin
+        # no record of this type is in atdb.fits: synthetic ones (synthetic.jl), among them one with the level and the parent level 0 (limited to 1 by ucalc) and one with a negative energy
+        @test check_ucalc("type96"; call=(co, ce, lv, c) -> Radix.rate(co, ce),
+            expected=direct, rtol=1e-6, atol=1e-100) == 24
+    end
+    @testset "type 79 FluorescenceLine" begin
+        # no record of this type is in atdb.fits: synthetic ones (synthetic.jl), among them the fudges for a small oscillator strength and a wavelength above 10⁹ Å, and the levels in reverse order
+        @test check_ucalc("type79"; call=(co, ce, lv, c) -> Radix.rate(co, ce; vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
+            expected=(o, c) -> (; frate=o[1], irate=o[2], fenergy=-o[4], ienergy=-o[3], init=o[7], final=o[8], opacity=o[11]), rtol=1e-6, atol=1e-100) == 28
+    end
+    @testset "type 89 SafronovaLine" begin
+        # no record of this type is in atdb.fits: synthetic ones (synthetic.jl, with four levels), among them the levels in reverse order, a wavelength above 10⁹ Å, a negative one, none, and the continuum level
+        @test check_ucalc("type89"; call=(co, ce, lv, c) -> Radix.rate(co, ce; vturb=c.cond[6], ptmp=(c.cond[11], c.cond[12])),
+            expected=(o, c) -> (; frate=o[1], irate=o[2], fenergy=-o[4], ienergy=-o[3], init=o[7], final=o[8], opacity=o[11]), rtol=1e-6, atol=1e-100) == 44
+    end
+    @testset "type 102 CollisionSPEX" begin
+        # no record of this type is in atdb.fits: synthetic ones (synthetic.jl, with four levels): the eight formulas, with 0 to 4 resonances (ucalc reads four sets of parameters for 0 but adds none), the levels in both orders
+        # (init is the upper level)
+        @test check_ucalc("type102"; call=(co, ce, lv, c) -> Radix.rate(co, ce), expected=with_energy, rtol=1e-5, atol=1e-100) == 192
+    end
+    @testset "type 64 PhotoionizeHydrogenic" begin
+        # no record of this type is in atdb.fits: synthetic ones (synthetic.jl, four levels; the first case of the file is a type 59 that sets the top of the grid, `nphint`, as an earlier call of ucalc does).
+        # The `gull1` of ucalc fills the Gaunt factors that it gives `hphotx` only for n = 1 (the copy to the output arrays follows the jump to the end for the other n), so that ucalc gives garbage for n > 1:
+        # the cases of n = 1 are compared, and the hydrogenic cross sections of the others with their values
+        @test check_ucalc("type64"; skip=1, select=c -> c.ints[1] == 1, call=photo_call,
+            expected=(o, c) -> (; frate=o[1], irate=o[2], ienergy=-o[3], fenergy=-o[4], ienergy2=-o[5], fenergy2=-o[6], init=o[7], final=o[8], opacity=o[11],
+                sum_total=o[12], sum_continuum=o[13], sum_em1=o[14], sum_em2=o[15]), rtol=1e-5, atol=1e-100) == 8
+        threshold(n, z=1) = Radix.hphotx(1e-6, z, n)
+        @test threshold(1)[1] ≈ 6.304 rtol=1e-3                                   # H 1s: 6.30×10⁻¹⁸ cm²
+        @test threshold(1, 2)[1] ≈ threshold(1)[1]/4 rtol=1e-5                      # Z⁻²
+        @test threshold(2)[1] ≈ 14.78 rtol=2e-3                                    # H 2s and 2p: 1.48 and 1.35×10⁻¹⁷ cm²
+        @test threshold(2)[2] ≈ 13.55 rtol=2e-3
+        for n in 2:6                                                              # the statistical average is Kramers' 7.91 n Mb times a Gaunt factor of 0.85 to 0.95
+            x = threshold(n)
+            @test 0.85 < sum((2l + 1)*x[l + 1] for l in 0:n - 1)/n^2/(7.91*n) < 0.95
+        end
     end
     @testset "type 73 CollisionHelikeSat" begin
         @test check_ucalc("type73"; call=(co, ce, lv, c) -> Radix.rate(co, ce),

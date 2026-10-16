@@ -23,7 +23,7 @@ allocated(coef, cell, kw) = @allocated Radix.rate(coef, cell; kw...)
 
     @testset "the rates of the fixtures" begin
         for name in ("type01", "type02", "type07", "type09", "type10", "type22", "type30", "type38", "type39", "type51", "type54", "type56", "type57", "type60", "type62",
-                "type63", "type66", "type68", "type69", "type71", "type72", "type73", "type75", "type76", "type77", "type81", "type86", "type92", "type95", "type98")
+                "type63", "type65", "type66", "type67", "type68", "type69", "type71", "type72", "type73", "type75", "type76", "type77", "type79", "type81", "type86", "type89", "type92", "type95", "type96", "type98", "type102")
             kw0 = name in ("type02", "type09", "type10") ? (; nlev=5) : NamedTuple()
             worst = 0
             for (c, _) in Iterators.take(ucalc_cases(name), 20)
@@ -38,7 +38,7 @@ allocated(coef, cell, kw) = @allocated Radix.rate(coef, cell; kw...)
     end
 
     @testset "the rates on the grid, with the radiation and the opacity arrays of the caller" begin
-        for name in ("type49", "type53", "type59", "type70", "type85", "type88", "type99", "type74", "type50", "type91")
+        for name in ("type49", "type53", "type59", "type64", "type70", "type85", "type88", "type99", "type74", "type50", "type91")
             worst = 0
             for (c, _) in Iterators.take(ucalc_cases(name), 12)
                 coef, cell, lv = ucalc_inputs(c)
