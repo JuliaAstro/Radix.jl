@@ -18,12 +18,12 @@ const heating_floor = 1e-37                          # heatf: added to heating +
 ucalc_energies(::AbstractRate, r) = (0.0, 0.0, 0.0, 0.0)
 ucalc_energies(::Union{AtomicLine2, RadiativeAPED}, r) = (-r.fenergy, -r.ienergy, 0.0, 0.0)
 ucalc_energies(::RadiativeFeDecay, r) = (r.ienergy, r.fenergy, 0.0, 0.0)           # (ucalc does not negate them)
-ucalc_energies(::Union{RadiativeProb, RadiativeSuper, TwoPhotonDecay}, r) = (-r.ienergy, -r.fenergy, 0.0, 0.0)
+ucalc_energies(::Union{RadiativeProb, RadiativeSuper, TwoPhotonDecay, FluorescenceLine, SafronovaLine}, r) = (-r.ienergy, -r.fenergy, 0.0, 0.0)
 ucalc_energies(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3, PhotoionizeSuper, PhotoRecombX, PhotoionizeFeKedge,
-    PhotoionizeDamp}, r) = (-r.ienergy, -r.fenergy, -get(r, :ienergy2, 0.0), -get(r, :fenergy2, 0.0))
-ucalc_energies(::Union{ElectronCollision, ElectronImpact1, ElectronImpact2, EffectiveCharge, CollisionHlike1, CollisionHlike2,
+    PhotoionizeDamp, PhotoionizeHydrogenic}, r) = (-r.ienergy, -r.fenergy, -get(r, :ienergy2, 0.0), -get(r, :fenergy2, 0.0))
+ucalc_energies(::Union{ElectronCollision, ElectronImpact1, ElectronImpact2, EffectiveCharge, EffectiveCharge2, CollisionHlike1, CollisionHlike2,
     CollisionProb, CollisionHeFine, CollisionHelike, CollisionLS, CollisionHelikeSat, CollisionSuper, CollisionFe19, CollisionAPED,
-    CollisionIonize}, r) = (0.0, 0.0, r.ienergy, r.fenergy)
+    CollisionIonize, CollisionKeenan, CollisionSPEX}, r) = (0.0, 0.0, r.ienergy, r.fenergy)
 
 struct EnergyBuffers
     ans3::Vector{Float64}

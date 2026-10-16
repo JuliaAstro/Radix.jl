@@ -33,10 +33,10 @@ ucalc_rates(coef::Union{AtomicLine2, RadiativeAPED, RadiativeFeDecay}, r) = (r.i
 balance_keywords(::AbstractRate) = ()
 balance_keywords(::AtomicLine2) = (:radiation, :pesc, :cfrac)           # (ucalc type 50 reduces the photoexcitation by the covering fraction)
 balance_keywords(::Union{RadiativeAPED, RadiativeFeDecay}) = (:radiation, :pesc)
-balance_keywords(::Union{PhotoionizeDamp, PhotoionizeFeKedge, PhotoRecombX, PhotoionizeSuper}) = (:radiation, :lfast, :ptmp)
+balance_keywords(::Union{PhotoionizeDamp, PhotoionizeFeKedge, PhotoRecombX, PhotoionizeSuper, PhotoionizeHydrogenic}) = (:radiation, :lfast, :ptmp)
 balance_keywords(::Union{ParPhotoIonize1, ParPhotoIonize2, ParPhotoIonize3}) = (:radiation, :lfast, :ptmp, :cache, :slot)    # (their integrals are kept: `PhotoMemo`)
 balance_keywords(::PhotoionizeDelta) = (:radiation,)
-balance_keywords(::RadiativeSuper) = (:ptmp,)
+balance_keywords(::Union{RadiativeSuper, FluorescenceLine, SafronovaLine}) = (:ptmp,)
 
 # the rates of the ion that go into the level matrix
 in_level_matrix(coef::AbstractRate) = !(coef isa Union{AtomicLevel, AtomicLevelFe}) && !(coef.rtype in total_rate_types) &&

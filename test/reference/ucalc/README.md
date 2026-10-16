@@ -24,6 +24,11 @@ julia generate.jl /path/to/atdb.fits /tmp/ucalc-ref 56          # writes type56.
 `ucalc`'s `t` is in units of 10⁴ K. The input format is documented at the top of
 `drvu.f90` and in `generate.jl`.
 
+`synthetic.jl` writes the inputs of the types that no record of `atdb.fits` has (`julia synthetic.jl OUTDIR`, then `drvu < OUTDIR/typeNN.in > data/typeNN.out`): 8 (Arnaud and Raymond), 65 (Sampson and Zhang), 67 (Keenan et al.),
+79 (fluorescence lines), 89 (Safronova lines), 96 (autoionization of satellite levels), 102 (SPEX collision strengths, with four levels) and 64 (hydrogenic photoionization: its first case is a type 59 that sets
+`nphint`, which `ucalc` keeps from an earlier call, and the test leaves it out with `skip=1`). `data/type52.in` is `data/type59.in` with the type 52 and the rate type 7 in the headers of the cases: the
+code of 52 is that of 59. (Type 101 is a copy of 56: the 100 cases of `type56.in` with the type changed to 101 give the same `drvu` output, after removing the line `now in type 101` that `ucalc` prints.)
+
 `drvcomp.f90` is a second driver, around `comp2` (the Compton heating and cooling integrals of the spectrum that
 `src/heating.jl` ports as `integral(Compton, …)`): it reads `coheat.dat` as `xstarsetup` does, then a temperature and a spectrum. For
 the incident spectrum of `../xstar_pow_xi2` at 10¹³ cm (`F = L/(4π r²)`, 999 points) and T = 10⁶ K it returns

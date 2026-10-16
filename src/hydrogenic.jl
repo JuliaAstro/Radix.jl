@@ -394,6 +394,109 @@ function szirc(n, T, rz, rno)
         (yy*e2 - 2yy*e1 + exp(-yy))*3hn/rn/(3 - rrn) + (e1 - e2)*szirc_exchange*yy)
 end
 
+"""
+    szirco(n, T, rz)
+
+Collisional ionization coefficient (cm³ s⁻¹) of a hydrogenic level `n` of the effective charge `rz` at the temperature `T` (K), from the semiempirical formula (35) of Sampson and Zhang (1988) without a limit on
+the highest bound level (XSTAR's `szirco`, which `szirc` extends).
+"""
+function szirco(n, T, rz)
+    an, hn, rrn = n < szirc_nmax ?
+        (szirc_a[n], szirc_h[n], szirc_r[n]) :
+        (szirc_a[end]/n, szirc_h[end]*n, szirc_r[end])
+    tt = T*Float64(1.38066f-16)
+    rn = Float64(n)
+    yy = rz*rz/(rn*rn)*Float64(2.179874f-11)/tt
+    e1, e2, e3 = eint(yy)
+    term1 = e1/rn - (exp(-yy) - yy*e3)/(3rn)
+    term2 = (yy*e2 - 2yy*e1 + exp(-yy))*3hn/rn/(3 - rrn)
+    term3 = (e1 - e2)*Float64(3.36f0)*yy
+    szirc_coeff*sqrt(tt)*rn^5/rz^4*an*yy*(term1 + term2 + term3)
+end
+
+"""
+    gull1(n, rs)
+
+The logarithms `(gu, gl)` of the radial integrals of the hydrogenic bound-free Gaunt factors of Burgess (1965) for the principal quantum number `n` and `rs = k²` (the energy of the electron in the units of the
+ionization potential of the level, Ry/n²), for the angular momenta `l = 0` to `n − 1` (`gu[l + 1]` for the transition to `l + 1` and `gl[l + 1]` to `l − 1`), by the recurrences of Burgess (1965), as XSTAR's `gull1`
+(`fact` sums the logarithms in single precision, and π is that of a single `acos`).
+"""
+function gull1(n::Integer, r)
+    gu, gl = zeros(max(n, 3) + 1), zeros(max(n, 3) + 1)
+    gull1!(gu, gl, n, r)
+end
+
+# (into the arrays `gu` and `gl` of at least max(n, 3) + 1 elements, which it sets to 0 first)
+function gull1!(gu, gl, n::Integer, r)
+    dn = Float64(n)
+    pi_s = Float64(2f0*acos(0f0))
+    fill!(gu, 0.0)
+    fill!(gl, 0.0)
+    f1 = 0.0
+    for i in 1:2n - 1
+        f1 += Float64(log(Float32(i)))
+    end
+    g0 = 0.5*log(pi_s/2) + log(8dn) + dn*log(4dn) - f1
+    if r == 0
+        gu[n] = g0 - 2dn
+    else
+        s = sqrt(r)
+        gu[n] = g0 - 2*atan(dn*s)/s - 0.5*log(1 - exp(-2pi_s/s))
+    end
+    gu[n] = exp(gu[n])
+    fn = 1e-300/gu[n]
+    gu[n] *= fn
+    if n == 1
+        gl[1] = 0.0
+        gu[1] = 2*log(gu[1]) - log(4.0) - 5*log(1 + r) - 2*log(fn)
+        return gu, gl
+    end
+    gu[n - 1] = (2dn - 1)*(1 + dn*dn*r)*dn*gu[n]
+    gl[n] = (1 + dn*dn*r)*gu[n]/(2dn)
+    gl[n - 1] = (2dn - 1)*(4 + (dn - 1)*(1 + dn*dn*r))*gl[n]
+    for l in n - 1:-1:3
+        dl = Float64(l)
+        gu[l - 1] = (4dn*dn - 4dl*dl + dl*(2dl - 1)*(1 + dn*dn*r))*gu[l]
+        gu[l - 1] = gu[l - 1] - 4dn*dn*(dn - dl)*(dn + dl)*(1 + (dl + 1)*(dl + 1)*r)*gu[l + 1]
+        gl[l - 1] = (4dn*dn - 4*(dl - 1)*(dl - 1) + (dl - 1)*(2dl - 1)*(1 + dn*dn*r))*gl[l]
+        gl[l - 1] = gl[l - 1] - 4dn*dn*(dn - dl)*(dn + dl)*(1 + (dl - 1)*(dl - 1)*r)*gl[l + 1]
+    end
+    gl[1] = 0.0
+    gu[1] = (4dn*dn - 16 + 6*(1 + dn*dn*r))*gu[2]
+    gu[1] = gu[1] - 4dn*dn*(dn - 2)*(dn + 2)*(1 + 9r)*gu[3]
+    cn = log(dn) - dn*log(4dn*dn) - (2dn + 4)*log(1 + dn*dn*r)
+    gu[1] = cn + log(1 + r) + 2*log(gu[1]) - 2*log(fn)
+    clu = cn + log(1 + r)
+    cll = cn
+    for l in 1:n - 1
+        dl = Float64(l)
+        clu += log(4dn*dn*(dn - dl)*(dn + dl)*(1 + (dl + 1)*(dl + 1)*r))
+        cll += log(4dn*dn*(dn - dl)*(dn + dl)*(1 + (dl - 1)*(dl - 1)*r))
+        gu[l + 1] = clu + 2*log(gu[l + 1]) - 2*log(fn)
+        gl[l + 1] = cll + 2*log(gl[l + 1]) - 2*log(fn)
+    end
+    gu, gl
+end
+
+"""
+    hphotx(ener, ic, nq)
+
+The hydrogenic photoionization cross sections (Mb) of the level `nq` of an ion of the charge `ic` for each angular momentum `l = 0` to `nq − 1`, at the photon energy `ener` (Ry) above the threshold, from the Gaunt factors of
+`gull1` (Brocklehurst 1971; XSTAR's `hphotx`).
+"""
+function hphotx(ener, ic, nq)
+    gu, gl = zeros(max(nq, 3) + 1), zeros(max(nq, 3) + 1)
+    [hphotx!(gu, gl, ener, ic, nq, lm) for lm in 0:nq - 1]
+end
+
+# the cross section of the angular momentum `l` alone, with the work arrays `gu` and `gl` (of at least max(nq, 3) + 1 elements)
+function hphotx!(gu, gl, ener, ic, nq, l)
+    cons = Float64(0.54492f0*acos(0f0))
+    rk = sqrt(ener)/Float64(ic*ic)
+    gull1!(gu, gl, nq, rk*rk)
+    Float64(nq*nq)/Float64(ic*ic)*(cons*((l + 1)*(1 + nq*nq*rk*rk)*exp(gu[l + 1]) + l*(1 + nq*nq*rk*rk)*exp(gl[l + 1]))/(2l + 1))
+end
+
 # irc: Hydrogen-like fits for the ionization from n = 1, 2, and higher (rc = 1)
 const irc_fit1 = ((1.133, 0.4059, 0.07014), (1.0785, 0.2319, 0.02947))
 const irc_rn = (0.45, 0.653)

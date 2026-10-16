@@ -606,6 +606,9 @@ brackets are the XSTAR data-type codes.
 | `TwoPhotonDecay` (76) | `transition`, `ion`, `A` |
 | `TwoPhotonRad` (5) | `transition`, `r1`, `r2` |
 | `EffectiveCharge` (57) | `n`, `L`, `twoJ`, `Z`, `level`, `ion`, `Zeff` |
+| `EffectiveCharge2` (65) | `n`, `L`, `twoJ`, `Z`, `level`, `ion`, `Zeff` |
+| `FluorescenceLine` (79) | `transition`, `Z`, `ion`, `λ`, `f`, `mass` |
+| `SafronovaLine` (89) | `transition`, `Z`, `ion`, `λ`, `gf`, `A` |
 
 **Autoionization**
 
@@ -614,6 +617,7 @@ brackets are the XSTAR data-type codes.
 | `Autoionize` (3) | `C`, `E` |
 | `AutoionizeSat` (72) | `spin_mult`, `L`, `level`, `parent`, `Z`, `ion`, `A_auto`, `E`, `g` |
 | `AutoionizeFe25Sat` (75) | `ion`, `level`, `parent`, `A_auto`, `E` |
+| `AutoionizeSafronova` (96) | `ion`, `level`, `parent`, `A_auto`, `weight`, `E` |
 | `IronKAuger` (86) | `parent`, `level`, `Z`, `ion`, `E`, `A_widths` |
 
 **Recombination and charge exchange**
@@ -644,6 +648,8 @@ brackets are the XSTAR data-type codes.
 | `CollisionFe19` (81) | `transition`, `Z`, `ion`, `Υ` |
 | `CollisionProb` (63) | `transition`, `Z`, `ion` |
 | `CollisionAPED` (92) | `transition`, `Z`, `ion`, `T_grid`, `Υ` |
+| `CollisionKeenan` (67) | `transition`, `Z`, `ion`, `coeffs` |
+| `CollisionSPEX` (102) | `itype`, `nreso`, `transition`, `Z`, `ion`, `E`, `a`, `reso` |
 | `CollisionIonize` (95) | `level`, `ion`, `E_th`, `T0`, `ρ` |
 | `ElectronCollision` (51) | `kind`, `transition`, `Z`, `ion`, `ΔE`, `C`, `Υ` |
 | `ElectronImpact1` (56) | `transition`, `Z`, `ion`, `T_grid`, `Υ` |
@@ -655,6 +661,7 @@ brackets are the XSTAR data-type codes.
 |---|---|
 | `ParPhotoIonize1` (49) | `n`, `L`, `twoJ`, `Z`, `parent`, `level`, `ion`, `E_grid`, `σ` |
 | `ParPhotoIonize2` (53) | `n`, `L`, `twoJ`, `Z`, `parent`, `level`, `ion`, `E_grid`, `σ` |
+| `PhotoionizeHydrogenic` (64) | `n`, `l`, `charge`, `level`, `ion` |
 | `ParPhotoIonize3` (59) | `n_electrons`, `n`, `l`, `parent`, `level`, `ion`, `E_th`, `E0`, `σ0`, `ya`, `P`, `yw` |
 | `PhotoionizeFeKedge` (85) | `n`, `L`, `twoJ`, `Z`, `parent`, `level`, `ion`, `Zeff`, `E_th`, `f`, `γ`, `scale` |
 | `PhotoionizeDamp` (88) | `n`, `L`, `twoJ`, `Z`, `parent`, `superlevel`, `level`, `ion`, `E_grid`, `σ` |
@@ -668,6 +675,30 @@ brackets are the XSTAR data-type codes.
 | `CollisionSuper` (77) | `transition`, `Z`, `ion`, `λ`, `ne_grid`, `T_grid`, `C` |
 | `PhotoionizeSuper` (70) | `n`, `L`, `spin_mult`, `Z`, `parent`, `level`, `ion`, `ne_grid`, `T_grid`, `logα`, `E_grid`, `σ` |
 | `PhotoRecombX` (99) | `n`, `L`, `spin_mult`, `Z`, `parent`, `level`, `ion`, `ne_grid`, `T_grid`, `α`, `E_grid`, `σ` |
+
+**Types of ucalc that have no record in the databases**
+
+The databases of the HEASoft installation and of the XSTAR source tree have records of 38 rate types and of the three data records (13, 14, 83). `ratemap` leaves 44 other type numbers `Missing` that `ucalc`
+knows; `load` skips a record of one of them and prints "Rate N not implemented.". Of those that have code in `ucalc` the ones that are not old or disabled are implemented, and
+checked against the real `ucalc` with synthetic records (`test/reference/ucalc/synthetic.jl`):
+
+- **52** is 59 for the rate type 7 (`ParPhotoIonize3`, the code of `ucalc` jumps to that of 59). **101** is a copy of the code of 56 (`ElectronImpact1`: the driver gives the same output).
+- **65** (`EffectiveCharge2`): collisional ionization of a hydrogenic level from `szirco` (Sampson and Zhang 1988) with the stored effective charge, and the three-body recombination by the Saha factor.
+- **67** (`CollisionKeenan`): the quadratic fit in log T of Keenan et al. to the effective collision strength of He-like ions (`calt67`). `ucalc` uses the first coefficient also as the wavelength,
+  and as the energy for the energies of the collisions (`dele = elin`): ported as it is.
+- **79** (`FluorescenceLine`), **89** (`SafronovaLine`): radiative decay of a line with the opacity of its centre. 89 turns the photoexcitation off (`ans2 = 0`); its call of `linopac` with the wavelength of the
+  first line of the ion is not ported.
+- **96** (`AutoionizeSafronova`): capture rate `2.069×10⁻³ T^{-3/2} e^{-E/kT} w` of the satellite levels of Safronova in Kato et al. (1997).
+- **64** (`PhotoionizeHydrogenic`): hydrogenic cross sections of Brocklehurst (1971) (`gull1`, `hphotx`) integrated with the cross section on the grid and the Milne relation for the recombination coefficient
+  (`irate` is the coefficient times the weight, without the electron density, as `ucalc` has it). `ucalc` is wrong for `n > 1`: `gull1` copies the Gaunt factors to the arrays that it returns only in its `n = 1` branch (the
+  jump to the end skips it for the other `n`), so that `hphotx` uses the old contents of its arrays; the port gives the right cross sections (1s 6.30 Mb, 2s 14.8 Mb, the statistical average of each `n` close to
+  Kramers' 7.91 n Mb), compared with `ucalc` for n = 1. The top of the integral, `nphint`, is that of the last bin that `enxt` gives (`ucalc` keeps the value of an earlier call).
+- **102** (`CollisionSPEX`): the SPEX collision strengths, a continuum (eight formulas of six parameters with the exponential integrals `E₁` to `E₆` of `exintn`) and up to four resonances. As in `ucalc`, `init` is the higher of the
+  two levels, so that the rates go in the opposite direction from the other collision types.
+
+Not implemented: **55** (hydrogenic cross sections in the format of Bautista: it divides by `Z − stage`, the net charge of the ion that is 0 for neutral and H-like ions), **97** (collision rates from Υ with the parent
+level of an excited level: `ucalc` uses `ggup` and `tsq` that it has not set for the ground level, and its comment says "to do"), 94 and 84 (code that a `go to 9000` at the top turns off), 12, 58, 61, 78, 80, 87, 90, 93, 100 (jumps, "defunct", "old code" or
+empty blocks) and the types 11 to 48 of the earlier databases (11, 15 to 21, 23 to 29, 31 to 37, 40 to 48), none of which occurs in the databases.
 
 **Atom and Ion**
 
