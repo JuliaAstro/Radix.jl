@@ -4,7 +4,6 @@
 
 # XSTAR data type: 2
 
-const ChargeExH0Desc = "charge exch. h0: Kingdon and Ferland"
 const cxH0_Tmax = 5.0                 # no rate above this temperature (10⁴ K)
 
 struct ChargeExH0{I, R} <: AbstractRate

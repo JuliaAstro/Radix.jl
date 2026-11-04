@@ -7,8 +7,6 @@
 
 # XSTAR data type: 70
 
-const PhotoionizeSuperDesc = "Coefficients for phot x-section of suplevels"
-
 struct PhotoionizeSuper{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

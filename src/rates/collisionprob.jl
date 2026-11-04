@@ -4,7 +4,6 @@
 
 # XSTAR data type: 63
 
-const CollisionProbDesc = "h-like cij, bautista (hlike ion)"
 const max_dE_over_kT = 50.0           # no rate for transitions with ΔE/kT above this
 const proton_charge = 1.0              # colliding ions are protons
 

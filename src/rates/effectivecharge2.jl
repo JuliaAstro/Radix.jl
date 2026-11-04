@@ -3,8 +3,6 @@
 
 # XSTAR data type: 65
 
-const EffectiveCharge2Desc = "effective charge to be used in coll. ion."
-
 struct EffectiveCharge2{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

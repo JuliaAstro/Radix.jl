@@ -3,8 +3,6 @@
 
 # XSTAR data type: 66
 
-const CollisionHeFineDesc = "Like type 69 but, data in fine structure"
-
 struct CollisionHeFine{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

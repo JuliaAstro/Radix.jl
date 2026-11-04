@@ -2,7 +2,6 @@
 
 # XSTAR data type: 9
 
-const ChargeExHeDesc = "charge exch. H0 Kingdon and Ferland"
 const cxHe_Tmax = 1000.0               # the fit is capped at this temperature (10⁴ K)
 const cxHe_fraction = 0.1              # fraction of the fitted rate that XSTAR uses
 const cxHe_levels = 6                  # records with two levels share it over this many

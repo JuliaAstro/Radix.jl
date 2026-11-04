@@ -4,8 +4,6 @@
 
 # XSTAR data type: 68
 
-const CollisionHelikeDesc = ""
-
 struct CollisionHelike{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

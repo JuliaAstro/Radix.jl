@@ -3,8 +3,6 @@
 
 # XSTAR data type: 67
 
-const CollisionKeenanDesc = "Effective collision strengths from Keenan et al."
-
 struct CollisionKeenan{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

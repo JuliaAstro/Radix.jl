@@ -37,9 +37,8 @@ function load(io::IO)
     implemented(j) = !(ratemap[ptr[2,j]] in (Missing, Nothing))
 
     rates = Array{Union{Atom, Ion, AbstractRate, Missing, Nothing}}(missing, N)
-    for j in 1:nrec
-        implemented(j) || println("Rate $(ptr[2,j]) not implemented.")
-    end
+    skipped = [ptr[2,j] for j in 1:nrec if !implemented(j)]
+    isempty(skipped) || @warn "$(length(skipped)) records of rate types not implemented were skipped" types=sort!(unique(skipped))
     # the levels, the elements and the ions first: the other rates carry the level table built from them
     for j in 1:nrec
         implemented(j) && ptr[2,j] in level_data_types && (rates[j] = record(j, nothing))

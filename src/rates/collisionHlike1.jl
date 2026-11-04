@@ -4,8 +4,6 @@
 
 # XSTAR data type: 60
 
-const CollisionHlike1Desc = ""
-
 struct CollisionHlike1{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

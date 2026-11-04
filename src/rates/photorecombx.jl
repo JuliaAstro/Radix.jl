@@ -7,8 +7,6 @@
 
 # XSTAR data type: 99
 
-const PhotoRecombXDesc = "Recombination and photoionization of superlevels"
-
 struct PhotoRecombX{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

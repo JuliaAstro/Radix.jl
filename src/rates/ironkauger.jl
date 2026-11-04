@@ -4,8 +4,6 @@
 
 # XSTAR data type: 86
 
-const IronKAugerDesc = "Iron K Auger data from Patrick"
-
 struct IronKAuger{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

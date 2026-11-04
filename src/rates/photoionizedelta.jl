@@ -5,8 +5,6 @@
 
 # XSTAR data type: 74
 
-const PhotoionizeDeltaDesc = "Delta functions to add to phot. x-sections  DR"
-
 struct PhotoionizeDelta{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

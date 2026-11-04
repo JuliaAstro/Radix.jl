@@ -6,8 +6,6 @@
 
 # XSTAR data type: 71
 
-const RadiativeSuperDesc = "Transition rates from superlevel to spect. lvls"
-
 struct RadiativeSuper{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

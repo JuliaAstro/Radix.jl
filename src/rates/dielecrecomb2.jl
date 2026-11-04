@@ -3,8 +3,6 @@
 
 # XSTAR data type: 8
 
-const DielecRecomb2Desc = "dielectronic recombination: arnaud and raymond"
-
 struct DielecRecomb2{R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

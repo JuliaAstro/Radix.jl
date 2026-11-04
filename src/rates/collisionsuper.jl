@@ -6,8 +6,6 @@
 
 # XSTAR data type: 77
 
-const CollisionSuperDesc = "coll rates from 71"
-
 struct CollisionSuper{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

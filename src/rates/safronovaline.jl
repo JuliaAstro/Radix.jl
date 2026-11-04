@@ -2,8 +2,6 @@
 
 # XSTAR data type: 89
 
-const SafronovaLineDesc = "saf line rad. rates"
-
 struct SafronovaLine{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

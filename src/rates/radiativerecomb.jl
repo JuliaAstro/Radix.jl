@@ -3,8 +3,6 @@
 
 # XSTAR data type: 1
 
-const RadRecomDesc = "radiative recombination:  aldrovandi and pequign"
-
 struct RadRecomb{R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

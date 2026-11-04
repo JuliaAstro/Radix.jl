@@ -5,8 +5,6 @@
 
 # XSTAR data type: 95
 
-const CollisionIonizeDesc = "Bryans CI rates"
-
 struct CollisionIonize{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

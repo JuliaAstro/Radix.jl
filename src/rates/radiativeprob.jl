@@ -4,8 +4,6 @@
 
 # XSTAR data type: 54
 
-const RadiativeProbDesc = "h-like cij, bautista (hlike ion)"
-
 struct RadiativeProb{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
@@ -22,7 +20,6 @@ function RadiativeProb(rate::Int32, label::String, ivec::I, rvec::R, levels::Lev
     RadiativeProb(Int8(rate), label, Transition(ivec[1], ivec[2]), ivec[3:4]..., rvec[1], levels)
 end
 
-const radiativeprob_min_dE = 1e-24     # added to the level energy difference before inverting it
 
 """
     rate(coef::RadiativeProb, cell; index=false)

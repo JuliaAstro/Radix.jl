@@ -5,7 +5,6 @@
 
 # XSTAR data type: 56
 
-const ElectronImpact1Desc = "tabulated collision strength, bautista"
 const min_dE = 1e-16                  # eV; degenerate levels are skipped
 const min_upsilon = 1e-48              # floor of the tabulated Υ before interpolating
 

@@ -2,8 +2,6 @@
 
 # XSTAR data type: 5
 
-const TwoPhotonRadDesc = "2 photon transition collisional"
-
 struct TwoPhotonRad{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

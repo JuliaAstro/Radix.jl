@@ -6,8 +6,6 @@
 
 # XSTAR data type: 53
 
-const ParPhotoIonize2Desc = "op pi xsections"
-
 struct ParPhotoIonize2{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

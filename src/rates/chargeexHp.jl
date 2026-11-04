@@ -4,8 +4,6 @@
 
 # XSTAR data type: 10
 
-const ChargeExHpDesc = "charge exchange H+ Kingdon and Ferland"
-
 struct ChargeExHp{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

@@ -2,8 +2,6 @@
 
 # XSTAR data type: 4
 
-const AtomicLineDesc = "line data radiative: mendosa; raymond and smith"
-
 """
     AtomicLine
 

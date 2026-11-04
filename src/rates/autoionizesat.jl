@@ -4,8 +4,6 @@
 
 # XSTAR data type: 72
 
-const AutoionizeSatDesc = "Autoinization rates (in s^-1) for satellite lvls"
-
 struct AutoionizeSat{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

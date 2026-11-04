@@ -5,8 +5,6 @@
 
 # XSTAR data type: 6
 
-const AtomicLevelDesc = "level data"
-
 """
     AtomicLevel
 

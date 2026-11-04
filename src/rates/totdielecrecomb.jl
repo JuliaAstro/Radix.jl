@@ -5,8 +5,6 @@
 
 # XSTAR data type: 39
 
-const TotDielecRecombDesc = "total dr  from badnell amdpp.phys.strath.ac.uk"
-
 struct TotDielecRecomb{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

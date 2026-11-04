@@ -301,14 +301,16 @@ The matrices are sparse (`sparse=true`) for the elements of `sparse_from` unknow
 `radiation` and `escape` (see `element_matrix!`) are fixed values for all the cells, or functions of the index
 of the cell that return that cell's value, so that each cell has its own radiation field and line trapping.
 """
+# a fixed value for all the cells, or a function of the index of the cell that returns that cell's value
+cell_value(value::Function, i) = value(i)
+cell_value(value, i) = value
+
 function element_populations(layout::Elements, cells::AbstractArray{<:Cell}; radiation=NO_RADIATION, escape=nothing,
         sparse=layout.N >= sparse_from, kw...)
-    at(value::Function, i) = value(i)
-    at(value, i) = value
     R = typeof(float(first(cells).T))
     x = zeros(R, layout.N, length(cells))
     Threads.@threads for i in eachindex(cells)
-        A = element_matrix(layout, cells[i]; sparse, radiation=at(radiation, i), escape=at(escape, i), kw...)
+        A = element_matrix(layout, cells[i]; sparse, radiation=cell_value(radiation, i), escape=cell_value(escape, i), kw...)
         x[:, i] = level_populations(A)
     end
     x
