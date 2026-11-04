@@ -6,8 +6,6 @@
 
 # XSTAR data type: 59
 
-const ParPhotoIonize3Desc = "verner pi x!"
-
 struct ParPhotoIonize3{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

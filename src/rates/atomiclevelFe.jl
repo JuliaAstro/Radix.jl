@@ -3,8 +3,6 @@
 
 # XSTAR data type: 83
 
-const AtomicLevelFeDesc = "Fe UTA level data"
-
 struct AtomicLevelFe{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

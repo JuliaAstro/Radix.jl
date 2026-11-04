@@ -7,8 +7,6 @@
 
 # XSTAR data type: 98
 
-const ElectronImpact2Desc = "chianti2016 collisional rates"
-
 struct ElectronImpact2{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

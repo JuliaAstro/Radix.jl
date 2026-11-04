@@ -4,7 +4,6 @@
 
 # XSTAR data type: 73
 
-const CollisionHelikeSatDesc =  "Fit to coll. strengths satellite lvls Helike ion"
 
 struct CollisionHelikeSat{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)

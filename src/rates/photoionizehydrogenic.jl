@@ -3,8 +3,6 @@
 
 # XSTAR data type: 64
 
-const PhotoionizeHydrogenicDesc = "hydrogenic pi xsections, bautista format"
-
 struct PhotoionizeHydrogenic{I, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

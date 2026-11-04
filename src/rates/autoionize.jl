@@ -2,8 +2,6 @@
 
 # XSTAR data type: 3
 
-const AutoionizeDesc = "AutoIonizeation: hamilton, sarazin chevalier"
-
 struct Autoionize{R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

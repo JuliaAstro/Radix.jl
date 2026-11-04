@@ -2,8 +2,6 @@
 
 # XSTAR data type: 13
 
-const AtomDesc = "element data:"
-
 """
 Atom(label, i1-i8, mass, Eion)
 """

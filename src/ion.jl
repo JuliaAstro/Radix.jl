@@ -2,8 +2,6 @@
 
 # XSTAR data type: 14
 
-const IonDesc = "ion data"
-
 """
 Ion(label, Zp, Z, N, E)
 """

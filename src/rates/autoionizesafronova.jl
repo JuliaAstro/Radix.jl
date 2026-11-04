@@ -3,8 +3,6 @@
 
 # XSTAR data type: 96
 
-const AutoionizeSafronovaDesc = "Autoinization rates (in s^-1) for satellite lvls"
-
 struct AutoionizeSafronova{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

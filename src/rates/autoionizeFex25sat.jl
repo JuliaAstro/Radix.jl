@@ -4,8 +4,6 @@
 
 # XSTAR data type: 75
 
-const AutoionizeFe25SatDesc = "autoionization data for Fe XXiV satellites"
-
 struct AutoionizeFe25Sat{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

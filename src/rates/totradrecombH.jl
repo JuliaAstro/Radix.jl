@@ -3,8 +3,6 @@
 
 # XSTAR data type: 30
 
-const TotRadRecombHDesc = "radiative recombination hydrogenic: gould and t"
-
 const C30a = 6.34/100
 const C30b = 0.06376
 const C30c = 0.9

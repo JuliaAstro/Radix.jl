@@ -3,8 +3,6 @@
 
 # XSTAR data type: 91
 
-const RadiativeAPEDDesc = "aped line wavelengths same as 50"
-
 struct RadiativeAPED{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

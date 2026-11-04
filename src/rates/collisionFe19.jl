@@ -3,8 +3,6 @@
 
 # XSTAR data type: 81
 
-const CollisionFe19Desc = "Bhatia Fe XIX collision strengths"
-
 struct CollisionFe19{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

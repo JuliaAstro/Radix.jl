@@ -4,8 +4,6 @@
 
 # XSTAR data type: 92
 
-const CollisionAPEDDesc = "aped collision strengths"
-
 struct CollisionAPED{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

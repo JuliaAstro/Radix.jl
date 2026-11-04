@@ -3,8 +3,6 @@
 
 # XSTAR data type: 69
 
-const CollisionLSDesc = "Kato & Nakazaki (1996) fit to Helike coll. strgt"
-
 struct CollisionLS{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

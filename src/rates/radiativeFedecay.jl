@@ -4,8 +4,6 @@
 
 # XSTAR data type: 82
 
-const RadiativeFeDecayDesc = "Fe UTA rad rates"
-
 struct RadiativeFeDecay{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

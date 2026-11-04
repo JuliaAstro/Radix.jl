@@ -5,7 +5,6 @@
 
 # XSTAR data type: 38
 
-const TotRadRecomDesc = "total rr  from badnell amdpp.phys.strath.ac.uk"
 const rr_floor = 1e-48                 # added to the denominator of the fit
 
 struct TotRadRecomb{I, R} <: AbstractRate

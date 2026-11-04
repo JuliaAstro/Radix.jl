@@ -2,8 +2,6 @@
 
 # XSTAR data type: 79
 
-const FluorescenceLineDesc = "fluorescence lines"
-
 struct FluorescenceLine{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

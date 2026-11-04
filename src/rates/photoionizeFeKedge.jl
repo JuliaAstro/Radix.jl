@@ -5,8 +5,6 @@
 
 # XSTAR data type: 85
 
-const PhotoionizeFeKedgeDesc = "Iron K Pi xsections, spectator Auger summed"
-
 struct PhotoionizeFeKedge{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

@@ -154,18 +154,18 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     populations = [zeros(el.N) for el in elements]
     fractions = [zeros(length(el.ions) + 1) for el in elements]
     memos = [PhotoMemo(length(el.rates)) for el in elements]       # (the cross sections are integrated once for all the electron fractions, and for the heating and the emissivities)
-    nₕ = Float64(neutral)
+    nₕ = Ref(Float64(neutral))              # (the neutral hydrogen follows the balance of hydrogen)
     hydrogen = findfirst(==(hydrogen_Z), mixture.Z)
 
     # the balance of every element at the electron fraction x; returns XSTAR's elcter = x - electrons
     function evaluate(x)
-        cell = Cell(Float64(T), nₕ, ntot*x, Float64(ntot))
+        cell = Cell(Float64(T), nₕ[], ntot*x, Float64(ntot))
         Threads.@threads for k in eachindex(elements)
             element_matrix!(matrices[k], elements[k], cell; radiation, escape=element_escape(escape, k), lfast, memo=memos[k], cfrac)
             populations[k] = level_populations(matrices[k])
             fractions[k] = ion_fractions(populations[k], elements[k])
         end
-        hydrogen === nothing || (nₕ = ntot*mixture.abundance[hydrogen]*populations[hydrogen][1])
+        hydrogen === nothing || (nₕ[] = ntot*mixture.abundance[hydrogen]*populations[hydrogen][1])
         x - electrons(mixture, fractions)
     end
 
@@ -176,7 +176,7 @@ function ionization_balance(mixture::Mixture, T, ntot; radiation=NO_RADIATION, e
     if iterate && !converged
         xee, elcter, iterations, converged = bracket_electron_fraction(evaluate, xee, elcter; tolerance)
     end
-    (; xee, nₑ=ntot*xee, electrons=xee - elcter, nₕ, populations, fractions, iterations, converged, memos)
+    (; xee, nₑ=ntot*xee, electrons=xee - elcter, nₕ=nₕ[], populations, fractions, iterations, converged, memos)
 end
 
 # dsec's iteration of the electron fraction: `evaluate(x)` is x minus the electrons that the balance at x gives. A negative
@@ -269,17 +269,18 @@ and `trace`, the temperatures tried with their imbalance.
 """
 function thermal_equilibrium(mixture::Mixture, ntot, processes; radiation=NO_RADIATION, escape=nothing, T=1.0,
         xee=1.0, T_min=default_T_min, lfast=photoionization_lfast, tolerance=imbalance_tolerance, iterations=temperature_iterations, cfrac=0.0)
-    xee = Float64(xee)
-    neutral = 0.0
-    local balance, energy
+    state = Ref((; xee=Float64(xee), neutral=0.0))     # (each balance starts from the electron fraction and the neutral hydrogen of the last one)
+    latest = Ref{Any}(nothing)                         # the balance and the energy of the last temperature
     function evaluate(t)
         n = gas_density(ntot, t)
-        balance = ionization_balance(mixture, t, n; radiation, escape, xee, neutral, lfast, cfrac)
-        energy = heating_cooling(mixture, balance, t, n, processes; radiation, escape, lfast, cfrac)
-        xee, neutral = balance.xee, balance.nₕ
-        energy.imbalance
+        b = ionization_balance(mixture, t, n; radiation, escape, xee=state[].xee, neutral=state[].neutral, lfast, cfrac)
+        e = heating_cooling(mixture, b, t, n, processes; radiation, escape, lfast, cfrac)
+        state[] = (; xee=b.xee, neutral=b.nₕ)
+        latest[] = (b, e)
+        e.imbalance
     end
     t, converged, evaluations, trace = bracket_temperature(evaluate, Float64(T); tolerance, iterations, T_min)
+    balance, energy = latest[]
     (; energy..., T=t, ntot=gas_density(ntot, t), xee=balance.xee, nₑ=balance.nₑ, nₕ=balance.nₕ, populations=balance.populations, fractions=balance.fractions,
        evaluations, converged, trace, memos=balance.memos)
 end

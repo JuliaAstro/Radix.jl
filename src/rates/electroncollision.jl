@@ -5,8 +5,6 @@
 
 # XSTAR data type: 51
 
-const ElectronCollisionDesc = "op and chianti line coll rates"
-
 struct ElectronCollision{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

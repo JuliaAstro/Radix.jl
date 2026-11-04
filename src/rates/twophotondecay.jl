@@ -4,8 +4,6 @@
 
 # XSTAR data type: 76
 
-const TwoPhotonDecayDesc = "2 photon decay"
-
 struct TwoPhotonDecay{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

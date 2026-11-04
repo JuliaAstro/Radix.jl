@@ -5,8 +5,6 @@
 
 # XSTAR data type: 88
 
-const PhotoionizeDampDesc = "Iron inner shell resonance excitation (Patrick)"
-
 struct PhotoionizeDamp{I, R, L<:Levels} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String

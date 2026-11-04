@@ -7,8 +7,6 @@
 
 # XSPEC data type: 50
 
-const AtomicLine2Desc = "op line rad. rates"
-
 const min_wavelength = 1e-34           # Å; lines below this have no wavelength
 const no_wavelength = 0.99e9           # Å; longer wavelengths mark lines without opacity
 const decay_floor = 1e-20              # floor of the decay rate, per unit ntot

@@ -3,8 +3,6 @@
 
 # XSTAR data type: 22
 
-const DielecRecombHDesc = "dielectronic recombination: storey"
-
 struct DielecRecombH{I, R} <: AbstractRate
     rtype::Int8                 # XSTAR rate type (lrtyp)
     label::String
