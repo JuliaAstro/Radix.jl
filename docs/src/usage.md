@@ -1,14 +1,15 @@
 # Using Radix
 
 Radix solves the ionization, heating and radiative transfer of a photoionized slab of gas, as XSTAR does (`xstar`, 1-dimensional, one pass). It reads the atomic data
-(`atdb.fits`) and the Compton table (`coheat.dat`) of an XSTAR installation (`$HEADAS/refdata/atdb.fits`, or `ftools/xstar/data/` of the source), and does not need XSTAR to run.
+(`atdb.fits`) of an XSTAR installation (`$HEADAS/refdata/atdb.fits`, or `ftools/xstar/data/` of the source), and does not need XSTAR to run. The energy exchanged in Compton scattering comes from a surrogate model
+that is part of Radix, so XSTAR's table `coheat.dat` is not needed (it is needed only to reproduce XSTAR's interpolation, `Model("atdb.fits", "coheat.dat")` with `constants!(ucalc())`).
 
 ## A slab
 
 ```julia
 using Radix
 
-model = Model("atdb.fits", "coheat.dat")                  # the elements and processes (abundances = :xdef, the default table of XSTAR)
+model = Model("atdb.fits")                                # the elements and processes (abundances = :xdef, the default table of XSTAR)
 
 run = slab(model;
     density = 1e4,                # cm⁻³ (or `pressure = 1e-7` dyn cm⁻² for constant pressure)
@@ -22,7 +23,7 @@ run = slab(model;
     vturb = 0.0)                  # km s⁻¹: the widths of the lines
 ```
 
-`Model(atdb, coheat; abundances, multiplier, exclude, cfrac)` takes an abundance table (`composition(:angr)`, ... or a vector for the elements 1 to 30),
+`Model(atdb; abundances, multiplier, exclude, cfrac)` (and `Model(atdb, coheat; ...)` with XSTAR's Compton table) takes an abundance table (`composition(:angr)`, ... or a vector for the elements 1 to 30),
 `multiplier = Dict(26 => 2.0)` for factors, `exclude` for the elements that are left out (Li, Be and B by default, as the atomic data of XSTAR has no data for them) and the covering fraction.
 Under the hood `slab` is `powerlaw` (the source), `source_distance`, `Base.iterate` of a mixture (the zones and the transfer); they can be called on their own, and it takes the zones (`(r, Δr)`) as well.
 

@@ -238,7 +238,7 @@ iteration of `dsec`. What the code does and what was found:
   and `nbinc` never returns a bin above `n - max(2, n/50)`. With the same grid every bin above it takes the flux of that bin: a flat
   tail where a power law falls. The Compton heating, which the high energies dominate, is 50% larger than for the unmapped spectrum for an E⁻¹
   spectrum on the grid of 999 bins. Radix does not map the spectrum itself: pass `map_spectrum(radiation)` to reproduce XSTAR.
-- **Compton.** `coheat.dat` (a table of 101 × 101 values, read by `load(Compton, path)`) is in the data directory of XSTAR, next to `atdb.fits`.
+- **Compton.** `Compton()` needs no table: the energy it exchanges is that of the surrogate model. `coheat.dat` (a table of 101 × 101 values, read by `load(Compton, path)`) is in the data directory of XSTAR, next to `atdb.fits`, and is needed only for XSTAR's interpolation (`constants(ucalc())`).
   `integral(Compton, radiation, T)` (the `comp2` integral; `σ(compton, Eph, Te)` is `cmpfnc`: the interpolation of the table with the constants of `ucalc()`, the surrogate of `thermal_exchange` by default) is checked against the real F90 `comp2` (`test/reference/ucalc/drvcomp.f90`) to 10⁻⁶. The processes that
   are not tied to levels are types (`src/processes.jl`, subtypes of `AbstractContinuum`, whose coefficients are the functions `α` (absorption), `j` (emission) and `σ` (scattering)) with generic functions: `heating(process, radiation, T, nₑ)`,
   `cooling(...)`, `heating_cooling(...)` (both) and `α(process, E, T)`, `σ(process, E, T)`, the absorption or scattering coefficient, since each coefficient is a function of the process (the opacity is that times the density, `opacity(process, E, T, nₑ)`); `FreeFree()` (absorption: heating and opacity),
