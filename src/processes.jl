@@ -24,8 +24,8 @@ The heating and cooling (erg cm⁻³ s⁻¹) in the radiation field at the elect
 - `FreeFree()`: absorption `α` per electron and per ion (cm⁵; density `nₑ nᵢ`, `nᵢ = 1.4 nₑ`): heats the gas and has an opacity (`freef`);
 - `Bremsstrahlung()`: the emission `j` of the free-free process, per electron and per ion: cools the gas (`bremem`, integrated by `heatf`);
 - `Thomson(cfrac=0.0)`: scattering `σ = σ_T (1 - cfrac)` (cm², per electron) for the covering fraction `cfrac`: an opacity only;
-- `Compton(Te, Eph, Es)`: Compton scattering with the energy it exchanges between the radiation and the electrons, from the table of XSTAR's
-  `coheat.dat` (`load(Compton, path)`): heating and cooling (`comp2`, `cmpfnc`).
+- `Compton()`: Compton scattering with the energy it exchanges between the radiation and the electrons, from the surrogate model of Klein-Nishina scattering by a thermal gas
+  (no table is needed), or `Compton(Te, Eph, Es)` with the table of XSTAR's `coheat.dat` (`load(Compton, path)`), which XSTAR interpolates (`constants(ucalc())`): heating and cooling (`comp2`, `cmpfnc`).
 
 `standard_processes(compton; cfrac)` makes the four of a run of XSTAR.
 """
@@ -41,9 +41,10 @@ end
 Thomson() = Thomson(0.0)
 
 """
+    Compton()
     Compton(Te, Eph, Es)
 
-Compton scattering with the table of the Compton heating (XSTAR's `coheat.dat`, read by `load(Compton, path_or_io)`): `Es[i, j]` at the electron
+Compton scattering, with no table (`Compton()`, the surrogate model only) or with the table of the Compton heating (XSTAR's `coheat.dat`, read by `load(Compton, path_or_io)`): `Es[i, j]` at the electron
 temperature `Te[i]` (in electron rest masses) and the photon energy `Eph[j]` (in electron rest masses).
 
 - `σ(compton, Eph::Real, Te::Real)` is XSTAR's `cmpfnc`: the Compton function at the photon energy `Eph` and the electron temperature `Te` (both in
@@ -59,6 +60,15 @@ struct Compton <: AbstractScattering
     Eph::Vector{Float64}            # photon energies (electron rest masses)
     Es::Matrix{Float64}             # the tabulated energy exchanged in scattering (the Compton function), Es[i, j] at Te[i] and Eph[j]
 end
+
+"""
+    Compton()
+
+Compton scattering without a table: the energy it exchanges is that of the surrogate model (the default, `compton_surrogate` of the constants), which covers the electron
+temperatures up to 5×10¹⁰ K and the photon energies up to 5 MeV (beyond them the edge of the range is used). The table of XSTAR (`coheat.dat`, `load(Compton, path)`) is
+needed only to reproduce XSTAR's interpolation, `constants(ucalc())`.
+"""
+Compton() = Compton(Float64[], Float64[], zeros(0, 0))
 
 function load(::Type{Compton}, io::IO)
     entries = [split(line) for line in eachline(io) if !isempty(strip(line))]
@@ -135,6 +145,9 @@ function σ(compton::Compton, Eph::Real, Te::Real)
     if constants().compton_surrogate
         v = surrogate_exchange(Eph, Te)
         v === nothing || return v
+        isempty(compton.Te) && return surrogate_exchange(min(Eph, compton_E_range[2]), min(Te, compton_Te_range[2]))    # (no table: the edge of the range of the surrogate)
+    elseif isempty(compton.Te)
+        throw(ArgumentError("`compton_surrogate=false` interpolates the table of the Compton heating: use `load(Compton, \"coheat.dat\")`, not `Compton()`"))
     end
     Eph > compton_Eph_min || return 4Te - Eph
     iE = clamp(hunt_index(compton.Eph, Eph), 2, length(compton.Eph))

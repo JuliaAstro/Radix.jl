@@ -45,6 +45,21 @@
         @test ForwardDiff.derivative(f, 0.05) ≈ (f(0.05 + h) - f(0.05 - h))/(2h) rtol=1e-4
     end
 
+    @testset "no table is needed" begin
+        none = Radix.Compton()
+        @test isempty(none.Te) && Radix.standard_processes(none)[1] === none
+        # the same as with a table (whose values the surrogate does not use) inside the range of the surrogate
+        table = Radix.Compton([1e-7, 1e2], [1e-7, 1e2], zeros(2, 2))
+        for (Te, E) in ((1e-5, 1e-6), (1e-3, 1e-3), (0.5, 0.1))
+            @test Radix.σ(none, E, Te) == Radix.σ(table, E, Te)
+        end
+        # above the range: the edge of it, finite (the table, if there is one, is used there)
+        @test isfinite(Radix.σ(none, 50.0, 1e-3)) && isfinite(Radix.σ(none, 1e-3, 50.0))
+        # the interpolation of XSTAR's table needs the table
+        @test_throws ArgumentError Radix.constants(() -> Radix.σ(none, 1e-3, 1e-3), Radix.ucalc())
+        @test Radix.integral(none, Radix.NO_RADIATION, 1.0) == (0.0, 0.0)
+    end
+
     @testset "the coefficients are saved, not trained at each start" begin
         # the file of the repository is what a new training gives (to the rounding of the linear solve)
         @test isfile(Radix.compton_surrogate_file)
